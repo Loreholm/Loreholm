@@ -1,0 +1,53 @@
+# Publishes the static site (landing + docs) to GitHub Pages at loreholm.com.
+# Deliberately excludes the dashboard pages (dashboard.html, dashboard.js,
+# api-keys.js) — they need the API, which is not publicly deployed during
+# development. They ship with the full stack at launch instead.
+name: Publish Site
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "web/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Assemble static site
+        run: |
+          mkdir -p _site/css _site/js
+          cp web/index.html web/docs.html _site/
+          cp web/css/style.css _site/css/
+          cp web/js/config.js web/js/auth.js _site/js/
+          touch _site/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
