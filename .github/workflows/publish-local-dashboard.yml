@@ -57,6 +57,6 @@ jobs:
           cache-from: type=gha,scope=${{ env.LOCAL_DASHBOARD_CACHE_SCOPE }}
           cache-to: type=gha,scope=${{ env.LOCAL_DASHBOARD_CACHE_SCOPE }},mode=max
           tags: |
-            ghcr.io/${{ github.repository_owner }}/mcp-local-dashboard:latest
-            ghcr.io/${{ github.repository_owner }}/mcp-local-dashboard:${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/mcp-local-dashboard:${{ github.ref_name }}
+            ghcr.io/loreholm/mcp-local-dashboard:latest
+            ghcr.io/loreholm/mcp-local-dashboard:${{ github.sha }}
+            ghcr.io/loreholm/mcp-local-dashboard:${{ github.ref_name }}

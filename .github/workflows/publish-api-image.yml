@@ -59,9 +59,9 @@ jobs:
           context: .
           file: api/Dockerfile
           push: true
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/mcp-api:buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/mcp-api:buildcache,mode=max
+          cache-from: type=registry,ref=ghcr.io/loreholm/mcp-api:buildcache
+          cache-to: type=registry,ref=ghcr.io/loreholm/mcp-api:buildcache,mode=max
           tags: |
-            ghcr.io/${{ github.repository_owner }}/mcp-api:latest
-            ghcr.io/${{ github.repository_owner }}/mcp-api:${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/mcp-api:${{ github.ref_name }}
+            ghcr.io/loreholm/mcp-api:latest
+            ghcr.io/loreholm/mcp-api:${{ github.sha }}
+            ghcr.io/loreholm/mcp-api:${{ github.ref_name }}
