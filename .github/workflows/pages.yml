@@ -31,7 +31,10 @@ jobs:
       - name: Assemble static site
         run: |
           mkdir -p _site/css _site/js
-          cp web/index.html web/docs.html _site/
+          # Coming-soon page is the site root until launch; the real landing
+          # page (web/index.html) ships with the full stack at launch.
+          cp web/coming-soon.html _site/index.html
+          cp web/docs.html _site/
           cp web/css/style.css _site/css/
           cp web/js/config.js web/js/auth.js _site/js/
           touch _site/.nojekyll
