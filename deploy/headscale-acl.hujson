@@ -1,0 +1,31 @@
+{
+  // ACL policy for loreholm
+  // Goal: only the API can reach end-user databases.
+  // End hosts cannot reach each other or the API over the tailnet.
+  
+  "groups": {
+    "group:api": ["admin"]
+  },
+  
+  "acls": [
+    // Allow only API -> local dashboard query-proxy sidecar.
+    // Under the query-proxy topology the cloud never dials the user's
+    // ArcadeDB directly; every query is forwarded through the dashboard.
+    //
+    // dst is `*:8081` rather than `autogroup:member:8081` because Headscale
+    // 0.25.x's Policy v2 does not recognize `autogroup:member` (it was
+    // properly implemented in 0.27). On this tailnet no nodes are tagged,
+    // so `*` and `autogroup:member` cover the same set; the implicit-deny
+    // below still blocks every other communication path. Switch back to the
+    // autogroup form once we land on 0.27+.
+    {
+      "action": "accept",
+      "src": ["group:api"],
+      "dst": [
+        "*:8081"
+      ]
+    }
+
+    // IMPLICIT DENY: all other communication is blocked
+  ]
+}

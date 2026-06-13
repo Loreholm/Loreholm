@@ -1,0 +1,185 @@
+services:
+  headscale:
+    image: docker.io/headscale/headscale:0.25.1
+    container_name: headscale
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /var/run/headscale
+    ports:
+      - "0.0.0.0:50443:50443"  # Main control server for Tailscale clients (HTTPS)
+      - "127.0.0.1:8080:50443" # Internal API access via localhost:8080
+    environment:
+      - HEADSCALE_DOMAIN=${HEADSCALE_DOMAIN:-loreholm.com}
+    volumes:
+      - /opt/mcp-cloud/headscale/config:/etc/headscale:ro
+      - /opt/mcp-cloud/headscale/lib:/var/lib/headscale
+      # Mount certbot certificates (stored at /opt/mcp-cloud/certbot/conf on host)
+      # This maps to /etc/letsencrypt inside the container for Headscale config compatibility
+      - /opt/mcp-cloud/certbot/conf:/etc/letsencrypt:ro
+    command: serve
+    healthcheck:
+      # Check if headscale process can respond - the version command doesn't require auth
+      test: ["CMD", "headscale", "version"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+    networks:
+      - mcp-network
+
+  # Init container - creates the admin user and pre-auth key for tailscale-api
+  # Runs once and exits, tailscale-api waits for the key file it creates
+  tailscale-init:
+    image: curlimages/curl:latest
+    container_name: tailscale-init
+    user: "0:0"  # Run as root to write to the shared volume
+    depends_on:
+      headscale:
+        condition: service_healthy
+    environment:
+      # Use the same HEADSCALE_API_URL as mcp-api (internal Docker network)
+      - HEADSCALE_API_URL=${HEADSCALE_API_URL}
+      - HEADSCALE_API_KEY=${HEADSCALE_API_KEY}
+    volumes:
+      - tailscale_init:/var/lib/tailscale-init
+      - /opt/mcp-cloud/deploy/tailscale-init.sh:/init.sh:ro
+    entrypoint: ["/bin/sh", "/init.sh"]
+    restart: "no"
+    networks:
+      - mcp-network
+
+  # Tailscale sidecar for API - connects to Headscale mesh to reach user databases
+  tailscale-api:
+    image: tailscale/tailscale:latest
+    container_name: tailscale-api
+    hostname: loreholm-api
+    restart: unless-stopped
+    depends_on:
+      headscale:
+        condition: service_healthy
+      tailscale-init:
+        condition: service_completed_successfully
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    volumes:
+      - tailscale_api_state:/var/lib/tailscale
+      - tailscale_init:/var/lib/tailscale-init:ro
+      - /dev/net/tun:/dev/net/tun
+      - /opt/mcp-cloud/deploy/tailscale-entrypoint.sh:/entrypoint.sh:ro
+    environment:
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_USERSPACE=false
+      - TS_EXTRA_ARGS=--login-server=https://${HEADSCALE_DOMAIN:-loreholm.com}:50443
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    expose:
+      - "8080"  # Expose mcp-api port (shares this network)
+    healthcheck:
+          test: ["CMD", "tailscale", "status"]
+          interval: 10s   # Check more frequently
+          timeout: 5s
+          retries: 10     # Give it more chances
+          start_period: 120s # Give it 2 full minutes to negotiate the mesh
+    networks:
+      - mcp-network
+
+  mcp-api:
+    # Overridable so deploys can pin an exact published version; defaults to
+    # latest so a bare `docker compose up` still works.
+    image: ${MCP_API_IMAGE:-ghcr.io/loreholm/mcp-api:latest}
+    container_name: mcp-api
+    # Share network with tailscale-api to access the Tailscale mesh
+    # NOTE: This means mcp-api is NOT on mcp-network and cannot resolve Docker hostnames like "headscale"
+    network_mode: service:tailscale-api
+    depends_on:
+      tailscale-api:
+        condition: service_healthy
+    environment:
+      AUTH0_CLIENT_ID: "${AUTH0_CLIENT_ID}"
+      AUTH0_CLIENT_SECRET: "${AUTH0_CLIENT_SECRET}"
+      AUTH0_DOMAIN: "${AUTH0_DOMAIN}"
+      AUTH0_AUDIENCE: "${AUTH0_AUDIENCE}"
+      AUTH0_AUDIENCE_COMPAT: "${AUTH0_AUDIENCE_COMPAT:-}"
+      AUTH0_FRONTEND_AUDIENCE: "${AUTH0_FRONTEND_AUDIENCE:-}"
+      # Hardcoded: must use public domain since this container shares tailscale-api's network
+      # and cannot resolve Docker hostnames like "headscale"
+      HEADSCALE_API_URL: "https://${HEADSCALE_DOMAIN:-loreholm.com}:50443"
+      HEADSCALE_API_KEY: "${HEADSCALE_API_KEY}"
+      PUBLIC_API_HOST: "${PUBLIC_API_HOST:-loreholm.com}"
+      API_KEY_SIGNING_SECRET: "${API_KEY_SIGNING_SECRET}"
+      REDIS_HOST: "${REDIS_HOST}"
+      REDIS_PORT: "${REDIS_PORT:-6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD}"
+      REDIS_DB: "${REDIS_DB:-0}"
+      PG_DB: "${PG_DB}"
+      PG_PORT: "${PG_PORT:-5432}"
+      PG_PW: "${PG_PW}"
+      PG_SERVER: "${PG_SERVER}"
+      PG_USER: "${PG_USER}"
+      # BYODB sync — cloud-only signing secret from which per-user bearer
+      # tokens are derived via HMAC-SHA256(secret, auth0_sub). See
+      # `api/app/services/sync_auth.py`. The derivation runs on every
+      # outbound cloud->local sync call and on install-command generation
+      # (onboarding/router.py), so every user's install receives a
+      # distinct token that the local dashboard compares byte-for-byte.
+      # Required for: API-key creation sidebar database discovery,
+      # tailnet_pull atomic sync on key creation, MCP query proxy.
+      # Rotation: bumping this secret invalidates every currently-installed
+      # user token — affected users need to re-run the install command
+      # from their onboarding dashboard.
+      LOCAL_SYNC_SIGNING_SECRET: "${LOCAL_SYNC_SIGNING_SECRET}"
+      # AUTH_TOKEN: "optional"  # Legacy auth
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: mcp-nginx
+    depends_on:
+      - mcp-api
+      - chat
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - /opt/mcp-cloud/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /opt/mcp-cloud/web:/var/www/html:ro
+      - chat_web:/var/www/chat:ro
+      - /opt/mcp-cloud/certbot/www:/var/www/certbot:ro
+      - /opt/mcp-cloud/certbot/conf:/etc/letsencrypt:ro
+    restart: unless-stopped
+    networks:
+      - mcp-network
+
+  chat:
+    image: ${LOREHOLM_CHAT_IMAGE:-ghcr.io/loreholm/loreholm-chat:latest}
+    container_name: loreholm-chat
+    restart: unless-stopped
+    command: sh -c "rm -rf /chat/* && cp -a /src/. /chat/ && tail -f /dev/null"
+    volumes:
+      - chat_web:/chat
+    networks:
+      - mcp-network
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: mcp-certbot
+    volumes:
+      - /opt/mcp-cloud/certbot/www:/var/www/certbot
+      - /opt/mcp-cloud/certbot/conf:/etc/letsencrypt
+    entrypoint: /bin/sh -c
+    command: "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h; done"
+    restart: unless-stopped
+
+networks:
+  mcp-network:
+    name: mcp-network
+    driver: bridge
+
+volumes:
+  tailscale_api_state:
+    name: tailscale-api-state
+  tailscale_init:
+    name: tailscale-init
+  chat_web:
+    name: chat-web

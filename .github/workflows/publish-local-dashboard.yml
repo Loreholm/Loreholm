@@ -1,0 +1,62 @@
+# Builds and publishes the local dashboard image users pull during install
+# (multi-arch: amd64 + arm64). Built in the open from public source — the
+# image you run is built from the code you can read. No secrets beyond the
+# workflow's own GITHUB_TOKEN.
+name: Publish Local Dashboard Image
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+    paths:
+      - "api/app/local_dashboard/**"
+      - "api/app/__init__.py"
+      - "api/Dockerfile.local-dashboard"
+      - "api/requirements-local-dashboard.txt"
+      - ".github/workflows/publish-local-dashboard.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: mcp-local-dashboard-image-publish
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish-local-dashboard:
+    runs-on: ubuntu-latest
+    env:
+      LOCAL_DASHBOARD_CACHE_SCOPE: mcp-local-dashboard
+      LOCAL_DASHBOARD_PLATFORMS: linux/amd64,linux/arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push local dashboard image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: api/Dockerfile.local-dashboard
+          push: true
+          platforms: ${{ env.LOCAL_DASHBOARD_PLATFORMS }}
+          cache-from: type=gha,scope=${{ env.LOCAL_DASHBOARD_CACHE_SCOPE }}
+          cache-to: type=gha,scope=${{ env.LOCAL_DASHBOARD_CACHE_SCOPE }},mode=max
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/mcp-local-dashboard:latest
+            ghcr.io/${{ github.repository_owner }}/mcp-local-dashboard:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/mcp-local-dashboard:${{ github.ref_name }}

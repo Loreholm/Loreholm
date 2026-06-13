@@ -1,0 +1,32 @@
+services:
+  headscale:
+    image: docker.io/headscale/headscale:0.25.1
+    container_name: headscale
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /var/run/headscale
+    ports:
+      - "0.0.0.0:50443:50443"  # Main control server for Tailscale clients (HTTPS)
+      - "127.0.0.1:8080:50443" # Internal API access via localhost:8080
+    environment:
+      - HEADSCALE_DOMAIN=${HEADSCALE_DOMAIN:-loreholm.com}
+    volumes:
+      - /opt/mcp-cloud/headscale/config:/etc/headscale:ro
+      - /opt/mcp-cloud/headscale/lib:/var/lib/headscale
+      # Mount certbot certificates (stored at /opt/mcp-cloud/certbot/conf on host)
+      # This maps to /etc/letsencrypt inside the container for Headscale config compatibility
+      - /opt/mcp-cloud/certbot/conf:/etc/letsencrypt:ro
+    command: serve
+    healthcheck:
+      test: ["CMD", "headscale", "version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - mcp-network
+
+networks:
+  mcp-network:
+    name: mcp-network
+    driver: bridge

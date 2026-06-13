@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentation | loreholm</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="nav-brand">loreholm</a>
+            <div class="nav-links">
+                <a href="/#features">Features</a>
+                <a href="/docs" class="active">Docs</a>
+                <button id="loginBtn" class="btn btn-primary">Sign In</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="docs-page">
+        <div class="container">
+            <div class="docs-header">
+                <h1>Documentation</h1>
+                <p class="lead">Setup and integration guides for loreholm, a BYODB memory layer for AI conversations.</p>
+                <p class="beta-banner"><strong>Beta status:</strong> pricing is not published yet. Access is currently focused on onboarding and product feedback.</p>
+            </div>
+
+            <div class="docs-content">
+                <!-- What is loreholm -->
+                <section class="docs-section" id="what-is-loreholm">
+                    <h2>What is loreholm?</h2>
+                    <p>
+                        <strong>loreholm</strong> is a bring-your-own-database memory layer for LLM conversations, built around the
+                        <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">Model Context Protocol (MCP)</a>.
+                    </p>
+                    <p>
+                        It provides a structured, inspectable way to:
+                    </p>
+                    <ul>
+                        <li>Store human-readable memories derived from LLM conversations</li>
+                        <li>Link those memories to entities (people, projects, tools, concepts)</li>
+                        <li>Retrieve relevant context to ground future conversations</li>
+                        <li>Keep humans in control of what is remembered and why</li>
+                    </ul>
+                    <p>
+                        At its core, loreholm is a <strong>tool for thinking</strong> — not an autonomous agent and not a black box.
+                        All memory interaction happens through explicit MCP tools. There are no hidden background writes or implicit memory mutation.
+                    </p>
+                </section>
+
+                <!-- How it works -->
+                <section class="docs-section" id="how-it-works">
+                    <h2>How It Works</h2>
+                    <div class="architecture-diagram">
+                        <pre>
+┌─────────────────┐
+│   Your LLM      │  (Claude, GPT, etc.)
+│   Application   │
+└────────┬────────┘
+         │ MCP Tools
+         ▼
+┌─────────────────┐
+│  loreholm API  │  (Hosted service)
+│   api.loreholm.com
+└────────┬────────┘
+         │ Tailscale (encrypted)
+         ▼
+┌─────────────────┐
+│   Your Server   │  (Your hardware)
+│   ArcadeDB      │  (Apache 2.0)
+└─────────────────┘
+                        </pre>
+                    </div>
+                    <h3>The BYODB Model</h3>
+                    <p>
+                        "Bring Your Own Database" means your data stays on your hardware. We provide the API service
+                        that connects to your self-hosted ArcadeDB instance over a secure Tailscale network.
+                    </p>
+                    <ul>
+                        <li><strong>Your data, your hardware</strong> — ArcadeDB runs on your machine</li>
+                        <li><strong>Secure connection</strong> — Tailscale creates an encrypted mesh network</li>
+                        <li><strong>Simple setup</strong> — One install script gets everything running</li>
+                        <li><strong>Open source</strong> — ArcadeDB is Apache 2.0, Cypher on top of a standard HTTP API</li>
+                    </ul>
+                </section>
+
+                <!-- Getting Started -->
+                <section class="docs-section" id="getting-started">
+                    <h2>Getting Started</h2>
+                    
+                    <div class="step-card">
+                        <div class="step-header">
+                            <span class="step-number">1</span>
+                            <h3>Create Your Account</h3>
+                        </div>
+                        <p>
+                            Sign up at <a href="/">loreholm.com</a> to get access to your dashboard. 
+                            This creates your user account and generates your unique namespace.
+                        </p>
+                    </div>
+
+                    <div class="step-card">
+                        <div class="step-header">
+                            <span class="step-number">2</span>
+                            <h3>Run the Install Script</h3>
+                        </div>
+                        <p>
+                            From your dashboard, copy the install command for your platform:
+                        </p>
+                        
+                        <!-- Platform Selector -->
+                        <div class="platform-selector">
+                            <button class="platform-tab active" data-platform="unix">Linux / macOS</button>
+                            <button class="platform-tab" data-platform="windows">Windows</button>
+                        </div>
+                        
+                        <!-- Linux/macOS Command -->
+                        <div class="platform-content active" data-platform="unix">
+                            <div class="code-block-large">
+                                <pre>curl -fsSL https://loreholm.com/install.sh | bash -s -- --key YOUR_KEY</pre>
+                            </div>
+                        </div>
+                        
+                        <!-- Windows Command -->
+                        <div class="platform-content" data-platform="windows">
+                            <div class="code-block-large">
+                                <pre>irm loreholm.com/install.ps1 | iex</pre>
+                            </div>
+                            <p><small>Or download and run with your key:</small></p>
+                            <div class="code-block-large">
+                                <pre>Invoke-WebRequest -Uri https://loreholm.com/install.ps1 -OutFile install.ps1
+.\install.ps1 -Key "YOUR_KEY"</pre>
+                            </div>
+                        </div>
+                        
+                        <p>This script:</p>
+                        <ul>
+                            <li>Checks that Docker is installed</li>
+                            <li>Creates a <code>~/.loreholm</code> directory (or <code>%USERPROFILE%\.loreholm</code> on Windows)</li>
+                            <li>Deploys Tailscale + a shared ArcadeDB server + Bifrost + local dashboard via Docker Compose (databases are created on demand inside the shared server from the dashboard)</li>
+                            <li>Connects your node to the secure Tailscale network</li>
+                        </ul>
+                        <div class="requirements-box">
+                            <strong>Requirements:</strong>
+                            <ul>
+                                <li>Docker and Docker Compose installed (<a href="https://docs.docker.com/get-docker/" target="_blank">Docker Desktop</a> for Windows/Mac)</li>
+                                <li>Ports 2480 (ArcadeDB HTTP / Studio) and 4466 (local dashboard) available</li>
+                                <li>Linux, macOS, or Windows 10/11</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="step-card">
+                        <div class="step-header">
+                            <span class="step-number">3</span>
+                            <h3>Verify Connection</h3>
+                        </div>
+                        <p>
+                            Once the install completes, return to your dashboard. You should see:
+                        </p>
+                        <ul>
+                            <li><strong>Node Status:</strong> Connected</li>
+                            <li><strong>Database Status:</strong> Connected</li>
+                        </ul>
+                        <p>
+                            If the database shows "Not Connected," give it a minute — the first connection can take 
+                            up to 30 seconds as Tailscale establishes the mesh.
+                        </p>
+                    </div>
+
+                    <div class="step-card">
+                        <div class="step-header">
+                            <span class="step-number">4</span>
+                            <h3>Create an API Key</h3>
+                        </div>
+                        <p>
+                            From your dashboard, navigate to the API Keys section and create a new API key. 
+                            This key will authenticate your AI model's requests to the loreholm API.
+                        </p>
+                        <div class="requirements-box">
+                            <strong>Keep your API key secure!</strong> It provides full access to your memory database.
+                        </div>
+                        <p>
+                            Need one key per use case or workspace? See
+                            <a href="#multiple-databases">Create Multiple Databases</a> below.
+                        </p>
+                    </div>
+
+                    <div class="step-card">
+                        <div class="step-header">
+                            <span class="step-number">5</span>
+                            <h3>Connect Your AI Model</h3>
+                        </div>
+                        <p>
+                            Choose the integration method that works best for your use case:
+                        </p>
+                        
+                        <h4>Option 1: Claude.ai Custom Connector (Recommended)</h4>
+                        <p>
+                            If you use <a href="https://claude.ai" target="_blank">Claude.ai</a>, you can connect directly using Custom Connectors:
+                        </p>
+                        <ol>
+                            <li>Go to Claude.ai → Settings → Connectors</li>
+                            <li>Click "Add custom connector"</li>
+                            <li>Enter the URL: <code>https://api.loreholm.com/mcp/v1/</code></li>
+                            <li>Authenticate with your API key when prompted</li>
+                            <li>Done! Claude can now discover and use all 8 loreholm tools automatically</li>
+                        </ol>
+                        <p>
+                            This uses the official <a href="https://modelcontextprotocol.io" target="_blank">Model Context Protocol</a> 
+                            specification with JSON-RPC, allowing Claude to:
+                        </p>
+                        <ul>
+                            <li>Automatically discover available tools via <code>tools/list</code></li>
+                            <li>Call tools dynamically based on conversation context</li>
+                            <li>Receive structured responses for further reasoning</li>
+                        </ul>
+
+                        <h4>Option 2: Custom AI Integration</h4>
+                        <p>
+                            For other AI models or custom applications, you can use either:
+                        </p>
+                        <ul>
+                            <li><strong>Official MCP Protocol</strong> (JSON-RPC 2.0 over HTTP) — Same as Claude.ai uses</li>
+                            <li><strong>REST API</strong> (Simple HTTP endpoints) — For easier integration</li>
+                        </ul>
+                        
+                        <h5>Quick Test - MCP Protocol:</h5>
+                        <div class="code-block-large">
+                            <pre># List available tools
+curl -X POST "https://api.loreholm.com/mcp/v1/" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'</pre>
+                        </div>
+                        <p>
+                            <strong>Protocol note:</strong> MCP clients usually call <code>initialize</code> first, then send
+                            <code>notifications/initialized</code>. Notifications are acknowledged with HTTP <code>202</code>.
+                            JSON-RPC method errors are returned in the JSON <code>error</code> payload (typically with HTTP <code>200</code>).
+                            Resource probes (<code>resources/list</code> and <code>resources/templates/list</code>) are supported and return empty lists when no resources are exposed.
+                        </p>
+
+                        <h5>Quick Test - REST API:</h5>
+                        <div class="code-block-large">
+                            <pre># List available tools
+curl -X GET "https://api.loreholm.com/mcp/tools" \
+  -H "X-API-Key: YOUR_API_KEY"</pre>
+                        </div>
+                        <p>
+                            <strong>Behavior note:</strong> <code>/mcp/tools</code> returns static tool definitions and does not require
+                            a live database connection.
+                        </p>
+
+                        <p>
+                            For complete integration examples with Python, JavaScript, and detailed API documentation, 
+                            see the <a href="#" id="apiDocsLinkInline" target="_blank">API Reference</a>.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- Multiple Databases -->
+                <section class="docs-section" id="multiple-databases">
+                    <h2>Create Multiple Databases</h2>
+                    <p>
+                        You can run multiple ArcadeDB databases on one BYODB machine and bind separate API keys to each one.
+                        This is useful for splitting work/personal contexts, environments, or teams.
+                    </p>
+
+                    <h3>1) Open your Local Dashboard and create a database</h3>
+                    <ol>
+                        <li>From <code>loreholm.com/dashboard</code>, click <strong>Open Local Dashboard</strong></li>
+                        <li>In <strong>Create Database</strong>, enter <code>database_id</code> and display name</li>
+                        <li>Click <strong>Create Database</strong></li>
+                    </ol>
+                    <p>
+                        All databases live inside the one shared <code>loreholm-arcadedb</code> server — there is no second container and no per-database port. The local dashboard runs <code>CREATE DATABASE</code> on the shared server, runs the bootstrap DDL (vertex/edge types + HNSW vector indexes), and appends the new database to your local registry automatically.
+                    </p>
+
+                    <h3>2) Verify local registry entries</h3>
+                    <p>
+                        Local registry file locations:
+                    </p>
+                    <ul>
+                        <li>Linux/macOS: <code>~/.loreholm/databases.json</code></li>
+                        <li>Windows: <code>%USERPROFILE%\.loreholm\databases.json</code></li>
+                    </ul>
+                    <p>
+                        If you use the Local Dashboard create flow, entries are added automatically. Each record describes one database inside the shared server — no connection info (<code>host</code>, <code>port</code>, <code>container_name</code>, credentials) is stored, since every database resolves to the same server.
+                    </p>
+                    <div class="code-block-large">
+                        <pre>{
+  "version": 1,
+  "databases": [
+    {
+      "database_id": "default",
+      "name": "Default",
+      "backend": "arcadedb",
+      "embedding_model": "harrier-270m",
+      "embedding_dimension": 640,
+      "profile_id": "memory-default",
+      "profile_hash": "sha256:…"
+    },
+    {
+      "database_id": "personal-db",
+      "name": "Personal",
+      "backend": "arcadedb",
+      "embedding_model": "harrier-270m",
+      "embedding_dimension": 640,
+      "profile_id": "memory-default",
+      "profile_hash": "sha256:…"
+    }
+  ]
+}</pre>
+                    </div>
+                    <p>
+                        <code>database_id</code> is the key identifier you will use in API key creation.
+                    </p>
+
+                    <h3>3) Create one API key per database ID</h3>
+                    <ol>
+                        <li>Go to <code>loreholm.com/dashboard</code> → <strong>Create API Key</strong></li>
+                        <li>Expand <strong>Database Target (Optional)</strong></li>
+                        <li>Set <strong>Database ID</strong> (example: <code>personal-db</code>)</li>
+                    </ol>
+                    <p>
+                        On key creation, loreholm pulls the target route from your local dashboard over the private Tailnet and binds that key to the resolved database target.
+                    </p>
+
+                    <div class="requirements-box">
+                        <strong>Important:</strong> The <code>database_id</code> in the dashboard must exactly match the ID in <code>databases.json</code>.
+                        If not, key creation returns "database not found."
+                    </div>
+
+                    <h3>4) Verify routing</h3>
+                    <p>
+                        Create two keys with different database IDs, then issue the same MCP read call with each key.
+                        You should see results from different databases on the shared server.
+                    </p>
+                </section>
+
+                <!-- MCP Tools Overview -->
+                <section class="docs-section" id="mcp-tools">
+                    <h2>Available Tools</h2>
+                    <p>
+                        Your AI model can discover and call these tools automatically. 
+                        All tools are designed to be:
+                    </p>
+                    <ul>
+                        <li><strong>Explicit</strong> — No hidden behavior</li>
+                        <li><strong>Deterministic</strong> — Same input → same effect</li>
+                        <li><strong>Inspectable</strong> — Results can be audited</li>
+                        <li><strong>Composable</strong> — Do one thing well</li>
+                    </ul>
+
+                    <div class="tools-grid">
+                        <div class="tool-card">
+                            <h4>loreholm_upsert_entities</h4>
+                            <p>Create or update canonical entities (people, projects, tools, concepts).</p>
+                            <code>→ JSON Schema with properties</code>
+                        </div>
+                        <div class="tool-card">
+                            <h4>loreholm_write_memory</h4>
+                            <p>Store a memory with automatic embedding generation for semantic search.</p>
+                            <code>→ Requires text, confidence, source_ref</code>
+                        </div>
+                        <div class="tool-card">
+                            <h4>loreholm_link_entities</h4>
+                            <p>Create relationships between entities (e.g., "Alice WORKS_ON ProjectX").</p>
+                            <code>→ Creates directed edges in graph</code>
+                        </div>
+                        <div class="tool-card">
+                            <h4>loreholm_delete_entities</h4>
+                            <p>Delete entities by ID when memories are stale, incorrect, or test data.</p>
+                            <code>→ Uses detach-delete semantics</code>
+                        </div>
+                        <div class="tool-card">
+                            <h4>loreholm_search</h4>
+                            <p>Semantic search across all memories using vector similarity.</p>
+                            <code>→ Returns top_k results with confidence</code>
+                        </div>
+                        <div class="tool-card">
+                            <h4>loreholm_context</h4>
+                            <p>Get full context for an entity including related memories and relationships.</p>
+                            <code>→ Graph traversal with configurable depth</code>
+                        </div>
+                        <div class="tool-card">
+                            <h4>loreholm_recent</h4>
+                            <p>Retrieve recently stored memories, optionally filtered by time.</p>
+                            <code>→ Sorted by timestamp</code>
+                        </div>
+                        <div class="tool-card">
+                            <h4>loreholm_stats</h4>
+                            <p>Get database statistics: entity counts, memory counts, top entities.</p>
+                            <code>→ Overview of knowledge graph</code>
+                        </div>
+                    </div>
+
+                    <p class="tools-cta">
+                        <strong>Note:</strong> When using Claude.ai Custom Connectors or the official MCP protocol, 
+                        these tools are automatically discovered via the <code>tools/list</code> method with full JSON Schema definitions.
+                        <br><br>
+                        For complete tool schemas, examples, and integration code, see the <a href="#" id="apiDocsLinkTools" target="_blank">API Reference →</a>
+                    </p>
+                </section>
+
+                <!-- Updating -->
+                <section class="docs-section" id="updating">
+                    <h2>Updating Your Installation</h2>
+                    <p>
+                        When we release updates, you can update your local installation without losing any data:
+                    </p>
+                    <div class="code-block-large">
+                        <pre>curl -fsSL https://loreholm.com/update.sh | bash</pre>
+                    </div>
+                    <p>
+                        The update script:
+                    </p>
+                    <ul>
+                        <li>Backs up your current docker-compose.yml</li>
+                        <li>Pulls the latest container images</li>
+                        <li>Restarts services with zero data loss</li>
+                        <li>Preserves your Tailscale authentication</li>
+                    </ul>
+                </section>
+
+                <!-- ArcadeDB Studio -->
+                <section class="docs-section" id="arcadedb-studio">
+                    <h2>ArcadeDB Studio</h2>
+                    <p>
+                        The shared ArcadeDB server ships with <a href="https://docs.arcadedb.com/#Studio" target="_blank" rel="noopener">ArcadeDB Studio</a>, a visual interface for exploring your graph databases.
+                    </p>
+                    <p>
+                        Access it at <code>http://localhost:2480/</code> on your database host machine. Login as <code>root</code> with the password from <code>~/.loreholm/arcadedb-root.password</code>.
+                    </p>
+                    <p>With Studio you can:</p>
+                    <ul>
+                        <li>Run Cypher (or SQL / Gremlin) queries directly</li>
+                        <li>Visualize entity relationships as a graph</li>
+                        <li>Inspect <code>Memory</code>, <code>Entity</code>, and <code>Staging</code> vertices and their HNSW-indexed embeddings</li>
+                        <li>Export query results</li>
+                    </ul>
+                </section>
+
+                <!-- Security -->
+                <section class="docs-section" id="security">
+                    <h2>Security Model</h2>
+                    <ul>
+                        <li><strong>Data stays local</strong> — Your ArcadeDB instance runs on your hardware</li>
+                        <li><strong>Encrypted transport</strong> — Tailscale provides end-to-end encryption</li>
+                        <li><strong>No public exposure</strong> — Database is only accessible via private Tailscale network</li>
+                        <li><strong>Auth0 authentication</strong> — API access requires valid JWT tokens</li>
+                        <li><strong>User isolation</strong> — Each user's data is namespaced and isolated</li>
+                    </ul>
+                </section>
+
+                <!-- FAQ -->
+                <section class="docs-section" id="faq">
+                    <h2>FAQ</h2>
+
+                    <div class="faq-item">
+                        <h4>What are the system requirements?</h4>
+                        <p>
+                            ArcadeDB is lightweight for graph + vector workloads. A machine with 2GB RAM and 10GB disk space is sufficient for most use cases.
+                            Docker must be installed and running.
+                        </p>
+                    </div>
+
+                    <div class="faq-item">
+                        <h4>Can I run this on a Raspberry Pi?</h4>
+                        <p>
+                            Yes! ArcadeDB runs on the JVM and supports ARM64. A Raspberry Pi 4 with 4GB+ RAM works well.
+                        </p>
+                    </div>
+
+                    <div class="faq-item">
+                        <h4>What happens if my server goes offline?</h4>
+                        <p>
+                            MCP tool calls will fail gracefully. When your server comes back online,
+                            Tailscale automatically reconnects. No data is lost.
+                        </p>
+                    </div>
+
+                    <div class="faq-item">
+                        <h4>Can I use my own Tailscale network?</h4>
+                        <p>
+                            Currently, loreholm uses a managed Headscale server for the mesh network.
+                            We're exploring options for BYOVPN in a future release.
+                        </p>
+                    </div>
+
+                    <div class="faq-item">
+                        <h4>How do I backup my data?</h4>
+                        <p>
+                            All databases share the ArcadeDB server's named Docker volumes (<code>loreholm-arcadedb-data</code> and <code>loreholm-arcadedb-log</code>).
+                            You can back it up using standard Docker volume backup methods, or use ArcadeDB's
+                            built-in backup commands from Studio.
+                        </p>
+                    </div>
+
+                    <div class="faq-item">
+                        <h4>Can I access my database directly?</h4>
+                        <p>
+                            Yes! ArcadeDB Studio is available at <code>http://localhost:2480/</code> on your host.
+                            You can also hit the HTTP API at <code>http://localhost:2480/api/v1/command/&lt;database&gt;</code> with any HTTP client.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- Support -->
+                <section class="docs-section" id="support">
+                    <h2>Getting Help</h2>
+                    <p>
+                        Need assistance? Here are your options:
+                    </p>
+                    <ul>
+                        <li><strong>Email:</strong> support@loreholm.com</li>
+                        <li><strong>GitHub:</strong> <a href="https://github.com/loreholm/loreholm/issues" target="_blank" rel="noopener">Open an issue</a></li>
+                    </ul>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2026 loreholm. Built for thinking, not surveillance.</p>
+        </div>
+    </footer>
+
+    <script src="/js/config.js"></script>
+    <script src="/js/auth.js"></script>
+    <script>
+        // Wire up login button
+        document.getElementById('loginBtn').addEventListener('click', () => {
+            window.auth.login();
+        });
+
+        // Set API docs links dynamically
+        const apiDocsUrl = window.location.origin.replace('://', '://api.') + '/docs';
+        document.getElementById('apiDocsLinkInline').href = apiDocsUrl;
+        document.getElementById('apiDocsLinkTools').href = apiDocsUrl;
+
+        // Platform selector functionality
+        document.querySelectorAll('.platform-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const platform = tab.getAttribute('data-platform');
+                
+                // Update active tab
+                document.querySelectorAll('.platform-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                // Update visible content
+                document.querySelectorAll('.platform-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+                document.querySelectorAll(`.platform-content[data-platform="${platform}"]`).forEach(content => {
+                    content.classList.add('active');
+                });
+            });
+        });
+
+        // Detect platform and set default
+        const detectPlatform = () => {
+            const userAgent = navigator.userAgent.toLowerCase();
+            const platform = navigator.platform.toLowerCase();
+            
+            if (platform.includes('win')) {
+                return 'windows';
+            } else {
+                return 'unix';  // Default for Linux/macOS
+            }
+        };
+
+        // Set default platform on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            const detectedPlatform = detectPlatform();
+            const defaultTab = document.querySelector(`.platform-tab[data-platform="${detectedPlatform}"]`);
+            if (defaultTab) {
+                defaultTab.click();
+            }
+        });
+    </script>
+</body>
+</html>

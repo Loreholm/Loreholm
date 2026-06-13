@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remote | loreholm</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="nav-brand">loreholm</a>
+            <div class="nav-links">
+                <a href="/docs">Docs</a>
+                <span id="userEmail" class="user-email"></span>
+                <button id="logoutBtn" class="btn btn-secondary">Sign Out</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="dashboard">
+        <!-- Sidebar overlay -->
+        <div id="sidebarOverlay" class="sidebar-overlay"></div>
+        
+        <!-- Create API Key Sidebar -->
+        <div id="createKeySidebar" class="sidebar">
+            <div class="sidebar-content">
+                <div class="sidebar-header">
+                    <h3>Create API Key</h3>
+                    <button type="button" id="closeSidebar" class="btn-close" aria-label="Close">&times;</button>
+                </div>
+                <form id="createKeyForm">
+                    <div class="form-group">
+                        <label for="keyName">Key Name</label>
+                        <input type="text" id="keyName" name="name" placeholder="e.g., Claude Desktop" required maxlength="100">
+                        <p class="form-hint">A friendly name to identify this key</p>
+                    </div>
+                    <div class="form-group">
+                        <label for="keyExpiry">Expires In</label>
+                        <select id="keyExpiry" name="expires_days">
+                            <option value="30">30 days</option>
+                            <option value="90">90 days</option>
+                            <option value="365" selected>1 year</option>
+                            <option value="730">2 years</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="dbTargetSelect">Database</label>
+                        <select id="dbTargetSelect" name="database_id_select">
+                            <option value="">Default (no binding)</option>
+                        </select>
+                        <p class="form-hint" id="dbDiscoveryStatus">Discovering databases on your local node…</p>
+                        <button type="button" id="dbRefreshBtn" class="btn btn-small btn-secondary" style="margin-top: 6px;">Refresh list</button>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" id="cancelCreateKey" class="btn btn-secondary">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Create Key</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="container">
+            <div id="loading" class="loading-state">
+                <div class="spinner"></div>
+                <p>Loading your dashboard...</p>
+            </div>
+
+            <div id="initialized" class="dashboard-content" style="display: none;">
+
+                <div class="devices-card">
+                    <div class="devices-header">
+                        <h2>Devices</h2>
+                        <span id="devicesCap" class="devices-cap"></span>
+                    </div>
+                    <p class="help-text">Machines running loreholm on your network. Each device has its own database.</p>
+
+                    <div id="devicesEmpty" class="devices-empty" style="display: none;">
+                        <p>No devices yet. Add your first one to get started.</p>
+                    </div>
+
+                    <div id="devicesTableWrapper" class="devices-table-wrapper" style="display: none;">
+                        <table class="devices-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Status</th>
+                                    <th>Last Seen</th>
+                                    <th class="actions-col">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="devicesTableBody"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="devices-footer">
+                        <button id="addDeviceBtn" class="btn btn-primary">+ Add Device</button>
+                    </div>
+                </div>
+
+                <div class="maintenance-card">
+                    <h2>Maintenance</h2>
+                    <p class="help-text">Run these commands on the device you want to update or uninstall.</p>
+                    <div class="command-platform">
+                        <label for="commandPlatformSelect">Platform</label>
+                        <select id="commandPlatformSelect">
+                            <option value="unix">Linux / macOS</option>
+                            <option value="windows">Windows (PowerShell)</option>
+                        </select>
+                        <label for="setupModeSelect">Setup Mode</label>
+                        <select id="setupModeSelect">
+                            <option value="recommended">Guided (Recommended)</option>
+                            <option value="legacy">Legacy Script</option>
+                        </select>
+                    </div>
+
+                    <h3 class="maintenance-subhead">Update</h3>
+                    <div class="code-block">
+                        <code id="updateCommand">Loading...</code>
+                        <div class="code-actions">
+                            <button id="previewBtn" class="btn btn-small btn-secondary" title="Preview script contents">
+                                👁 Preview
+                            </button>
+                            <button id="copyBtn" class="btn btn-small btn-copy" title="Copy to clipboard">
+                                📋 Copy
+                            </button>
+                        </div>
+                    </div>
+
+                    <h3 class="maintenance-subhead">Uninstall</h3>
+                    <div class="code-block">
+                        <code id="uninstallCommand">Loading...</code>
+                        <div class="code-actions">
+                            <button id="previewUninstallBtn" class="btn btn-small btn-secondary" title="Preview script contents">
+                                👁 Preview
+                            </button>
+                            <button id="copyUninstallBtn" class="btn btn-small btn-copy" title="Copy to clipboard">
+                                📋 Copy
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="api-keys-card">
+                    <h2>🔑 API Keys</h2>
+                    <p class="help-text">Create API keys for MCP clients like Claude Desktop, Cursor, or custom integrations.</p>
+                    
+                    <div id="apiKeysList" class="api-keys-list">
+                        <p class="loading-text">Loading keys...</p>
+                    </div>
+                    
+                    <div class="api-keys-footer">
+                        <span id="keyCount" class="key-count">0 / 10 keys</span>
+                        <button id="createApiKeyBtn" class="btn btn-primary">+ Create API Key</button>
+                    </div>
+                </div>
+
+                <div class="access-card">
+                    <h2>Access Your Database</h2>
+                    <div class="access-grid">
+                        <div class="access-item">
+                            <h3>MCP API</h3>
+                            <p>Use these endpoints in your LLM configuration</p>
+                            <a id="apiDocsLink" href="#" target="_blank" rel="noopener" class="btn btn-secondary">
+                                View API Docs →
+                            </a>
+                        </div>
+                        <div class="access-item">
+                            <h3>Local Dashboard</h3>
+                            <p>Resolve and open your server's local dashboard URL from your BYODB node.</p>
+                            <a id="localDashboardLink" href="#" class="btn btn-secondary">
+                                Open Local Dashboard →
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="error" class="error-card" style="display: none;">
+                <h2>⚠️ Error</h2>
+                <p id="errorMessage"></p>
+                <button id="retryBtn" class="btn btn-primary">Retry</button>
+            </div>
+        </div>
+    </div>
+
+
+
+    <!-- Show API Key Modal (shown once after creation) -->
+    <dialog id="showKeyModal" class="modal">
+        <div class="modal-content">
+            <h3>🔑 API Key Created</h3>
+            <div class="warning-box">
+                <strong>⚠️ Copy this key now!</strong>
+                <p>You won't be able to see it again.</p>
+            </div>
+            <div class="code-block api-key-display">
+                <code id="newApiKey"></code>
+                <button id="copyNewKeyBtn" class="btn btn-small btn-copy" title="Copy to clipboard">📋 Copy</button>
+            </div>
+            <div class="mcp-config-hint">
+                <div class="mcp-platform-picker">
+                    <label for="mcpPlatformSelect"><strong>Where are you installing this MCP server?</strong></label>
+                    <select id="mcpPlatformSelect">
+                        <option value="claude-code">Claude Code (CLI)</option>
+                        <option value="codex">Codex CLI</option>
+                        <option value="claude-desktop">Claude Desktop</option>
+                        <option value="cursor">Cursor</option>
+                        <option value="vscode">VS Code (GitHub Copilot)</option>
+                        <option value="generic">Other / Raw HTTP</option>
+                    </select>
+                </div>
+                <p id="mcpPlatformInstructions"></p>
+                <div class="mcp-config-code">
+                    <pre id="mcpConfigExample"></pre>
+                    <button type="button" id="copyMcpConfigBtn" class="btn btn-small btn-copy" title="Copy to clipboard">📋 Copy</button>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" id="closeShowKeyModal" class="btn btn-primary">I've Copied the Key</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Add Device Modal -->
+    <dialog id="addDeviceModal" class="modal">
+        <div class="modal-content">
+            <h3>Add a Device</h3>
+            <p class="modal-intro">Choose a name for this device, then run the command on that machine.</p>
+            <form id="addDeviceForm">
+                <div class="form-group">
+                    <label for="addDeviceName">Device Name</label>
+                    <input type="text" id="addDeviceName" name="name" placeholder="e.g., desktop, laptop, work-mac" required maxlength="63" pattern="[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?">
+                    <p class="form-hint">Lowercase letters, digits, and hyphens. 1–63 characters.</p>
+                </div>
+                <div class="form-group">
+                    <label for="addDevicePlatformSelect">Platform</label>
+                    <select id="addDevicePlatformSelect">
+                        <option value="unix">Linux / macOS</option>
+                        <option value="windows">Windows (PowerShell)</option>
+                    </select>
+                </div>
+                <div class="add-device-command" id="addDeviceCommandWrapper" style="display: none;">
+                    <label>Run on the new device:</label>
+                    <div class="code-block">
+                        <code id="addDeviceCommand"></code>
+                        <div class="code-actions">
+                            <button type="button" id="copyAddDeviceCmdBtn" class="btn btn-small btn-copy" title="Copy to clipboard">📋 Copy</button>
+                        </div>
+                    </div>
+                    <p class="help-text" id="addDeviceCommandHint">After the install finishes, return here — the device will appear in the table.</p>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" id="cancelAddDevice" class="btn btn-secondary">Close</button>
+                    <button type="submit" id="generateAddDeviceCmd" class="btn btn-primary">Generate Command</button>
+                </div>
+            </form>
+        </div>
+    </dialog>
+
+    <!-- Rename Device Modal -->
+    <dialog id="renameDeviceModal" class="modal">
+        <div class="modal-content">
+            <h3>Rename Device</h3>
+            <form id="renameDeviceForm">
+                <input type="hidden" id="renameDeviceId">
+                <div class="form-group">
+                    <label for="renameDeviceName">New Name</label>
+                    <input type="text" id="renameDeviceName" name="name" required maxlength="63" pattern="[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?">
+                    <p class="form-hint">Lowercase letters, digits, and hyphens. 1–63 characters.</p>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" id="cancelRenameDevice" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </dialog>
+
+    <!-- Remove Device Modal -->
+    <dialog id="removeDeviceModal" class="modal">
+        <div class="modal-content">
+            <h3>⚠️ Remove Device</h3>
+            <p>Are you sure you want to remove <strong id="removeDeviceName"></strong>?</p>
+            <p class="warning-text" id="removeDeviceWarning">This action cannot be undone. The device will need to re-install if you want to add it back.</p>
+            <div class="modal-actions">
+                <button type="button" id="cancelRemoveDevice" class="btn btn-secondary">Cancel</button>
+                <button type="button" id="confirmRemoveDevice" class="btn btn-danger">Remove Device</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Confirm Revoke Modal -->
+    <dialog id="revokeKeyModal" class="modal">
+        <div class="modal-content">
+            <h3>⚠️ Revoke API Key</h3>
+            <p>Are you sure you want to revoke <strong id="revokeKeyName"></strong>?</p>
+            <p class="warning-text">This action cannot be undone. Any applications using this key will immediately lose access.</p>
+            <div class="modal-actions">
+                <button type="button" id="cancelRevokeKey" class="btn btn-secondary">Cancel</button>
+                <button type="button" id="confirmRevokeKey" class="btn btn-danger">Revoke Key</button>
+            </div>
+        </div>
+    </dialog>
+
+    <script src="/js/config.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/api-keys.js"></script>
+    <script src="/js/dashboard.js"></script>
+</body>
+</html>

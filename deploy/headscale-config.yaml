@@ -1,0 +1,72 @@
+# Headscale configuration for loreholm
+# Place this file at /opt/mcp-cloud/headscale/config/config.yaml on the server
+
+# Server URL - must match your domain and port
+server_url: https://loreholm.com:50443
+
+# Listen addresses
+listen_addr: 0.0.0.0:50443
+metrics_listen_addr: 127.0.0.1:9090
+
+# gRPC settings
+grpc_listen_addr: 127.0.0.1:50444
+grpc_allow_insecure: false
+
+# Private key paths (auto-generated if not present)
+private_key_path: /var/lib/headscale/private.key
+noise:
+  private_key_path: /var/lib/headscale/noise_private.key
+
+# IP prefixes for the Tailscale network
+prefixes:
+  v4: 100.64.0.0/10
+  v6: fd7a:115c:a1e0::/48
+
+# DERP (relay) configuration - use Tailscale's public DERP servers
+derp:
+  server:
+    enabled: false
+  urls:
+    - https://controlplane.tailscale.com/derpmap/default
+  auto_update_enabled: true
+  update_frequency: 24h
+
+# Disable default OIDC (we use Auth0 via the API)
+oidc:
+
+# Database
+database:
+  type: sqlite
+  sqlite:
+    path: /var/lib/headscale/db.sqlite
+
+# ACL Policy - IMPORTANT: This enables user isolation
+# Users can only communicate with the API, not with each other
+# (Headscale 0.23+ replaced `acl_policy_path` with the `policy:` block.)
+policy:
+  mode: file
+  path: /etc/headscale/acl.hujson
+
+# TLS configuration - using Let's Encrypt certs
+tls_cert_path: /etc/letsencrypt/live/loreholm.com/fullchain.pem
+tls_key_path: /etc/letsencrypt/live/loreholm.com/privkey.pem
+
+# Logging
+log:
+  format: text
+  level: info
+
+# DNS configuration
+dns:
+  magic_dns: true
+  base_domain: loreholm.net
+  nameservers:
+    global:
+      - 1.1.1.1
+      - 8.8.8.8
+
+# Ephemeral node settings
+ephemeral_node_inactivity_timeout: 30m
+
+# Disable automatic node expiry (users manage their own nodes)
+node_update_check_interval: 10s

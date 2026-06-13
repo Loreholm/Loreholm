@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Local | loreholm</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Spline+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/local-dashboard.css" />
+</head>
+<body class="loading">
+  <div class="bg-orb bg-orb-a"></div>
+  <div class="bg-orb bg-orb-b"></div>
+  <div class="grain"></div>
+
+  <div id="app" class="app-shell hidden">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <span class="logo-icon"></span>
+          <span class="logo-text">LOREHOLM.DB</span>
+        </div>
+      </div>
+      
+      <nav class="nav-links">
+        <button class="nav-item active" data-view="overview">
+          Overview
+        </button>
+        <button class="nav-item" data-view="databases">
+          Databases
+        </button>
+        <button class="nav-item" data-view="bifrost">
+          AI Models
+        </button>
+        <div class="nav-divider">AI TOOLS</div>
+        <button class="nav-item" data-view="wizard">
+          Setup Wizard
+        </button>
+        <button class="nav-item" data-view="query-builder">
+          Query Builder
+        </button>
+        <div class="nav-divider">ACCOUNT</div>
+        <button class="nav-item" data-view="settings">
+          API Keys
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="footer-row">
+          <div class="status-indicators">
+            <div id="llmStatusIndicator" class="status-pill" title="Bifrost Status">
+              <span class="status-dot status-pending"></span> LLM
+            </div>
+            <div id="dbStatusIndicator" class="status-pill" title="ArcadeDB Status">
+              <span class="status-dot status-pending"></span> DB
+            </div>
+          </div>
+          <button id="logoutBtn" class="logout-btn icon-btn" title="Sign out">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="content-area">
+      <header class="top-bar">
+        <h1 id="viewTitle">Overview</h1>
+        <div class="top-bar-actions">
+          <code id="tokenHelpCommand" class="token-code"></code>
+          <button id="refreshAllBtn" class="refresh-btn icon-btn" title="Refresh">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div id="viewContainer" class="view-container">
+        <!-- Views are injected here -->
+      </div>
+    </main>
+
+    <!-- Console Area (Fixed to bottom) -->
+    <section class="console-fixed" id="consoleArea">
+      <header class="console-header">
+        <span class="console-title">SYSTEM LOGS</span>
+        <div class="console-status">
+          <span class="byodb-status">BYODB CONNECTED</span>
+        </div>
+      </header>
+      <div class="console-body">
+        <textarea id="pollLogConsole" class="poll-log-console" readonly></textarea>
+      </div>
+    </section>
+  </div>
+
+  <!-- Templates for Views -->
+  <template id="view-overview">
+    <div class="overview-grid">
+      <section class="setup-quickstart panel" id="onboardingBanner">
+        <div class="banner-content">
+          <h2>Welcome to Loreholm.DB</h2>
+          <p>It looks like you're just getting started. Use the Setup Wizard to design your first database or configure your LLM provider.</p>
+          <button class="primary-btn" onclick="Router.navigate('wizard')">Open Setup Wizard</button>
+        </div>
+      </section>
+
+      <section class="stat-card panel">
+        <h3>Connected Models</h3>
+        <ul id="modelList" class="data-list">
+          <li class="loading-item">Loading models...</li>
+        </ul>
+      </section>
+
+      <section class="stat-card panel">
+        <h3>Active Databases</h3>
+        <ul id="activeDbList" class="data-list">
+          <li class="loading-item">Loading databases...</li>
+        </ul>
+      </section>
+    </div>
+  </template>
+
+  <template id="view-databases">
+    <div class="databases-view">
+      <header class="view-actions">
+        <h2>Registered Databases</h2>
+        <button class="primary-btn" onclick="Router.navigate('wizard')">+ New Database</button>
+      </header>
+      <div id="databasesGrid" class="databases-grid">
+        <!-- Database cards injected here -->
+      </div>
+    </div>
+  </template>
+
+  <template id="view-bifrost">
+    <div class="bifrost-view">
+      <section class="config-card panel">
+        <h2>AI Model Setup</h2>
+        <p class="section-desc">Connect an AI provider to power your database queries and chat wizard.</p>
+        
+        <div id="llmSetupForm" class="setup-form">
+          <div class="provider-selector">
+            <button class="provider-btn selected" data-provider="openai">OpenAI</button>
+            <button class="provider-btn" data-provider="anthropic">Anthropic</button>
+            <button class="provider-btn" data-provider="google">Google</button>
+            <button class="provider-btn" data-provider="groq">Groq</button>
+            <button class="provider-btn" data-provider="local">Local (Ollama)</button>
+          </div>
+
+          <div class="input-group" id="providerKeyGroup">
+            <label id="providerKeyLabel" for="providerApiKey">API Key</label>
+            <input id="providerApiKey" type="password" placeholder="Paste your key here..." />
+          </div>
+
+          <div class="input-group hidden" id="providerBaseUrlGroup">
+            <label for="providerBaseUrl">Ollama URL</label>
+            <input id="providerBaseUrl" type="text" placeholder="http://host.docker.internal:11434" />
+          </div>
+
+          <div class="form-actions">
+            <button id="saveLlmConfigBtn" class="primary-btn">Connect & Save</button>
+            <button id="loadProviderModelsBtn" class="secondary-btn" type="button">Load Models</button>
+            <button id="disconnectProviderBtn" class="danger-btn" type="button">Disconnect</button>
+            <button id="recheckLlmBtn" class="secondary-btn">Verify</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="models-card panel">
+        <h2>Available Models</h2>
+        <p class="section-desc">These models are currently connected and ready to use.</p>
+        <div id="bifrostModelGrid" class="models-grid">
+          <!-- Models injected here -->
+        </div>
+      </section>
+    </div>
+  </template>
+
+  <template id="view-wizard">
+    <div class="wizard-view">
+      <section class="wizard-chat-card panel">
+        <header class="wizard-header">
+          <div class="wizard-header-top">
+            <div>
+              <h2>Database Setup Wizard</h2>
+              <p>Describe your use case, and I'll help you design and deploy a Graph Database.</p>
+            </div>
+            <div class="wizard-header-actions">
+              <button id="wizardCopyBtn" class="secondary-btn icon-btn" title="Copy chat as Markdown"></button>
+              <button id="wizardNewChatBtn" class="secondary-btn" title="Start a new conversation">New Chat</button>
+            </div>
+          </div>
+          <div class="wizard-model-picker">
+            <label for="wizardModelSelect">Wizard Model (Text LLM)</label>
+            <div class="wizard-model-select-row">
+              <select id="wizardModelSelect"></select>
+              <button id="wizardModelFavoriteBtn" class="model-star-btn icon-btn" type="button" title="Set as default"></button>
+            </div>
+          </div>
+        </header>
+        
+        <div id="wizardMessages" class="wizard-messages">
+          <div class="wizard-msg assistant">
+            Hello! I'm your Loreholm.DB onboarding agent. What kind of data are you looking to organize in a graph?
+          </div>
+        </div>
+
+        <div class="wizard-input-area">
+          <textarea id="wizardInput" placeholder="e.g., I want to map the relationships between academic papers and authors..."></textarea>
+          <button id="wizardSendBtn" class="primary-btn icon-btn" title="Send">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+          </button>
+          <button id="wizardStopBtn" class="danger-btn icon-btn hidden" title="Stop agent">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+          </button>
+        </div>
+      </section>
+
+      <aside class="wizard-sidebar panel">
+        <h3>Recommendation</h3>
+        <div id="recommendationPanel" class="recommendation-content empty">
+          Waiting for enough context to provide a recommendation...
+        </div>
+        <div id="recommendationActions" class="hidden">
+          <button id="createDbBtn" class="primary-btn full-width">Deploy Database</button>
+        </div>
+      </aside>
+    </div>
+  </template>
+
+  <template id="view-query-builder">
+    <div class="query-builder-view">
+      <section class="query-builder panel">
+        <h2>Cypher Query Builder</h2>
+        <p>Convert natural language into optimized Cypher queries based on your active schema.</p>
+        
+        <div class="prompt-form">
+          <div class="input-group">
+            <label>Target Database</label>
+            <select id="queryDbSelect"></select>
+          </div>
+          <div class="input-group">
+            <label>What are you looking for?</label>
+            <textarea id="queryGoal" placeholder="e.g. Find all users who have more than 5 connections to 'Project X' nodes..."></textarea>
+          </div>
+          <button id="generateQueryBtn" class="primary-btn">Build Cypher Query</button>
+        </div>
+
+        <div id="queryResult" class="prompt-result hidden">
+          <h3 id="queryTitle">Optimized Query</h3>
+          <pre id="queryOutput" class="code-preview"></pre>
+          <div class="prompt-notes">
+            <h4>Explanation</h4>
+            <p id="queryNotes"></p>
+          </div>
+          <div class="form-actions" style="margin-top:20px; display:flex; gap:10px">
+            <button id="copyQueryBtn" class="secondary-btn icon-btn" title="Copy Cypher">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+            <button id="runGeneratedQueryBtn" class="primary-btn icon-btn" title="Run Query">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </template>
+
+  <template id="view-settings">
+    <div class="settings-view">
+      <section class="config-card panel">
+        <h2>API Keys</h2>
+        <p class="section-desc">Create named API keys to sign in to this dashboard. Your setup token (from <code>local-dashboard.token</code>) always works as a fallback.</p>
+
+        <div class="key-create-form" style="display:flex;gap:10px;align-items:flex-end;margin-bottom:24px">
+          <div class="input-group" style="flex:1;margin:0">
+            <label for="newKeyLabel">Key Label</label>
+            <input id="newKeyLabel" type="text" placeholder="e.g. My Laptop" maxlength="80" />
+          </div>
+          <button id="createKeyBtn" class="primary-btn" style="flex-shrink:0">Generate Key</button>
+        </div>
+
+        <div id="newKeyResult" class="hidden" style="background:var(--surface-2,#1a1a2e);border:1px solid var(--accent);border-radius:8px;padding:14px;margin-bottom:20px">
+          <p style="margin:0 0 8px;font-size:13px;color:var(--accent)">Copy this key now — it won't be shown again.</p>
+          <code id="newKeyValue" style="word-break:break-all;font-size:13px"></code>
+          <div style="margin-top:10px">
+            <button id="copyNewKeyBtn" class="secondary-btn icon-btn" title="Copy key">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div id="apiKeysList">
+          <div class="loading-item">Loading keys...</div>
+        </div>
+      </section>
+    </div>
+  </template>
+
+  <!-- Database Detail Modal/View (Floating overlay) -->
+  <div id="dbDetailOverlay" class="modal-overlay hidden">
+    <div class="modal-content panel">
+      <header class="modal-header">
+        <h2 id="modalDbName">Database Name</h2>
+        <button id="closeModalBtn" class="close-btn">&times;</button>
+      </header>
+      <div class="modal-body">
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="health">Health</button>
+          <button class="tab-btn" data-tab="authored-schema">Schema</button>
+          <button class="tab-btn" data-tab="schema">Live Labels</button>
+          <button class="tab-btn" data-tab="graph">Graph Explorer</button>
+          <button class="tab-btn" data-tab="query">Query Console</button>
+        </div>
+        <div id="tabContent" class="tab-content">
+          <!-- Tab content dynamic -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Login Overlay -->
+  <div id="loginOverlay" class="login-overlay hidden">
+    <div class="login-card panel">
+      <div class="logo" style="margin-bottom:20px">
+        <span class="logo-icon"></span>
+        <span class="logo-text">LOREHOLM.DB</span>
+      </div>
+
+      <!-- Step: password-login (account exists) -->
+      <div id="loginStepPassword" class="login-step hidden">
+        <h2 style="margin:0 0 6px">Sign In</h2>
+        <p style="margin:0 0 20px;font-size:13px;color:var(--text-soft)">Enter your credentials to access the dashboard.</p>
+        <div class="input-group">
+          <label for="loginUsername">Username</label>
+          <input id="loginUsername" type="text" placeholder="username" autocomplete="username" />
+        </div>
+        <div class="input-group" style="margin-top:12px">
+          <label for="loginPassword">Password</label>
+          <input id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password" />
+        </div>
+        <button id="loginBtn" class="primary-btn" style="width:100%;margin-top:16px">Sign In</button>
+        <p id="loginError" class="hidden" style="color:var(--danger,#ff4d4d);font-size:13px;margin-top:10px"></p>
+      </div>
+
+      <!-- Step: token-entry (first visit, no account) -->
+      <div id="loginStepToken" class="login-step hidden">
+        <h2 style="margin:0 0 6px">Welcome</h2>
+        <p style="margin:0 0 20px;font-size:13px;color:var(--text-soft)">Enter your bootstrap token to get started. You'll create a username and password next.</p>
+        <div class="input-group">
+          <label for="loginKeyInput">Bootstrap Token</label>
+          <input id="loginKeyInput" type="password" placeholder="Your setup token" autocomplete="off" />
+        </div>
+        <button id="loginTokenBtn" class="primary-btn" style="width:100%;margin-top:16px">Continue</button>
+        <p id="loginTokenError" class="hidden" style="color:var(--danger,#ff4d4d);font-size:13px;margin-top:10px"></p>
+        <p style="margin-top:16px;font-size:12px;color:var(--text-soft)">
+          Find your token:<br>
+          <code id="loginHintCmd" style="font-size:11px"></code>
+        </p>
+      </div>
+
+      <!-- Step: account-setup (after bootstrap token validated) -->
+      <div id="loginStepSetup" class="login-step hidden">
+        <h2 style="margin:0 0 6px">Create Account</h2>
+        <p style="margin:0 0 20px;font-size:13px;color:var(--text-soft)">Choose a username and password. You'll use these to log in from now on.</p>
+        <div class="input-group">
+          <label for="setupUsername">Username</label>
+          <input id="setupUsername" type="text" placeholder="e.g. admin" maxlength="64" autocomplete="username" />
+        </div>
+        <div class="input-group" style="margin-top:12px">
+          <label for="setupPassword">Password</label>
+          <input id="setupPassword" type="password" placeholder="At least 8 characters" autocomplete="new-password" />
+        </div>
+        <div class="input-group" style="margin-top:12px">
+          <label for="setupPasswordConfirm">Confirm Password</label>
+          <input id="setupPasswordConfirm" type="password" placeholder="Repeat password" autocomplete="new-password" />
+        </div>
+        <button id="setupAccountBtn" class="primary-btn" style="width:100%;margin-top:16px">Create Account</button>
+        <p id="loginSetupError" class="hidden" style="color:var(--danger,#ff4d4d);font-size:13px;margin-top:10px"></p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/assets/local-dashboard.js"></script>
+</body>
+</html>

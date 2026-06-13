@@ -1,0 +1,57 @@
+# Dev-only stack for iterating on the local dashboard without deploying.
+#
+# Brings up the containers the dashboard expects to find at runtime:
+#   - loreholm-dev-tailscale: a placeholder that owns the shared network
+#     namespace (mirrors prod's loreholm-tailscale). The shared ArcadeDB server
+#     attaches via network_mode=service:dev-tailscale and inherits its published
+#     ports on 127.0.0.1.
+#   - loreholm-dev-bifrost: real bifrost, sharing the above netns so the
+#     dashboard can reach it at http://127.0.0.1:8080.
+#   - loreholm-arcadedb: the single shared ArcadeDB server. Per-database
+#     CRUD goes over HTTP against this one container; the dashboard never
+#     stands up a container per database.
+#
+# The uvicorn dashboard process itself runs on the host (see
+# scripts/dev-local-dashboard.sh) so --reload picks up source edits instantly.
+
+services:
+  dev-tailscale:
+    image: alpine:3.20
+    container_name: loreholm-dev-tailscale
+    restart: unless-stopped
+    command: ["sh", "-c", "trap exit TERM; while :; do sleep 3600 & wait; done"]
+    # Ports published here are inherited by every sibling that uses
+    # network_mode: service:dev-tailscale (bifrost + shared ArcadeDB server).
+    ports:
+      - "127.0.0.1:8080:8080"   # bifrost proxy
+      - "127.0.0.1:2480:2480"   # arcadedb HTTP API
+
+  dev-bifrost:
+    image: maximhq/bifrost:latest
+    container_name: loreholm-dev-bifrost
+    restart: unless-stopped
+    network_mode: service:dev-tailscale
+    depends_on:
+      - dev-tailscale
+    volumes:
+      - ../.dev-state/chat-bifrost-config.json:/app/data/config.json
+
+  arcadedb:
+    image: ${ARCADEDB_IMAGE:-arcadedata/arcadedb:26.3.1}
+    container_name: loreholm-arcadedb
+    restart: unless-stopped
+    network_mode: service:dev-tailscale
+    depends_on:
+      - dev-tailscale
+    environment:
+      JAVA_OPTS: "-Darcadedb.server.httpIncoming.port=2480 -Darcadedb.server.rootPasswordPath=/opt/arcadedb/root-password -Darcadedb.server.mode=development -Darcadedb.profile=low-ram ${ARCADEDB_OPTS_MEMORY:--Xms512M -Xmx512M}"
+    volumes:
+      - dev_arcadedb_data:/home/arcadedb/databases
+      - dev_arcadedb_log:/home/arcadedb/log
+      - ../.dev-state/arcadedb-root.password:/opt/arcadedb/root-password:ro
+
+volumes:
+  dev_arcadedb_data:
+    name: loreholm-dev-arcadedb-data
+  dev_arcadedb_log:
+    name: loreholm-dev-arcadedb-log

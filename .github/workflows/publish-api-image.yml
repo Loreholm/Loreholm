@@ -1,0 +1,67 @@
+# Builds and publishes the mcp-api image to GHCR. Publish only — deployment
+# to production lives in the private infra repository, which pins one of the
+# image tags produced here. No secrets beyond the workflow's own GITHUB_TOKEN.
+name: Publish mcp-api Image
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+    paths:
+      - "api/**"
+      - "!api/app/local_dashboard/**"
+      - "!api/Dockerfile.local-dashboard"
+      - "!api/requirements-local-dashboard.txt"
+      - ".github/workflows/publish-api-image.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: mcp-api-image-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish-api:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r api/requirements.txt -r api/requirements-dev.txt
+
+      - name: Run tests
+        run: PYTHONPATH=api pytest api/tests
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: api/Dockerfile
+          push: true
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/mcp-api:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/mcp-api:buildcache,mode=max
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/mcp-api:latest
+            ghcr.io/${{ github.repository_owner }}/mcp-api:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/mcp-api:${{ github.ref_name }}

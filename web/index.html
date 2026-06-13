@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>loreholm | Private AI Memory</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">loreholm</div>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="/docs">Docs</a>
+                <a href="#beta">Beta</a>
+                <button id="loginBtn" class="btn btn-primary">Sign In</button>
+            </div>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <div class="container">
+            <h1>Persistent AI memory you can inspect and control</h1>
+            <p class="tagline">
+                loreholm gives your assistants a shared memory layer for people, projects, and decisions.
+                <br>Memories stay in your own ArcadeDB database while loreholm handles secure coordination.
+            </p>
+            <div class="hero-actions">
+                <button id="getStartedBtn" class="btn btn-large btn-primary">Join the Beta</button>
+                <a href="/docs" class="btn btn-large btn-secondary">Read Docs</a>
+            </div>
+        </div>
+    </section>
+
+    <section id="features" class="features">
+        <div class="container">
+            <h2>What loreholm is for</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🧠</div>
+                    <h3>Build a usable memory graph</h3>
+                    <p>Store entities, relationships, and durable notes from conversations in a format you can query.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🏠</div>
+                    <h3>Keep storage on your hardware</h3>
+                    <p>Run ArcadeDB on your machine or server and keep raw memory data out of hosted black boxes.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔌</div>
+                    <h3>Connect through MCP tools</h3>
+                    <p>Use a consistent tool surface that works with Claude, custom apps, and MCP-capable clients.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">👁️</div>
+                    <h3>Review, edit, and delete memory</h3>
+                    <p>Inspect every write, understand why it happened, and remove or correct data at any time.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="beta" class="beta">
+        <div class="container">
+            <h2>Beta Access</h2>
+            <div class="beta-card">
+                <h3>Pricing is paused during beta</h3>
+                <p class="beta-summary">We are focused on onboarding quality, reliability, and product feedback before public plans launch.</p>
+                <ul class="feature-list">
+                    <li>✓ Full BYODB setup with your own ArcadeDB instance</li>
+                    <li>✓ Dashboard + MCP tools for structured memory workflows</li>
+                    <li>✓ Direct feedback loop with the product team during rollout</li>
+                </ul>
+                <button class="btn btn-primary btn-large" id="requestAccessBtn">Join the Beta</button>
+                <p class="beta-note">Your memory database still runs locally while loreholm coordinates secure access.</p>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2026 loreholm. Private, transparent memory for AI work.</p>
+        </div>
+    </footer>
+
+    <script src="/js/config.js"></script>
+    <script src="/js/auth.js"></script>
+    <script>
+        // Wire up buttons to auth
+        ['loginBtn', 'getStartedBtn', 'requestAccessBtn'].forEach((id) => {
+            const button = document.getElementById(id);
+            if (!button) {
+                return;
+            }
+            button.addEventListener('click', () => {
+                window.auth.login();
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>loreholm chat</title>
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Loading state shown during auth resolution -->
+    <div id="loadingGate" class="login-gate">
+      <div class="login-card">
+        <h1>loreholm chat</h1>
+        <div class="loader"></div>
+      </div>
+    </div>
+
+    <!-- Login gate -->
+    <div id="loginGate" class="login-gate" hidden>
+      <div class="login-card">
+        <h1>loreholm chat</h1>
+        <p>Sign in to chat with your databases.</p>
+        <button id="loginBtn" class="btn btn-primary">Sign In</button>
+      </div>
+    </div>
+
+    <!-- Main app -->
+    <div id="mainApp" hidden>
+      <!-- Sidebar -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-top">
+          <div class="sidebar-header">
+            <h2>loreholm</h2>
+            <button id="newChatBtn" class="btn btn-sm" title="New chat">+</button>
+          </div>
+          <div class="sidebar-db-select">
+            <label for="dbSelect">Database</label>
+            <select id="dbSelect"><option value="">Loading...</option></select>
+          </div>
+        </div>
+        <div class="sidebar-conversations" id="conversationList"></div>
+        <div class="sidebar-bottom">
+          <div class="sidebar-usage" id="usageSummary"></div>
+          <div class="sidebar-user">
+            <span id="userName"></span>
+            <button id="logoutBtn" class="btn btn-sm btn-muted">Sign Out</button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Sidebar backdrop (mobile) -->
+      <div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div>
+
+      <!-- Chat area -->
+      <main class="chat-main">
+        <header class="chat-header">
+          <button id="sidebarToggle" class="btn btn-sm sidebar-toggle">&#9776;</button>
+          <h3 id="chatTitle">Select a database to start</h3>
+          <select id="modelSelect" class="model-select"><option value="">Loading...</option></select>
+          <button id="favoriteModelBtn" class="btn btn-sm btn-star" title="Favorite this model" disabled>&#9734;</button>
+          <button id="systemPromptBtn" class="btn btn-sm" title="Edit system prompt for this database" disabled>Prompt</button>
+        </header>
+        <div class="messages" id="messages">
+          <div class="empty-state" id="emptyState">
+            <p>Choose a database and start a conversation.</p>
+          </div>
+        </div>
+        <div class="composer" id="composer">
+          <textarea id="messageInput" placeholder="Ask something about your data..." rows="1" disabled></textarea>
+          <button id="sendBtn" class="btn btn-primary send-btn" disabled>Send</button>
+        </div>
+      </main>
+    </div>
+
+    <!-- System prompt modal -->
+    <div id="systemPromptModal" class="modal-backdrop" hidden>
+      <div class="modal">
+        <div class="modal-header">
+          <h3>System prompt</h3>
+          <button id="systemPromptClose" class="btn btn-sm btn-muted" title="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-help">This prompt is sent to the agent at the start of every conversation for this database. The schema section is always appended automatically. Leave empty to use the default.</p>
+          <textarea id="systemPromptInput" rows="12" placeholder="e.g. You are a personal assistant helping track fitness and nutrition. Be opinionated and ask follow-up questions. Store facts as they come up."></textarea>
+
+          <div class="prompt-helper">
+            <div class="prompt-helper-header">
+              <span class="prompt-helper-title">Prompt helper</span>
+              <span class="prompt-helper-hint">Describe the agent you want; the helper will draft or refine the text above.</span>
+            </div>
+            <textarea id="promptHelperInput" rows="2" placeholder="e.g. Friendly fitness coach that asks follow-ups and nags me about protein"></textarea>
+            <div class="prompt-helper-actions">
+              <button id="promptHelperDraft" class="btn btn-sm">Draft new</button>
+              <button id="promptHelperRefine" class="btn btn-sm">Refine current</button>
+              <span id="promptHelperStatus" class="modal-status"></span>
+            </div>
+          </div>
+
+          <div id="systemPromptStatus" class="modal-status"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="systemPromptCancel" class="btn btn-muted">Cancel</button>
+          <button id="systemPromptSave" class="btn btn-primary">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
