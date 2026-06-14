@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # loreholm Update Script
-# Usage: curl -fsSL loreholm.com/update.sh | bash
+# Usage: curl -fsSL __APP_DOMAIN__/update.sh | bash
 #
 # Updates an existing loreholm installation with the latest docker-compose.yml
 # Preserves all data and Tailscale authentication
@@ -19,7 +19,7 @@ NC='\033[0m' # No Color
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.loreholm}"
 COMPOSE_FILE="$INSTALL_DIR/docker-compose.yml"
 CHAT_COMPOSE_FILE="$INSTALL_DIR/docker-compose.chat.yml"
-HEADSCALE_URL="${HEADSCALE_URL:-https://loreholm.com:50443}"
+HEADSCALE_URL="${HEADSCALE_URL:-https://__APP_DOMAIN__:50443}"
 LOCAL_DASHBOARD_DIR="$INSTALL_DIR/local-dashboard"
 LOCAL_DASHBOARD_FILE="$LOCAL_DASHBOARD_DIR/local-dashboard.json"
 LOCAL_DASHBOARD_ENDPOINT_PORT=8081
@@ -196,7 +196,7 @@ onto a single long-lived ArcadeDB server. There is no in-place data migration.
 To proceed, rerun with --nuke to destroy legacy containers and volumes,
 then rebuild from scratch:
 
-  curl -fsSL loreholm.com/update.sh | bash -s -- --nuke
+  curl -fsSL __APP_DOMAIN__/update.sh | bash -s -- --nuke
 EOF
         exit 1
     fi
@@ -568,7 +568,7 @@ _HOP_BY_HOP = {
 
 # Path prefixes the shim forwards to the upstream FastAPI local dashboard.
 # Sync lanes carry cloud→local pull traffic; chat lanes carry the chat proxy
-# traffic originating from chat.loreholm.com via the cloud /chat router.
+# traffic originating from __CHAT_DOMAIN__ via the cloud /chat router.
 _FORWARD_PREFIXES = ("/api/sync/", "/api/chat/")
 
 # Paths that must stream their response body without buffering (SSE).
@@ -910,8 +910,8 @@ generate_updated_compose() {
     cat > "$COMPOSE_FILE" << EOF
 # loreholm BYODB Stack
 # Auto-updated on $(date)
-# Documentation: https://loreholm.com/docs
-# API Reference: https://api.loreholm.com/docs
+# Documentation: https://__APP_DOMAIN__/docs
+# API Reference: https://__API_DOMAIN__/docs
 #
 # Profile: ${SELECTED_PROFILE} (RAM=${DETECTED_RAM_MB} MB, arch=${DETECTED_ARCH})
 # Embedding model: ${SELECTED_EMBEDDING_MODEL}
@@ -1186,7 +1186,7 @@ show_status() {
     fi
     echo "  └─ Resolver data: cat $LOCAL_DASHBOARD_FILE"
     echo "  └─ Local admin: http://${LOCAL_ADMIN_DISPLAY_HOST}:${LOCAL_ADMIN_PORT}"
-    echo "  └─ Dashboard:   https://loreholm.com/dashboard"
+    echo "  └─ Dashboard:   https://__APP_DOMAIN__/dashboard"
     echo ""
 }
 

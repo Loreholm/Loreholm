@@ -5,7 +5,7 @@ API keys allow MCP clients (like Claude Desktop, Cursor, or custom integrations)
 ## Overview
 
 API keys are self-contained PASETO tokens that encode:
-- User identity (linked to your Auth0 account)
+- User identity (linked to your OIDC account)
 - Key name (for your reference)
 - Expiration date
 - Unique key ID (for revocation)
@@ -122,7 +122,7 @@ Example target creation:
 
 ```http
 POST /database-targets
-Authorization: Bearer <auth0-jwt>
+Authorization: Bearer <oidc-jwt>
 Content-Type: application/json
 
 {
@@ -135,7 +135,7 @@ Then bind the API key to that target:
 
 ```http
 POST /api-keys
-Authorization: Bearer <auth0-jwt>
+Authorization: Bearer <oidc-jwt>
 Content-Type: application/json
 
 {
@@ -249,7 +249,7 @@ PG_PW=your-postgres-password
 
 ```http
 POST /api-keys
-Authorization: Bearer <auth0-jwt>
+Authorization: Bearer <oidc-jwt>
 Content-Type: application/json
 
 {
@@ -279,7 +279,7 @@ Response:
 
 ```http
 POST /database-targets
-Authorization: Bearer <auth0-jwt>
+Authorization: Bearer <oidc-jwt>
 Content-Type: application/json
 
 {
@@ -302,7 +302,7 @@ Response:
 
 ```http
 GET /api-keys
-Authorization: Bearer <auth0-jwt>
+Authorization: Bearer <oidc-jwt>
 ```
 
 Response:
@@ -333,7 +333,7 @@ Response:
 
 ```http
 DELETE /api-keys/{key_id}
-Authorization: Bearer <auth0-jwt>
+Authorization: Bearer <oidc-jwt>
 ```
 
 Response:

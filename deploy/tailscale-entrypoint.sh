@@ -21,7 +21,7 @@ sleep 2
 # Authenticate with the pre-auth key
 # We use --accept-routes so the API can reach the client databases
 tailscale up \
-    --login-server=https://${HEADSCALE_DOMAIN:-loreholm.com}:50443 \
+    --login-server=https://${HEADSCALE_DOMAIN:-localhost}:50443 \
     --authkey="${AUTHKEY}" \
     --accept-routes \
     --hostname=loreholm-api

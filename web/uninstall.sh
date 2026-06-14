@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # loreholm BYODB uninstall script (Linux/macOS)
-# Usage: curl -fsSL loreholm.com/uninstall.sh | bash
+# Usage: curl -fsSL __APP_DOMAIN__/uninstall.sh | bash
 #
 set -euo pipefail
 

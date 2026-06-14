@@ -5,10 +5,10 @@ All interactions with loreholm happen through explicit MCP tool calls. These are
 ## Authentication
 
 ### BYODB Mode (Default)
-Requires Auth0 JWT token. The API connects to your personal database via Tailscale.
+Requires an OIDC JWT token. The API connects to your personal database via Tailscale.
 
 ```
-Authorization: Bearer <auth0-jwt-token>
+Authorization: Bearer <oidc-jwt-token>
 ```
 
 ### Legacy Mode

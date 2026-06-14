@@ -89,15 +89,18 @@ UNINSTALL_PS1_SCRIPT_PATH = os.getenv(
     str(Path(__file__).parent.parent.parent.parent / "web" / "uninstall.ps1")
 )
 
-# Add CORS middleware for frontend
+# Add CORS middleware for frontend.
+# Origins are configured per-deployment via CORS_ALLOWED_ORIGINS (CSV) so the
+# image is not tied to any one domain. Self-hosters set their own dashboard /
+# chat / api origins here. Same-origin requests don't need an entry.
+_cors_origins = [
+    origin.strip()
+    for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://loreholm.com",
-        "https://www.loreholm.com",
-        "https://api.loreholm.com",
-        "https://chat.loreholm.com",
-    ],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -121,7 +124,7 @@ app.include_router(database_targets_router, include_in_schema=False)
 # Include LLM proxy router - hidden from public docs (chat app)
 app.include_router(llm_router, include_in_schema=False)
 
-# Include chat proxy router - hidden from public docs (chat.loreholm.com)
+# Include chat proxy router - hidden from public docs (chat front-end)
 app.include_router(chat_router, include_in_schema=False)
 
 
@@ -151,7 +154,7 @@ X-API-Key: <your-api-key>
 Authorization: Bearer <your-jwt-token>
 ```
 
-Create API keys from your dashboard at loreholm.com
+Create API keys from your loreholm dashboard
 
 ### Usage
 These tools are designed to be called by LLM applications to store and retrieve memories about entities, projects, and conversations.
@@ -230,7 +233,7 @@ def get_install_script() -> Response:
     else:
         # Fallback: embedded minimal script that redirects
         script_content = """#!/usr/bin/env bash
-echo "Error: Install script not found. Please download from https://loreholm.com/install.sh"
+echo "Error: Install script not found. Please download it from your loreholm server's /install.sh"
 exit 1
 """
     
@@ -251,7 +254,7 @@ def get_install_ps1_script() -> Response:
         with open(INSTALL_PS1_SCRIPT_PATH, "r") as f:
             script_content = f.read()
     else:
-        script_content = """Write-Host \"Error: Install script not found. Please download from https://loreholm.com/install.ps1\"
+        script_content = """Write-Host \"Error: Install script not found. Please download it from your loreholm server's /install.ps1\"
 exit 1
 """
 
@@ -273,7 +276,7 @@ def get_install_legacy_script() -> Response:
             script_content = f.read()
     else:
         script_content = """#!/usr/bin/env bash
-echo "Error: Legacy install script not found. Please download from https://loreholm.com/install-legacy.sh"
+echo "Error: Legacy install script not found. Please download it from your loreholm server's /install-legacy.sh"
 exit 1
 """
 
@@ -294,7 +297,7 @@ def get_install_legacy_ps1_script() -> Response:
         with open(INSTALL_LEGACY_PS1_SCRIPT_PATH, "r") as f:
             script_content = f.read()
     else:
-        script_content = """Write-Host \"Error: Legacy install script not found. Please download from https://loreholm.com/install-legacy.ps1\"
+        script_content = """Write-Host \"Error: Legacy install script not found. Please download it from your loreholm server's /install-legacy.ps1\"
 exit 1
 """
 
@@ -316,7 +319,7 @@ def get_update_script() -> Response:
             script_content = f.read()
     else:
         script_content = """#!/usr/bin/env bash
-echo "Error: Update script not found. Please download from https://loreholm.com/update.sh"
+echo "Error: Update script not found. Please download it from your loreholm server's /update.sh"
 exit 1
 """
 
@@ -337,7 +340,7 @@ def get_update_ps1_script() -> Response:
         with open(UPDATE_PS1_SCRIPT_PATH, "r") as f:
             script_content = f.read()
     else:
-        script_content = """Write-Host \"Error: Update script not found. Please download from https://loreholm.com/update.ps1\"
+        script_content = """Write-Host \"Error: Update script not found. Please download it from your loreholm server's /update.ps1\"
 exit 1
 """
 
@@ -359,7 +362,7 @@ def get_update_legacy_script() -> Response:
             script_content = f.read()
     else:
         script_content = """#!/usr/bin/env bash
-echo "Error: Legacy update script not found. Please download from https://loreholm.com/update-legacy.sh"
+echo "Error: Legacy update script not found. Please download it from your loreholm server's /update-legacy.sh"
 exit 1
 """
 
@@ -380,7 +383,7 @@ def get_update_legacy_ps1_script() -> Response:
         with open(UPDATE_LEGACY_PS1_SCRIPT_PATH, "r") as f:
             script_content = f.read()
     else:
-        script_content = """Write-Host \"Error: Legacy update script not found. Please download from https://loreholm.com/update-legacy.ps1\"
+        script_content = """Write-Host \"Error: Legacy update script not found. Please download it from your loreholm server's /update-legacy.ps1\"
 exit 1
 """
 
@@ -402,7 +405,7 @@ def get_uninstall_script() -> Response:
             script_content = f.read()
     else:
         script_content = """#!/usr/bin/env bash
-echo "Error: Uninstall script not found. Please download from https://loreholm.com/uninstall.sh"
+echo "Error: Uninstall script not found. Please download it from your loreholm server's /uninstall.sh"
 exit 1
 """
 
@@ -423,7 +426,7 @@ def get_uninstall_ps1_script() -> Response:
         with open(UNINSTALL_PS1_SCRIPT_PATH, "r") as f:
             script_content = f.read()
     else:
-        script_content = """Write-Host \"Error: Uninstall script not found. Please download from https://loreholm.com/uninstall.ps1\"
+        script_content = """Write-Host \"Error: Uninstall script not found. Please download it from your loreholm server's /uninstall.ps1\"
 exit 1
 """
 

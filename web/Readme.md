@@ -22,15 +22,15 @@ web/
 │   └── style.css       # Styles (vanilla CSS)
 └── js/
     ├── config.js       # Configuration (edit this!)
-    ├── auth.js         # Auth0 integration
+    ├── auth.js         # OIDC integration (oidc-client-ts)
     └── dashboard.js    # Dashboard logic
 ```
 
 ## Quick Start
 
-1. **Configure Auth0** (see CONFIG.md)
-   - Create SPA application
-   - Copy credentials to `js/config.js`
+1. **Configure your OIDC provider** (see CONFIG.md)
+   - Create a public client (Authorization Code + PKCE)
+   - Provide issuer/clientId/audience to the API (served at runtime)
 
 2. **Deploy**
    - Files are automatically deployed via GitHub Actions
@@ -46,7 +46,7 @@ web/
 - **HTML5** - Semantic markup
 - **CSS3** - Vanilla CSS (no frameworks)
 - **JavaScript** - ES6+ (no build tools)
-- **Auth0 SPA SDK** - Loaded from CDN
+- **oidc-client-ts** - Loaded from CDN
 
 ## No Build Required
 
@@ -67,7 +67,7 @@ The frontend calls these backend endpoints:
 - `GET /install.ps1` - Download Windows install script
 - `POST /mcp/*` - MCP tool endpoints (for LLMs)
 
-All API calls use JWT Bearer tokens from Auth0.
+All API calls use JWT Bearer tokens from the configured OIDC provider.
 
 ## Installation Scripts
 

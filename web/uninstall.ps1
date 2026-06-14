@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 #
 # loreholm BYODB uninstall script (Windows/PowerShell)
-# Usage: irm loreholm.com/uninstall.ps1 | iex
+# Usage: irm __APP_DOMAIN__/uninstall.ps1 | iex
 #
 param(
     [Parameter(Mandatory=$false)]

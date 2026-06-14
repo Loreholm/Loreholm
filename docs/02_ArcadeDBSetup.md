@@ -9,8 +9,8 @@ Users run their own ArcadeDB server locally. Databases are created and managed t
 ### User Installation
 
 ```bash
-# Get your install command from loreholm.com/dashboard.html
-curl -fsSL loreholm.com/install.sh | bash -s -- --key preauthkey-YOUR-KEY
+# Get your install command from example.com/dashboard.html
+curl -fsSL example.com/install.sh | bash -s -- --key preauthkey-YOUR-KEY
 ```
 
 This deploys five host-side containers: Tailscale (mesh networking), the shared ArcadeDB server, Bifrost (LLM gateway), the local dashboard (web UI + API + query proxy + embedding service + reconciler), and the `:8081` endpoint shim (the only Tailnet-facing container). ArcadeDB, Bifrost, and the dashboard all live on the default Docker bridge — not in the Tailscale netns. Databases are created on demand inside the shared server through the dashboard.

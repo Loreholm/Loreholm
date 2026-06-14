@@ -2,7 +2,7 @@
 # Place this file at /opt/mcp-cloud/headscale/config/config.yaml on the server
 
 # Server URL - must match your domain and port
-server_url: https://loreholm.com:50443
+server_url: https://__APP_DOMAIN__:50443
 
 # Listen addresses
 listen_addr: 0.0.0.0:50443
@@ -48,8 +48,8 @@ policy:
   path: /etc/headscale/acl.hujson
 
 # TLS configuration - using Let's Encrypt certs
-tls_cert_path: /etc/letsencrypt/live/loreholm.com/fullchain.pem
-tls_key_path: /etc/letsencrypt/live/loreholm.com/privkey.pem
+tls_cert_path: /etc/letsencrypt/live/__APP_DOMAIN__/fullchain.pem
+tls_key_path: /etc/letsencrypt/live/__APP_DOMAIN__/privkey.pem
 
 # Logging
 log:

@@ -74,7 +74,7 @@ Read in order:
 5. **[Cypher Queries](docs/05_CypherQueries.md)** - Example queries for inspection
 6. **[Tool Schemas](docs/06_ToolSchemas.md)** - Complete MCP tool schema definitions
 7. **[BYODB Architecture](docs/07_BYODB.md)** - How user-owned databases work
-8. **[Frontend Setup](docs/08_FrontendSetup.md)** - Web dashboard and Auth0
+8. **[Frontend Setup](docs/08_FrontendSetup.md)** - Web dashboard and OIDC auth
 9. **[Headscale Setup](docs/09_HeadscaleSetup.md)** - Private networking setup
 10. **[Onboarding API](docs/10_OnboardingAPI.md)** - User registration endpoints
 11. **[API Key Auth](docs/11_ApiKeyAuth.md)** - PASETO-based API key authentication
@@ -119,6 +119,25 @@ Edit `deploy/docker-compose.prod.yml` and set:
 - `GRAPH_STORE_BACKEND` (defaults to `arcadedb`)
 
 See [02_ArcadeDBSetup.md](docs/02_ArcadeDBSetup.md) for connection details.
+
+## Self-hosting on your own domain
+
+loreholm is not tied to `loreholm.com` — bring your own domain. Two layers of
+configuration:
+
+- **Runtime (the API image)** reads everything domain-related from env:
+  `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_AUDIENCE` for auth,
+  `CORS_ALLOWED_ORIGINS` (CSV) for the browser apps, `PUBLIC_API_HOST` for
+  install commands, and `HEADSCALE_DOMAIN` for the mesh control plane. The
+  dashboard and chat front-ends resolve their config at runtime, so they carry
+  no hardcoded host.
+- **Deploy templates** (`deploy/nginx.conf`, `deploy/headscale-config.yaml`,
+  `web/install.*` / `web/update.*`) carry `__APP_DOMAIN__` / `__API_DOMAIN__` /
+  `__CHAT_DOMAIN__` / `__OIDC_ISSUER_ORIGIN__` placeholders that your deploy
+  pipeline substitutes (the reference pipeline derives them from a single
+  `BASE_DOMAIN`).
+
+See [web/Config.md](web/Config.md) for the OIDC setup and the full env list.
 
 ---
 

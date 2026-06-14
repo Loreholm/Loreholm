@@ -73,7 +73,7 @@ def _load_signing_secret() -> bytes:
 def derive_user_sync_token(user_id: str) -> str:
     """Derive the per-user sync bearer token.
 
-    HMAC-SHA256 over the user's Auth0 sub with the fleet-wide signing
+    HMAC-SHA256 over the user's OIDC sub with the fleet-wide signing
     secret as the key. Returned as unpadded URL-safe base64 (43 chars),
     which fits cleanly in an `Authorization: Bearer …` header and in a
     shell `--sync-token` argument without quoting.

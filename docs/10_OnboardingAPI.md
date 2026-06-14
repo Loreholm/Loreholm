@@ -4,7 +4,7 @@ The onboarding API manages user registration, database provisioning, and connect
 
 ## Authentication
 
-All onboarding endpoints require a valid Auth0 JWT token:
+All onboarding endpoints require a valid OIDC JWT token:
 
 ```
 Authorization: Bearer <jwt-token>
@@ -26,7 +26,7 @@ Initialize onboarding for a new user. Creates a Headscale pre-auth key.
 **Response:**
 ```json
 {
-  "user_id": "auth0|123456789",
+  "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "pre_auth_key": "preauthkey-abc123...",
   "install_command": "curl -fsSL loreholm.com/install.sh | bash -s -- --key preauthkey-abc123...",
   "expires_at": "2026-01-31T13:00:00Z"
@@ -40,7 +40,7 @@ Get the current onboarding status for the authenticated user.
 **Response:**
 ```json
 {
-  "user_id": "auth0|123456789",
+  "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "email": "user@example.com",
   "initialized": true,
   "node_name": "my-workstation",
@@ -66,7 +66,7 @@ Check if user has a node registered in Headscale. Fast check, doesn't test datab
 **Response:**
 ```json
 {
-  "user_id": "auth0|123456789",
+  "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "node_connected": true,
   "tailscale_ip": "100.64.1.5",
   "namespace": "user-abc123"
@@ -80,7 +80,7 @@ Full connection check - verifies node registration AND database connectivity.
 **Response (Success):**
 ```json
 {
-  "user_id": "auth0|123456789",
+  "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "namespace": "user-abc123",
   "connected": true,
   "node_connected": true,
@@ -100,7 +100,7 @@ Resolve the user's LAN local dashboard URL at runtime by querying metadata from 
 **Response:**
 ```json
 {
-  "user_id": "auth0|123456789",
+  "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "tailscale_ip": "100.64.1.5",
   "url": "http://192.168.1.20:3000/",
   "local_admin_url": "http://192.168.1.20:4466/",
@@ -111,7 +111,7 @@ Resolve the user's LAN local dashboard URL at runtime by querying metadata from 
 **Response (Failure):**
 ```json
 {
-  "user_id": "auth0|123456789",
+  "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "namespace": "user-abc123",
   "connected": false,
   "node_connected": true,
@@ -127,7 +127,7 @@ Generate a new pre-auth key (invalidates previous key).
 **Response:**
 ```json
 {
-  "user_id": "auth0|123456789",
+  "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "pre_auth_key": "preauthkey-new123...",
   "install_command": "curl -fsSL loreholm.com/install.sh | bash -s -- --key preauthkey-new123...",
   "expires_at": "2026-01-31T14:00:00Z"
@@ -138,7 +138,7 @@ Generate a new pre-auth key (invalidates previous key).
 
 ```mermaid
 flowchart TD
-    A["1. User signs up at loreholm.com<br/>Auth0 handles authentication"]
+    A["1. User signs up at loreholm.com<br/>OIDC provider handles authentication"]
     B["2. User clicks Initialize on dashboard<br/>POST /onboarding/initialize<br/>Backend creates Headscale namespace + pre-auth key"]
     C["3. User copies install command<br/>Runs on their machine<br/>Docker deploys ArcadeDB + Tailscale<br/>Tailscale connects using pre-auth key"]
     D["4. Dashboard polls for connection<br/>GET /onboarding/node-status (fast check)<br/>GET /onboarding/connection (full check)"]
@@ -160,9 +160,10 @@ flowchart TD
 The onboarding router requires:
 
 ```bash
-# Auth0 JWT validation
-AUTH0_DOMAIN=your-tenant.us.auth0.com
-AUTH0_AUDIENCE=https://api.loreholm.com
+# OIDC JWT validation (any provider; endpoints are discovered from the issuer)
+OIDC_ISSUER=https://your-tenant.us.auth0.com
+OIDC_AUDIENCE=https://api.loreholm.com
+# OIDC_AUDIENCE_CLAIM=azp   # optional: if your provider carries the API in azp
 
 # Headscale API
 HEADSCALE_API_URL=http://headscale:8080
@@ -178,7 +179,7 @@ LOCAL_DASHBOARD_RESOLVER_PATH=/local-dashboard.json
 
 ## Development Mode
 
-When `AUTH0_DOMAIN` is not set, the API runs in development mode:
+When `OIDC_ISSUER` is not set, the API runs in development mode:
 - JWT validation is skipped
 - Mock user ID is used
 - Mock pre-auth keys are generated

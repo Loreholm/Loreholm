@@ -14,7 +14,7 @@ Instead of a shared cloud database, each user runs their own ArcadeDB server (a 
 
 ### 1. User Onboarding
 
-1. User signs up at `loreholm.com` via Auth0
+1. User signs up at `loreholm.com` via the configured OIDC provider
 2. Backend generates a **Headscale Pre-Auth Key** (one-time use)
 3. User receives an install command (curl-to-bash)
 
@@ -99,7 +99,7 @@ Provider configuration is stored in `chat-bifrost-config.json` and mounted into 
 
 When user makes MCP calls:
 
-1. API validates JWT token (Auth0)
+1. API validates JWT token (OIDC)
 2. If request uses an API key with `db_ref`, API resolves the database target route
 3. Looks up user's Tailscale IP via Headscale API when no host override is configured
 4. Sends the query over the encrypted mesh to the machine's `:8081` endpoint shim, which proxies it to the local dashboard's `POST /api/sync/query`
@@ -426,7 +426,7 @@ open http://localhost:4466
 - **Bifrost**: LLM provider gateway (OpenAI, Anthropic, Google, Groq, Ollama)
 - **Tailscale**: Encrypted mesh networking
 - **Headscale**: Self-hosted Tailscale control plane
-- **Auth0**: Cloud API authentication
+- **OIDC provider**: Cloud API authentication (any standard OIDC issuer)
 - **Docker Compose**: Local orchestration
 
 ## Data Persistence

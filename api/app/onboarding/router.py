@@ -44,6 +44,22 @@ _NODE_NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 
 # Cache JWKS to avoid fetching on every request
 _jwks_cache: dict = {"jwks": None, "expires": None}
+# Cache the OIDC discovery document (keyed by issuer) the same way.
+_oidc_discovery_cache: dict = {"issuer": None, "doc": None, "expires": None}
+
+
+def _normalize_issuer(raw: str) -> str:
+    """Return the issuer as an absolute URL without a trailing slash.
+
+    Operators may set OIDC_ISSUER with or without a scheme; the discovery
+    URL and the value we validate against are built from this.
+    """
+    value = (raw or "").strip().rstrip("/")
+    if not value:
+        return ""
+    if not value.startswith(("http://", "https://")):
+        value = "https://" + value
+    return value
 
 def _env_int(name: str, default: int) -> int:
     try:
@@ -62,43 +78,97 @@ LOCAL_DASHBOARD_BIFROST_IMAGE = os.getenv(
     "LOCAL_DASHBOARD_BIFROST_IMAGE",
     os.getenv("BIFROST_IMAGE", "maximhq/bifrost:latest"),
 )
-def get_auth0_config() -> dict:
-    """Get Auth0 configuration from environment."""
-    def _parse_csv_env(name: str) -> list[str]:
-        raw = (os.getenv(name, "") or "").strip()
-        if not raw:
-            return []
+def get_oidc_config() -> dict:
+    """Get provider-neutral OIDC configuration from environment.
 
-        values: list[str] = []
-        for item in raw.split(","):
-            cleaned = item.strip()
-            if cleaned and cleaned not in values:
-                values.append(cleaned)
-        return values
+    Only three values are required — OIDC_ISSUER, OIDC_CLIENT_ID and
+    OIDC_AUDIENCE. The issuer is an absolute URL used for discovery; the JWKS
+    URL and canonical issuer string are resolved at verification time from the
+    discovery document, never hardcoded.
 
-    domain = (os.getenv("AUTH0_DOMAIN", "") or "").strip()
-    primary_audiences = _parse_csv_env("AUTH0_AUDIENCE")
-    # Legacy/extra accepted audiences come exclusively from
-    # AUTH0_AUDIENCE_COMPAT — no tenant-specific defaults in code.
-    compat_audiences = _parse_csv_env("AUTH0_AUDIENCE_COMPAT")
-    all_audiences = list(primary_audiences)
-    for audience in compat_audiences:
-        if audience not in all_audiences:
-            all_audiences.append(audience)
+    Two optional knobs exist for less common providers and are not normally
+    set: OIDC_FRONTEND_AUDIENCE (when the browser must request a different
+    audience than the API) and OIDC_AUDIENCE_CLAIM (when the API lives in a
+    non-standard claim such as `azp`).
+    """
+    def _env(name: str) -> str:
+        return (os.getenv(name, "") or "").strip()
 
-    explicit_frontend_audience = (os.getenv("AUTH0_FRONTEND_AUDIENCE", "") or "").strip()
-    frontend_audience = explicit_frontend_audience
-    if not frontend_audience and primary_audiences:
-        frontend_audience = primary_audiences[0]
+    issuer = _normalize_issuer(_env("OIDC_ISSUER"))
+    audience = _env("OIDC_AUDIENCE")
+    audiences = [audience] if audience else []
+
+    explicit_frontend_audience = _env("OIDC_FRONTEND_AUDIENCE")
+    frontend_audience = explicit_frontend_audience or audience
+
+    # Which claim carries the audience varies by provider: most use `aud`,
+    # but some put the API/client in `azp`. Default to `aud`.
+    audience_claim = _env("OIDC_AUDIENCE_CLAIM") or "aud"
 
     return {
-        "domain": domain,
-        "client_id": (os.getenv("AUTH0_CLIENT_ID", "") or "").strip(),
-        "audiences": all_audiences,
+        "issuer": issuer,
+        "client_id": _env("OIDC_CLIENT_ID"),
+        "audiences": audiences,
+        "audience_claim": audience_claim,
         "frontend_audience": frontend_audience,
         "frontend_audience_explicit": bool(explicit_frontend_audience),
         "algorithms": ["RS256"],
     }
+
+
+async def get_oidc_discovery(issuer: str) -> dict:
+    """Fetch and cache the provider's OIDC discovery document.
+
+    Given the configured issuer, returns the parsed
+    ``/.well-known/openid-configuration`` document. The document's own
+    ``issuer`` field is validated against the configured issuer to catch
+    misconfiguration or a spoofed discovery endpoint.
+    """
+    issuer = _normalize_issuer(issuer)
+    if not issuer:
+        raise HTTPException(status_code=503, detail="OIDC issuer is not configured.")
+
+    now = datetime.now(timezone.utc)
+    cache = _oidc_discovery_cache
+    if (
+        cache["doc"]
+        and cache["issuer"] == issuer
+        and cache["expires"]
+        and now < cache["expires"]
+    ):
+        return cache["doc"]
+
+    discovery_url = f"{issuer}/.well-known/openid-configuration"
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(5.0, connect=3.0)) as client:
+            response = await client.get(discovery_url)
+            response.raise_for_status()
+            doc = response.json()
+    except (httpx.TimeoutException, httpx.HTTPStatusError) as exc:
+        if cache["doc"] and cache["issuer"] == issuer:
+            print(f"[auth] OIDC discovery fetch failed, using stale cache: {exc}")
+            return cache["doc"]
+        raise HTTPException(status_code=503, detail=f"Auth service unavailable: {exc}")
+
+    doc_issuer = str(doc.get("issuer", "")).strip()
+    if doc_issuer.rstrip("/") != issuer.rstrip("/"):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "OIDC discovery issuer mismatch: document advertises "
+                f"'{doc_issuer}' but OIDC_ISSUER is '{issuer}'."
+            ),
+        )
+    if not doc.get("jwks_uri"):
+        raise HTTPException(
+            status_code=503,
+            detail="OIDC discovery document is missing 'jwks_uri'.",
+        )
+
+    cache["issuer"] = issuer
+    cache["doc"] = doc
+    cache["expires"] = now + timedelta(hours=1)
+    return doc
 
 
 def _is_dev_environment() -> bool:
@@ -152,17 +222,17 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Missing authorization header")
     
     token = auth_header.removeprefix("Bearer ").strip()
-    config = get_auth0_config()
-    
-    # Skip signature validation only in explicit dev environments when Auth0 config is missing.
-    if not config["domain"]:
+    config = get_oidc_config()
+
+    # Skip signature validation only in explicit dev environments when OIDC config is missing.
+    if not config["issuer"]:
         if not _is_dev_environment():
             raise HTTPException(
                 status_code=503,
                 detail={
                     "error": {
                         "code": "AUTH_NOT_CONFIGURED",
-                        "message": "AUTH0_DOMAIN is required in non-dev environments.",
+                        "message": "OIDC_ISSUER is required in non-dev environments.",
                     }
                 },
             )
@@ -175,17 +245,20 @@ async def get_current_user(request: Request) -> dict:
                 detail={
                     "error": {
                         "code": "AUTH_NOT_CONFIGURED",
-                        "message": "AUTH0_AUDIENCE is required in non-dev environments.",
+                        "message": "OIDC_AUDIENCE is required in non-dev environments.",
                     }
                 },
             )
         return _decode_unverified_dev_token(token)
-    
+
     try:
-        # Fetch JWKS from Auth0 with caching and timeout
-        jwks_url = f"https://{config['domain']}/.well-known/jwks.json"
+        # Resolve JWKS URL and canonical issuer from the discovery document
+        # rather than constructing provider-specific URLs.
+        discovery = await get_oidc_discovery(config["issuer"])
+        jwks_url = discovery["jwks_uri"]
+        expected_issuer = str(discovery.get("issuer", config["issuer"]))
         now = datetime.now(timezone.utc)
-        
+
         # Use cached JWKS if available and not expired (cache for 1 hour)
         if _jwks_cache["jwks"] and _jwks_cache["expires"] and now < _jwks_cache["expires"]:
             jwks = _jwks_cache["jwks"]
@@ -223,19 +296,41 @@ async def get_current_user(request: Request) -> dict:
         if not rsa_key:
             raise HTTPException(status_code=401, detail="Invalid token key")
         
+        signing_key = PyJWK.from_dict(rsa_key).key
+        audience_claim = config["audience_claim"]
         payload = None
         last_error = None
-        for audience in config["audiences"]:
+        if audience_claim == "aud":
+            # Standard path: let PyJWT validate the `aud` claim directly.
+            for audience in config["audiences"]:
+                try:
+                    payload = jwt.decode(
+                        token,
+                        signing_key,
+                        algorithms=config["algorithms"],
+                        audience=audience,
+                        issuer=expected_issuer,
+                    )
+                    break
+                except PyJWTError as exc:
+                    last_error = exc
+        else:
+            # Some providers carry the audience in a non-standard claim
+            # (e.g. `azp`). Verify signature/issuer, then check it ourselves.
             try:
-                signing_key = PyJWK.from_dict(rsa_key).key
-                payload = jwt.decode(
+                decoded = jwt.decode(
                     token,
                     signing_key,
                     algorithms=config["algorithms"],
-                    audience=audience,
-                    issuer=f"https://{config['domain']}/",
+                    issuer=expected_issuer,
+                    options={"verify_aud": False},
                 )
-                break
+                if str(decoded.get(audience_claim, "")) in config["audiences"]:
+                    payload = decoded
+                else:
+                    last_error = PyJWTError(
+                        f"token '{audience_claim}' claim does not match an accepted audience"
+                    )
             except PyJWTError as exc:
                 last_error = exc
 
@@ -243,7 +338,7 @@ async def get_current_user(request: Request) -> dict:
             if last_error is not None:
                 raise last_error
             raise PyJWTError("token audience validation failed")
-        
+
         return {
             "sub": payload["sub"],
             "email": payload.get("email", payload.get("sub")),
@@ -255,14 +350,14 @@ async def get_current_user(request: Request) -> dict:
 @router.get("/auth/config")
 async def get_public_auth_config(request: Request) -> dict:
     """Return runtime auth config for the web app (no secrets)."""
-    config = get_auth0_config()
+    config = get_oidc_config()
     missing = []
-    if not config["domain"]:
-        missing.append("AUTH0_DOMAIN")
+    if not config["issuer"]:
+        missing.append("OIDC_ISSUER")
     if not config["client_id"]:
-        missing.append("AUTH0_CLIENT_ID")
+        missing.append("OIDC_CLIENT_ID")
     if not config["frontend_audience"]:
-        missing.append("AUTH0_AUDIENCE or AUTH0_FRONTEND_AUDIENCE")
+        missing.append("OIDC_AUDIENCE or OIDC_FRONTEND_AUDIENCE")
 
     if missing and not _is_dev_environment():
         raise HTTPException(
@@ -285,8 +380,8 @@ async def get_public_auth_config(request: Request) -> dict:
         if prefer_https and base_url.startswith("http://"):
             base_url = "https://" + base_url[len("http://"):]
     return {
-        "auth0": {
-            "domain": config["domain"],
+        "oidc": {
+            "issuer": config["issuer"],
             "clientId": config["client_id"],
             "audience": config["frontend_audience"],
             "frontendAudienceExplicit": config["frontend_audience_explicit"],
@@ -369,7 +464,7 @@ def generate_install_command(
     """Generate the install command for the user.
 
     The `--sync-token` argument is derived per-user from the fleet-wide
-    `LOCAL_SYNC_SIGNING_SECRET` + the user's Auth0 sub, so every install
+    `LOCAL_SYNC_SIGNING_SECRET` + the user's OIDC sub, so every install
     receives a distinct bearer token. The local dashboard stores the
     derived value in `local-sync.token` and compares incoming sync
     requests against it byte-for-byte. See `app/services/sync_auth.py`.
@@ -384,7 +479,7 @@ def generate_install_command(
     `node_name` is appended as `--name <name>` so the Tailscale client
     registers with the user-chosen device name on first connect.
     """
-    public_host = os.getenv("PUBLIC_API_HOST", "https://loreholm.com")
+    public_host = os.getenv("PUBLIC_API_HOST", "http://localhost:8080")
     command = f"curl -fsSL {public_host}/install.sh | bash -s -- --key {pre_auth_key}"
     try:
         sync_token = derive_user_sync_token(user_id)
@@ -545,7 +640,7 @@ async def get_onboarding_status(user: dict = Depends(get_current_user)) -> Onboa
     # Generate update command if node is connected
     update_command = None
     if data.get("node_connected"):
-        public_host = os.getenv("PUBLIC_API_HOST", "https://loreholm.com")
+        public_host = os.getenv("PUBLIC_API_HOST", "http://localhost:8080")
         update_command = f"curl -fsSL {public_host}/update.sh | bash"
     
     return OnboardingStatus(
@@ -901,7 +996,8 @@ async def get_updated_compose(user: dict = Depends(get_current_user)) -> dict:
     """
     user_id = user["sub"]
     namespace = user_id_to_namespace(user_id)
-    headscale_url = os.getenv("PUBLIC_API_HOST", "https://loreholm.com") + ":50443"
+    public_host = os.getenv("PUBLIC_API_HOST", "http://localhost:8080")
+    headscale_url = public_host + ":50443"
     
     # Get existing node name if available
     node_name = "loreholm-node"
@@ -913,8 +1009,8 @@ async def get_updated_compose(user: dict = Depends(get_current_user)) -> dict:
         pass
     
     compose_content = f"""# loreholm BYODB Stack
-# Updated docker-compose.yml - regenerated from loreholm.com
-# Documentation: https://loreholm.com/docs
+# Updated docker-compose.yml - regenerated by your loreholm server
+# Documentation: {public_host}/docs
 
 services:
   # Tailscale sidecar - connects to Headscale mesh network

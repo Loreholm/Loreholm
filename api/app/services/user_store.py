@@ -5,8 +5,8 @@ Each authenticated user has their own ArcadeDB database running on their machine
 accessible via their Tailscale IP on the Headscale mesh network.
 
 Security Model:
-1. User authenticates via Auth0 JWT
-2. User's Auth0 sub (user ID) maps to a Headscale namespace
+1. User authenticates via an OIDC JWT
+2. The user's OIDC sub (user ID) maps to a Headscale namespace
 3. We query Headscale to get the user's node Tailscale IP
 4. We connect to the local dashboard at that IP for all their requests
 5. Headscale namespaces provide network-level isolation
@@ -18,6 +18,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
@@ -51,12 +52,23 @@ def get_headscale_config() -> dict:
 
 
 def user_id_to_namespace(user_id: str) -> str:
-    """Convert Auth0 user ID to Headscale namespace.
-    
-    Auth0 user IDs look like: google-oauth2|123456789
-    Headscale namespaces must be alphanumeric with hyphens.
+    """Convert an OIDC subject into a Headscale namespace.
+
+    The `sub` claim varies by provider: Auth0 yields ``google-oauth2|12345``,
+    Keycloak/Zitadel yield UUIDs, others may embed ``/`` or other characters.
+    Headscale namespaces accept only ``[a-z0-9-]``, so we slugify the raw sub
+    and append a short SHA-256 prefix of the *original* value to guarantee
+    uniqueness even when two distinct subs slugify to the same string. The
+    result is deterministic for a given sub, which keeps the derivation
+    stateless: every call site computes the same namespace.
     """
-    return f"user-{user_id.replace('|', '-').replace(':', '-')}"
+    raw = (user_id or "").strip()
+    if not raw:
+        raise ValueError("user_id is required to derive a namespace.")
+    slug = re.sub(r"[^a-z0-9]+", "-", raw.lower()).strip("-")
+    slug = re.sub(r"-{2,}", "-", slug)[:40] or "user"
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:10]
+    return f"user-{slug}-{digest}"
 
 
 async def get_user_tailscale_ip(user_id: str) -> Optional[str]:

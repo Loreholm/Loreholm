@@ -15,8 +15,8 @@ web/
 ├── css/
 │   └── style.css       # Clean, minimal styles
 └── js/
-    ├── config.js       # Auth0 and API configuration
-    ├── auth.js         # Auth0 SPA integration
+    ├── config.js       # OIDC and API configuration
+    ├── auth.js         # OIDC integration (oidc-client-ts)
     └── dashboard.js    # Dashboard functionality
 ```
 
@@ -29,7 +29,7 @@ web/
 - Sign up / Sign in buttons
 
 ### Dashboard (`dashboard.html`)
-- Auth0 protected route
+- OIDC protected route
 - Initialize onboarding flow
 - Display install command with copy button
 - Show connection status
@@ -41,7 +41,7 @@ web/
 
 ```mermaid
 flowchart TD
-    A[Browser] --> B[Auth0 Login]
+    A[Browser] --> B[OIDC Login]
     B --> C[JWT Token]
     C --> D[Dashboard]
     D --> E["POST /onboarding/initialize"]
@@ -53,25 +53,29 @@ flowchart TD
 
 ## Configuration
 
-### 1. Auth0 Setup
+### 1. OIDC Setup
 
-See [web/Config.md](../web/Config.md) for detailed instructions.
+loreholm works with any OIDC provider (Auth0, Keycloak, Zitadel, Authentik,
+Google, …). See [web/Config.md](../web/Config.md) for detailed instructions.
 
 **Quick steps:**
-1. Create Auth0 Single Page Application
-2. Set callback URLs to `https://loreholm.com/dashboard.html`
-3. Create Auth0 API with identifier `https://api.loreholm.com`
-4. Copy Domain, Client ID, and Audience to `web/js/config.js`
+1. Create a public OIDC client (Authorization Code + PKCE)
+2. Set callback URLs to `https://example.com/dashboard`
+3. Define the API audience `https://api.example.com`
+4. Provide the issuer, Client ID, and Audience via the API's environment
+   (the frontend fetches them at runtime from `/onboarding/auth/config`)
 
-### 2. Update `web/js/config.js`
+### 2. Update `web/js/config.js` (optional fallback)
+
+Values are normally served at runtime; fill these in only as a static fallback:
 
 ```javascript
 window.APP_CONFIG = {
-    auth0: {
-        domain: 'YOUR_DOMAIN.us.auth0.com',
+    oidc: {
+        issuer: 'https://YOUR_ISSUER',
         clientId: 'YOUR_CLIENT_ID',
-        audience: 'https://api.loreholm.com',
-        redirectUri: window.location.origin + '/dashboard.html',
+        audience: 'https://api.example.com',
+        redirectUri: window.location.origin + '/dashboard',
         scope: 'openid profile email'
     },
     api: {
@@ -83,10 +87,10 @@ window.APP_CONFIG = {
 ### 3. GitHub Secrets
 
 Add to your repository secrets:
-- `AUTH0_CLIENT_ID`
-- `AUTH0_CLIENT_SECRET`
-- `AUTH0_DOMAIN`
-- `AUTH0_AUDIENCE`
+- `OIDC_ISSUER`
+- `OIDC_CLIENT_ID`
+- `OIDC_AUDIENCE`
+- `OIDC_AUDIENCE_CLAIM` *(optional, set to `azp` if your provider uses it)*
 - `HEADSCALE_API_URL`
 - `HEADSCALE_API_KEY`
 
@@ -99,25 +103,25 @@ python3 -m http.server 8000 --directory web
 # Visit http://localhost:8000
 ```
 
-Note: Auth0 won't work locally without configuring `http://localhost:8000` as an allowed callback URL.
+Note: login won't work locally without configuring `http://localhost:8000` as an allowed callback URL in your OIDC provider.
 
 ## Platform Install Commands
 
 Linux / macOS:
 ```bash
-curl -fsSL https://loreholm.com/install.sh | bash -s -- --key YOUR_KEY
+curl -fsSL https://example.com/install.sh | bash -s -- --key YOUR_KEY
 ```
 
 Windows (PowerShell):
 ```powershell
-irm https://loreholm.com/install.ps1 | iex
+irm https://example.com/install.ps1 | iex
 ```
 
 ## Design Philosophy
 
 **No Build Tools Required:**
 - Pure HTML/CSS/JavaScript
-- Auth0 SDK loaded from CDN
+- oidc-client-ts loaded from CDN
 - Edit and deploy instantly
 - No npm, webpack, or bundlers
 
@@ -142,7 +146,7 @@ The frontend calls these backend endpoints:
 | `GET /update.ps1` | Download update script (Windows) |
 | `POST /mcp/*` | MCP tool endpoints (for LLMs) |
 
-All API calls use JWT Bearer tokens from Auth0.
+All API calls use JWT Bearer tokens from the configured OIDC provider.
 
 ## Deployment
 

@@ -75,7 +75,7 @@ flowchart LR
   lookups.
 - **Cloud reaches the machine over the Headscale-managed Tailnet** to
   the `:8081` shim; the cloud never opens a connection to ArcadeDB.
-- **Auth0** handles user authentication for the cloud API.
+- **An OIDC provider** (any standard issuer) handles user authentication for the cloud API.
 - **Bifrost** proxies LLM requests to configured AI providers (OpenAI, Anthropic, Google, Groq, Ollama).
 
 ## Key Design Principles
@@ -139,7 +139,7 @@ No traditional text matching needed — semantic search finds relevant memories 
 - **Embeddings**: dashboard-side `EmbeddingService` (Harrier-270M 640-dim primary, MiniLM-L6-v2 384-dim fallback)
 - **LLM Gateway**: Bifrost (OpenAI-compatible proxy for multi-provider LLM access)
 - **Supported LLM Providers**: OpenAI, Anthropic, Google (Gemini), Groq, Ollama (local)
-- **Authentication**: Auth0 (JWT tokens) for cloud API; password-based auth for local dashboard
+- **Authentication**: OIDC (JWT tokens, any standard issuer) for cloud API; password-based auth for local dashboard
 - **API Key Metadata/Revocation**: Redis
 - **Database Target Registry**: Postgres
 - **Networking**: Tailscale + Headscale (private mesh)
@@ -153,7 +153,7 @@ api/                    # FastAPI application
   app/
     main.py            # FastAPI entry point
     mcp/               # MCP tool routes
-    onboarding/        # User onboarding & Auth0 integration
+    onboarding/        # User onboarding & OIDC integration
     local_dashboard/   # Local dashboard API + wizard agent
       main.py          # Dashboard endpoints, auth, Bifrost, wizard
       static/          # Frontend (HTML, JS, CSS)
@@ -167,7 +167,7 @@ web/                   # Static frontend + install scripts
   install.ps1          # BYODB install script (Windows)
   update.sh            # Update script (Linux/macOS)
   update.ps1           # Update script (Windows)
-  js/                  # Auth0 & dashboard logic
+  js/                  # OIDC & dashboard logic
 deploy/                # Production docker-compose
   docker-compose.headscale.yml  # Headscale control plane
 docs/                  # Documentation (you are here)
@@ -202,7 +202,7 @@ flowchart TD
 ## Security Model
 
 ### Cloud / Tailnet boundary
-- **Auth0 JWT validation** for all cloud API authenticated routes
+- **OIDC JWT validation** for all cloud API authenticated routes
 - **Per-user dashboard isolation** via Tailscale ACLs (Headscale enforces
   per-user reachability of each machine's `:8081` endpoint node)
 - **Optional per-key target routing** via server-side database target references

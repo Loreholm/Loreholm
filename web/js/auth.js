@@ -1,26 +1,28 @@
-// Auth0 Integration (Vanilla JS)
-// Using Auth0 SPA SDK via CDN
+// OIDC Integration (Vanilla JS)
+// Provider-neutral: uses oidc-client-ts via CDN against any OIDC issuer.
 
 (function() {
     'use strict';
 
-    let auth0Client = null;
-    let auth0InitPromise = null;
+    const OIDC_SDK_URL = 'https://cdnjs.cloudflare.com/ajax/libs/oidc-client-ts/3.3.0/browser/oidc-client-ts.min.js';
+
+    let userManager = null;
+    let managerInitPromise = null;
     let loginRedirectInProgress = false;
     const AUTH_CONFIG_ENDPOINT = '/onboarding/auth/config';
 
     async function ensureAuthClient() {
-        if (auth0Client) {
-            return auth0Client;
+        if (userManager) {
+            return userManager;
         }
-        if (!auth0InitPromise) {
-            auth0InitPromise = initAuth0()
+        if (!managerInitPromise) {
+            managerInitPromise = initOidc()
                 .catch((err) => {
-                    auth0InitPromise = null;
+                    managerInitPromise = null;
                     throw err;
                 });
         }
-        return await auth0InitPromise;
+        return await managerInitPromise;
     }
 
     async function loginOnce() {
@@ -51,14 +53,11 @@
 
     function validateAuthConfig(config) {
         const missing = [];
-        if (!config?.domain) {
-            missing.push('domain');
+        if (!config?.issuer) {
+            missing.push('issuer');
         }
         if (!config?.clientId) {
             missing.push('clientId');
-        }
-        if (!config?.audience) {
-            missing.push('audience');
         }
         if (!config?.redirectUri) {
             missing.push('redirectUri');
@@ -97,15 +96,15 @@
             }
 
             const payload = await response.json();
-            if (!payload?.auth0) {
+            if (!payload?.oidc) {
                 return null;
             }
-            return payload.auth0;
+            return payload.oidc;
         } catch (err) {
             if (err?.code === 'AUTH_NOT_CONFIGURED') {
                 throw err;
             }
-            console.warn('Using static Auth0 config because runtime config fetch failed:', err);
+            console.warn('Using static OIDC config because runtime config fetch failed:', err);
             return null;
         } finally {
             window.clearTimeout(timeoutId);
@@ -113,7 +112,7 @@
     }
 
     async function resolveAuthConfig() {
-        const staticConfig = window.APP_CONFIG?.auth0 || {};
+        const staticConfig = window.APP_CONFIG?.oidc || {};
         const runtimeConfig = await fetchRuntimeAuthConfig();
         if (!runtimeConfig) {
             return staticConfig;
@@ -124,7 +123,7 @@
         if (staticConfig.audience && runtimeConfig.audience && staticConfig.audience !== runtimeConfig.audience) {
             if (!runtimeAudienceExplicit) {
                 console.warn(
-                    `Auth audience mismatch detected; runtime audience "${runtimeConfig.audience}" is implicit. Using static fallback "${staticConfig.audience}" until AUTH0_FRONTEND_AUDIENCE is explicitly set.`
+                    `Auth audience mismatch detected; runtime audience "${runtimeConfig.audience}" is implicit. Using static fallback "${staticConfig.audience}" until OIDC_FRONTEND_AUDIENCE is explicitly set.`
                 );
                 mergedConfig.audience = staticConfig.audience;
                 return mergedConfig;
@@ -148,14 +147,14 @@
         return mergedConfig;
     }
 
-    // Initialize Auth0
-    async function initAuth0() {
-        // Load Auth0 SPA SDK from CDN
-        if (!window.auth0) {
+    // Initialize the OIDC client
+    async function initOidc() {
+        // Load oidc-client-ts from CDN (UMD global: window.oidc)
+        if (!window.oidc) {
             const script = document.createElement('script');
-            script.src = 'https://cdn.auth0.com/js/auth0-spa-js/2.1/auth0-spa-js.production.js';
+            script.src = OIDC_SDK_URL;
             script.async = true;
-            
+
             await new Promise((resolve, reject) => {
                 script.onload = resolve;
                 script.onerror = reject;
@@ -166,20 +165,25 @@
         const config = await resolveAuthConfig();
         validateAuthConfig(config);
         window.APP_CONFIG = window.APP_CONFIG || {};
-        window.APP_CONFIG.auth0 = config;
+        window.APP_CONFIG.oidc = config;
 
-        auth0Client = await window.auth0.createAuth0Client({
-            domain: config.domain,
-            clientId: config.clientId,
-            authorizationParams: {
-                audience: config.audience,
-                redirect_uri: config.redirectUri,
-                scope: config.scope
-            },
-            cacheLocation: 'localstorage'
+        // Some providers (e.g. Auth0) require an `audience` request param to
+        // mint a JWT access token for the API; pure OIDC providers ignore it.
+        const extraQueryParams = config.audience ? { audience: config.audience } : undefined;
+
+        userManager = new window.oidc.UserManager({
+            authority: config.issuer,
+            client_id: config.clientId,
+            redirect_uri: config.redirectUri,
+            post_logout_redirect_uri: window.location.origin,
+            response_type: 'code',
+            scope: config.scope || 'openid profile email',
+            automaticSilentRenew: true,
+            extraQueryParams,
+            userStore: new window.oidc.WebStorageStateStore({ store: window.localStorage })
         });
 
-        return auth0Client;
+        return userManager;
     }
 
     // Handle redirect callback
@@ -189,19 +193,18 @@
             const params = new URLSearchParams(query);
             const error = params.get('error') || 'auth_error';
             const description = params.get('error_description') || 'Authentication failed.';
-            const message = description;
-            console.error('Auth redirect error:', error, message);
+            console.error('Auth redirect error:', error, description);
             return {
                 error,
-                error_description: message
+                error_description: description
             };
         }
         if (query.includes('code=') && query.includes('state=')) {
             try {
-                const result = await auth0Client.handleRedirectCallback();
+                const user = await userManager.signinRedirectCallback();
                 // Clean up URL
                 window.history.replaceState({}, document.title, window.location.pathname);
-                return (result && result.appState) ? result.appState : {};
+                return (user && user.state) ? user.state : {};
             } catch (err) {
                 console.error('Error handling redirect:', err);
                 // Clean up URL even on error to prevent infinite loops
@@ -217,15 +220,22 @@
     async function getAccessToken() {
         try {
             const client = await ensureAuthClient();
-            const token = await client.getTokenSilently();
-            return token;
-        } catch (err) {
-            console.error('Error getting token:', err);
-            const code = err?.error || err?.code || '';
-            if (code === 'login_required' || code === 'consent_required' || code === 'missing_refresh_token') {
+            let user = await client.getUser();
+            if (user && user.expired) {
+                try {
+                    user = await client.signinSilent();
+                } catch (silentErr) {
+                    console.warn('Silent token renewal failed:', silentErr);
+                    user = null;
+                }
+            }
+            if (!user || !user.access_token) {
                 await loginOnce();
                 return null;
             }
+            return user.access_token;
+        } catch (err) {
+            console.error('Error getting token:', err);
             throw err;
         }
     }
@@ -246,37 +256,41 @@
         try {
             const client = await ensureAuthClient();
             const returnTo = window.location.pathname + window.location.search + window.location.hash;
-            await client.loginWithRedirect({
-                authorizationParams: {
-                    screen_hint: 'signup'  // Hint to show signup form
-                },
-                appState: { returnTo }
+            await client.signinRedirect({
+                state: { returnTo }
             });
         } catch (err) {
-            console.error('Login failed: Auth0 client is not initialized.', err);
+            console.error('Login failed: OIDC client is not initialized.', err);
         }
     }
 
     // Logout
     async function logout() {
         const client = await ensureAuthClient();
-        await client.logout({
-            logoutParams: {
-                returnTo: window.location.origin
-            }
-        });
+        try {
+            await client.signoutRedirect({
+                post_logout_redirect_uri: window.location.origin
+            });
+        } catch (err) {
+            // Provider may not expose an end_session_endpoint; clear locally.
+            console.warn('Provider logout unavailable, clearing local session:', err);
+            await client.removeUser();
+            window.location.href = window.location.origin;
+        }
     }
 
     // Check if authenticated
     async function isAuthenticated() {
         const client = await ensureAuthClient();
-        return await client.isAuthenticated();
+        const user = await client.getUser();
+        return Boolean(user && !user.expired);
     }
 
     // Get user info
     async function getUser() {
         const client = await ensureAuthClient();
-        return await client.getUser();
+        const user = await client.getUser();
+        return user ? user.profile : null;
     }
 
     // Fetch with authentication
@@ -309,7 +323,7 @@
     async function init() {
         try {
             await ensureAuthClient();
-            
+
             // Handle callback if present
             const redirectResult = await handleRedirectCallback();
 
@@ -318,7 +332,7 @@
                 console.error('Auth redirect failed:', details);
                 return false;
             }
-            
+
             // If we just handled a redirect successfully, redirect to dashboard clean URL
             // This ensures the auth state is properly established
             if (redirectResult && redirectResult !== 'error') {
@@ -326,18 +340,18 @@
                 window.location.href = returnTo || '/dashboard';
                 return true;
             }
-            
+
             // If there was an error during redirect handling, stay on current page
             // and let the user see the error in console (don't redirect away)
             if (redirectResult === 'error') {
-                console.error('Auth redirect failed - check Auth0 configuration');
+                console.error('Auth redirect failed - check OIDC configuration');
                 // Don't redirect, let user stay and see the error
                 return false;
             }
-            
+
             // Check if we're authenticated
             const authenticated = await isAuthenticated();
-            
+
             // Redirect logic
             const path = window.location.pathname;
             const isDashboard = path.startsWith('/dashboard');

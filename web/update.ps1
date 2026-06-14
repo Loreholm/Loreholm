@@ -1,8 +1,8 @@
 #!/usr/bin/env pwsh
 #
 # loreholm Update Script (Windows/PowerShell)
-# Usage: irm loreholm.com/update.ps1 | iex
-#        Or: Invoke-WebRequest -Uri https://loreholm.com/update.ps1 -OutFile update.ps1; .\update.ps1
+# Usage: irm __APP_DOMAIN__/update.ps1 | iex
+#        Or: Invoke-WebRequest -Uri https://__APP_DOMAIN__/update.ps1 -OutFile update.ps1; .\update.ps1
 #
 # Updates an existing loreholm installation with the latest docker-compose.yml.
 # Preserves data and Tailscale authentication.
@@ -12,7 +12,7 @@ param(
     [string]$InstallDir = "$env:USERPROFILE\.loreholm",
 
     [Parameter(Mandatory = $false)]
-    [string]$HeadscaleUrl = "https://loreholm.com:50443",
+    [string]$HeadscaleUrl = "https://__APP_DOMAIN__:50443",
 
     [Parameter(Mandatory = $false)]
     [string]$SyncToken = "",
@@ -131,7 +131,7 @@ Examples:
   .\update.ps1 -InstallDir "C:\Users\me\.loreholm"
 
 Web install:
-  irm loreholm.com/update.ps1 | iex
+  irm __APP_DOMAIN__/update.ps1 | iex
 "@
     exit 0
 }
@@ -234,7 +234,7 @@ function Test-LegacyLayout {
         Write-Host "onto a single long-lived ArcadeDB server. There is no in-place data migration."
         Write-Host ""
         Write-Host "To proceed, rerun with -Nuke to destroy legacy containers and volumes:"
-        Write-Host "  irm loreholm.com/update.ps1 | iex -Args '-Nuke'" -ForegroundColor $Colors.Yellow
+        Write-Host "  irm __APP_DOMAIN__/update.ps1 | iex -Args '-Nuke'" -ForegroundColor $Colors.Yellow
         Write-Host ""
         exit 1
     }
@@ -548,7 +548,7 @@ _HOP_BY_HOP = {
 
 # Path prefixes the shim forwards to the upstream FastAPI local dashboard.
 # Sync lanes carry cloud->local pull traffic; chat lanes carry the chat proxy
-# traffic originating from chat.loreholm.com via the cloud /chat router.
+# traffic originating from __CHAT_DOMAIN__ via the cloud /chat router.
 _FORWARD_PREFIXES = ("/api/sync/", "/api/chat/")
 
 # Paths that must stream their response body without buffering (SSE).
@@ -842,8 +842,8 @@ function Write-UpdatedComposeFile {
     $compose = @"
 # loreholm BYODB Stack
 # Auto-updated on $timestamp
-# Documentation: https://loreholm.com/docs
-# API Reference: https://api.loreholm.com/docs
+# Documentation: https://__APP_DOMAIN__/docs
+# API Reference: https://__API_DOMAIN__/docs
 #
 # Profile: $($script:SelectedProfile) (RAM=$($script:DetectedRamMb) MB, arch=$($script:DetectedArch))
 # Embedding model: $($script:SelectedEmbeddingModel)
@@ -1096,7 +1096,7 @@ function Show-Status {
     }
     Write-Host "  └─ Resolver data:   Get-Content $script:LocalDashboardFile"
     Write-Host "  └─ Local admin:     Start-Process http://$script:LocalAdminDisplayHost:$script:LocalAdminPort"
-    Write-Host "  └─ Dashboard:       https://loreholm.com/dashboard"
+    Write-Host "  └─ Dashboard:       https://__APP_DOMAIN__/dashboard"
     Write-Host ""
 }
 

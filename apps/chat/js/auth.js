@@ -1,14 +1,17 @@
-// Auth0 integration for chat.loreholm.com
-// Reuses the same Auth0 tenant and patterns as the main dashboard.
+// OIDC integration for the chat front-end
+// Provider-neutral: uses oidc-client-ts via CDN against the same issuer as
+// the main dashboard and API.
 
 (function () {
   'use strict';
 
-  let auth0Client = null;
-  let auth0InitPromise = null;
+  const OIDC_SDK_URL = 'https://cdnjs.cloudflare.com/ajax/libs/oidc-client-ts/3.3.0/browser/oidc-client-ts.min.js';
 
-  // Mirror of the dashboard's runtime-config pattern: tenant values come from
-  // the API at runtime, not from source. Only domain/clientId/audience are
+  let userManager = null;
+  let managerInitPromise = null;
+
+  // Mirror of the dashboard's runtime-config pattern: provider values come from
+  // the API at runtime, not from source. Only issuer/clientId/audience are
   // taken from the endpoint — redirectUri must stay this origin (the endpoint
   // returns the dashboard's), and scope stays local.
   async function loadRuntimeAuthConfig(staticConfig) {
@@ -16,10 +19,10 @@
     try {
       const resp = await fetch(`${apiBase}/onboarding/auth/config`);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const runtime = (await resp.json())?.auth0 || {};
+      const runtime = (await resp.json())?.oidc || {};
       return {
         ...staticConfig,
-        domain: runtime.domain || staticConfig.domain,
+        issuer: runtime.issuer || staticConfig.issuer,
         clientId: runtime.clientId || staticConfig.clientId,
         audience: runtime.audience || staticConfig.audience,
       };
@@ -30,20 +33,20 @@
   }
 
   async function ensureAuthClient() {
-    if (auth0Client) return auth0Client;
-    if (!auth0InitPromise) {
-      auth0InitPromise = initAuth0().catch((err) => {
-        auth0InitPromise = null;
+    if (userManager) return userManager;
+    if (!managerInitPromise) {
+      managerInitPromise = initOidc().catch((err) => {
+        managerInitPromise = null;
         throw err;
       });
     }
-    return await auth0InitPromise;
+    return await managerInitPromise;
   }
 
-  async function initAuth0() {
-    if (!window.auth0) {
+  async function initOidc() {
+    if (!window.oidc) {
       const script = document.createElement('script');
-      script.src = 'https://cdn.auth0.com/js/auth0-spa-js/2.1/auth0-spa-js.production.js';
+      script.src = OIDC_SDK_URL;
       script.async = true;
       await new Promise((resolve, reject) => {
         script.onload = resolve;
@@ -52,28 +55,34 @@
       });
     }
 
-    const config = await loadRuntimeAuthConfig(window.APP_CONFIG?.auth0 || {});
-    if (!config.domain || !config.clientId) {
-      throw new Error('Auth is not configured: missing domain/clientId from runtime config and static fallback.');
+    const config = await loadRuntimeAuthConfig(window.APP_CONFIG?.oidc || {});
+    if (!config.issuer || !config.clientId) {
+      throw new Error('Auth is not configured: missing issuer/clientId from runtime config and static fallback.');
     }
-    auth0Client = new window.auth0.Auth0Client({
-      domain: config.domain,
-      clientId: config.clientId,
-      authorizationParams: {
-        audience: config.audience,
-        redirect_uri: config.redirectUri,
-        scope: config.scope,
-      },
-      cacheLocation: 'localstorage',
+
+    // Some providers (e.g. Auth0) require an `audience` request param to mint a
+    // JWT access token for the API; pure OIDC providers ignore it.
+    const extraQueryParams = config.audience ? { audience: config.audience } : undefined;
+
+    userManager = new window.oidc.UserManager({
+      authority: config.issuer,
+      client_id: config.clientId,
+      redirect_uri: config.redirectUri,
+      post_logout_redirect_uri: window.location.origin,
+      response_type: 'code',
+      scope: config.scope || 'openid profile email',
+      automaticSilentRenew: true,
+      extraQueryParams,
+      userStore: new window.oidc.WebStorageStateStore({ store: window.localStorage }),
     });
-    return auth0Client;
+    return userManager;
   }
 
   async function handleRedirectCallback() {
     const query = window.location.search;
     if (query.includes('code=') && query.includes('state=')) {
       try {
-        await auth0Client.handleRedirectCallback();
+        await userManager.signinRedirectCallback();
         window.history.replaceState({}, document.title, window.location.pathname);
         return true;
       } catch (err) {
@@ -86,39 +95,51 @@
   }
 
   async function getAccessToken() {
-    try {
-      const client = await ensureAuthClient();
-      return await client.getTokenSilently();
-    } catch (err) {
-      const code = err?.error || err?.code || '';
-      if (code === 'login_required' || code === 'consent_required' || code === 'missing_refresh_token') {
-        await login();
-        return null;
+    const client = await ensureAuthClient();
+    let user = await client.getUser();
+    if (user && user.expired) {
+      try {
+        user = await client.signinSilent();
+      } catch (err) {
+        console.warn('Silent token renewal failed:', err);
+        user = null;
       }
-      throw err;
     }
+    if (!user || !user.access_token) {
+      await login();
+      return null;
+    }
+    return user.access_token;
   }
 
   async function login() {
     const client = await ensureAuthClient();
-    await client.loginWithRedirect({
-      authorizationParams: { screen_hint: 'signup' },
+    await client.signinRedirect({
+      extraQueryParams: { screen_hint: 'signup' },
     });
   }
 
   async function logout() {
     const client = await ensureAuthClient();
-    await client.logout({ logoutParams: { returnTo: window.location.origin } });
+    try {
+      await client.signoutRedirect({ post_logout_redirect_uri: window.location.origin });
+    } catch (err) {
+      console.warn('Provider logout unavailable, clearing local session:', err);
+      await client.removeUser();
+      window.location.href = window.location.origin;
+    }
   }
 
   async function isAuthenticated() {
     const client = await ensureAuthClient();
-    return await client.isAuthenticated();
+    const user = await client.getUser();
+    return Boolean(user && !user.expired);
   }
 
   async function getUser() {
     const client = await ensureAuthClient();
-    return await client.getUser();
+    const user = await client.getUser();
+    return user ? user.profile : null;
   }
 
   async function authenticatedFetch(url, options = {}) {
@@ -139,17 +160,17 @@
 
   async function init() {
     try {
-      await ensureAuthClient();
+      const client = await ensureAuthClient();
       const handled = await handleRedirectCallback();
       if (!handled) {
-        // Attempt silent SSO — if the user has an Auth0 session on the
-        // shared tenant domain, this logs them in without a redirect.
+        // Attempt silent SSO — if the user has a provider session, this logs
+        // them in without an interactive redirect.
         try {
-          await auth0Client.checkSession();
+          await client.signinSilent();
         } catch (err) {
           const code = err?.error || err?.code || '';
           if (code !== 'login_required' && code !== 'consent_required') {
-            console.warn('checkSession failed:', err);
+            console.warn('signinSilent failed:', err);
           }
         }
       }
