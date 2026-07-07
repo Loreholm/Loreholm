@@ -4,8 +4,8 @@
 #
 # - Seeds .dev-state/ with the token / config / credential files the dashboard
 #   expects (idempotent — re-run safely).
-# - Brings up deploy/docker-compose.dev.yml (arcadedb + bifrost + netns
-#   placeholder) so wizard, query, and chat features actually work.
+# - Brings up deploy/docker-compose.dev.yml (arcadedb + bifrost) so wizard,
+#   query, and chat features actually work.
 # - Runs uvicorn on the host with --reload pointing at the source tree, so
 #   edits to api/app/local_dashboard/ (static or Python) show up instantly.
 # - Pre-seeds a dev session via LOCAL_DASHBOARD_DEV_MODE + /dev/login, so you
@@ -99,32 +99,14 @@ seed_json "$DEV_KEYS_FILE"       '{"version":1,"keys":[]}'
 seed_json "$DEV_PREFS_FILE"      '{"version":1}'
 seed_json "$DEV_BIFROST_CONFIG"  '{"providers":{}}'
 
-# Pre-register the dev database so the dashboard lists it on first load. The
-# matching container is defined in deploy/docker-compose.dev.yml.
-if [[ ! -s "$DEV_REGISTRY_FILE" ]]; then
-  "$VENV_PY" - <<'PY' > "$DEV_REGISTRY_FILE"
-import json
-from datetime import datetime, timezone
-now = datetime.now(timezone.utc).isoformat()
-print(json.dumps({
-    "version": 1,
-    "databases": [
-        {
-            "database_id": "dev",
-            "name": "Dev",
-            "profile_id": "memory-default",
-            "profile_version": 1,
-            "sslmode": "disable",
-            "schema_hash": None,
-            "tool_manifest": {},
-            "created_at": now,
-            "updated_at": now,
-        }
-    ],
-}, indent=2))
-PY
-  chmod 600 "$DEV_REGISTRY_FILE"
-fi
+# Start with an empty registry, exactly like a real install (web/install.sh
+# ships databases.json with "databases": []). The dev loop then walks the same
+# product path: you create your first database through the dashboard, which
+# registers it AND runs CREATE DATABASE on ArcadeDB in one coupled operation.
+# (Pre-registering a `dev` record here without also creating the ArcadeDB
+# database made the reconciler sweep a database that didn't exist -> 403.)
+# See scripts/README.md for a scripted shortcut if you want to skip the click.
+seed_json "$DEV_REGISTRY_FILE"   '{"version":1,"databases":[]}'
 
 # Pre-seed credentials so _is_account_setup() reports True and nothing nudges
 # us toward the first-run setup wizard. Matches main.py's pbkdf2 params.
@@ -166,7 +148,7 @@ check_port 8080 "likely a 'fastapi dev app/main.py' from the API dev step, or an
 check_port 2480 "another ArcadeDB server is running."
 
 # ---------- dev stack ----------
-blue "Bringing up dev containers (arcadedb + bifrost + netns placeholder)..."
+blue "Bringing up dev containers (arcadedb + bifrost)..."
 docker compose -f "$COMPOSE_FILE" up -d
 green "Dev containers up"
 

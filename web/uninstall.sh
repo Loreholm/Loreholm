@@ -15,6 +15,7 @@ INSTALL_DIR="${INSTALL_DIR:-$HOME/.loreholm}"
 COMPOSE_FILE="$INSTALL_DIR/docker-compose.yml"
 CHAT_COMPOSE_FILE="$INSTALL_DIR/docker-compose.chat.yml"
 ASSUME_YES="false"
+KEEP_DATA="false"
 
 log() {
     echo -e "${BLUE}[loreholm]${NC} $1"
@@ -39,6 +40,8 @@ Usage: $0 [options]
 
 Options:
   --dir <path>  Installation directory (default: $INSTALL_DIR)
+  --keep-data   Remove containers only; keep the memory database, chat
+                history, and $INSTALL_DIR so a reinstall re-adopts them
   --yes         Skip confirmation prompt
   -h, --help    Show help
 EOF
@@ -56,6 +59,10 @@ parse_args() {
                 COMPOSE_FILE="$INSTALL_DIR/docker-compose.yml"
                 CHAT_COMPOSE_FILE="$INSTALL_DIR/docker-compose.chat.yml"
                 shift 2
+                ;;
+            --keep-data)
+                KEEP_DATA="true"
+                shift
                 ;;
             --yes)
                 ASSUME_YES="true"
@@ -77,8 +84,16 @@ confirm_uninstall() {
     fi
 
     echo ""
-    warn "This will remove loreholm containers, loreholm-* Docker volumes, and:"
-    warn "  $INSTALL_DIR"
+    if [[ "$KEEP_DATA" == "true" ]]; then
+        warn "This removes the loreholm containers but KEEPS your data:"
+        warn "  memory database, chat history, and $INSTALL_DIR."
+    else
+        warn "This PERMANENTLY DELETES your loreholm data and cannot be undone:"
+        warn "  the memory database and chat history (loreholm-* Docker volumes),"
+        warn "  plus all containers and $INSTALL_DIR."
+        warn "To keep your data, cancel and re-run with --keep-data (or back up the"
+        warn "loreholm-* Docker volumes first)."
+    fi
     local answer=""
     if [[ -r /dev/tty ]]; then
         printf "Continue uninstall? [y/N]: " > /dev/tty
@@ -126,10 +141,16 @@ stop_stack_if_present() {
         compose_args+=(-f "$CHAT_COMPOSE_FILE")
     fi
 
+    # -v removes named volumes (the memory data); omit it under --keep-data.
+    local down_args=(down --remove-orphans)
+    if [[ "$KEEP_DATA" != "true" ]]; then
+        down_args+=(-v)
+    fi
+
     if [[ "$COMPOSE_CMD" == "docker compose" ]]; then
-        docker compose "${compose_args[@]}" down -v --remove-orphans || true
+        docker compose "${compose_args[@]}" "${down_args[@]}" || true
     else
-        docker-compose "${compose_args[@]}" down -v --remove-orphans || true
+        docker-compose "${compose_args[@]}" "${down_args[@]}" || true
     fi
 }
 
@@ -167,6 +188,10 @@ main() {
     confirm_uninstall
 
     if ! command -v docker &> /dev/null; then
+        if [[ "$KEEP_DATA" == "true" ]]; then
+            warn "Docker is not installed and --keep-data was set; nothing to do."
+            exit 0
+        fi
         warn "Docker is not installed; removing local files only."
         remove_install_dir
         success "Uninstall complete."
@@ -176,6 +201,10 @@ main() {
     detect_compose_cmd
     stop_stack_if_present
     remove_loreholm_containers
+    if [[ "$KEEP_DATA" == "true" ]]; then
+        success "loreholm containers removed; data kept at $INSTALL_DIR."
+        exit 0
+    fi
     remove_loreholm_volumes
     remove_install_dir
     success "loreholm uninstall complete."

@@ -470,8 +470,13 @@ curl -fsSL example.com/uninstall.sh | bash
 irm example.com/uninstall.ps1 | iex
 ```
 
-To skip the prompt, pass `--yes` (`curl -fsSL example.com/uninstall.sh | bash -s -- --yes`)
-or `-Yes` to the PowerShell script.
+Flags (append after `bash -s --`, or pass directly to the PowerShell script):
+
+| Flag (`.sh` / `.ps1`) | Effect |
+|---|---|
+| `--keep-data` / `-KeepData` | Remove containers only; keep the memory database, chat history, and `~/.loreholm` so a reinstall re-adopts them |
+| `--yes` / `-Yes` | Skip the confirmation prompt |
+| `--dir <path>` / `-InstallDir <path>` | Use a non-default install directory |
 
 <details>
 <summary>Manual teardown (if you can't run the script)</summary>

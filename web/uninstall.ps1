@@ -8,6 +8,9 @@ param(
     [string]$InstallDir = "$env:USERPROFILE\.loreholm",
 
     [Parameter(Mandatory=$false)]
+    [switch]$KeepData,
+
+    [Parameter(Mandatory=$false)]
     [switch]$Yes,
 
     [Parameter(Mandatory=$false)]
@@ -47,6 +50,8 @@ Usage: .\uninstall.ps1 [options]
 
 Options:
   -InstallDir <path>  Install directory (default: $InstallDir)
+  -KeepData           Remove containers only; keep the memory database, chat
+                      history, and $InstallDir so a reinstall re-adopts them
   -Yes                Skip confirmation prompt
   -Help               Show this help message
 "@
@@ -59,8 +64,16 @@ function Confirm-Uninstall {
     }
 
     Write-Host ""
-    Write-Warn-Custom "This will remove loreholm containers, loreholm-* Docker volumes, and:"
-    Write-Warn-Custom "  $InstallDir"
+    if ($KeepData) {
+        Write-Warn-Custom "This removes the loreholm containers but KEEPS your data:"
+        Write-Warn-Custom "  memory database, chat history, and $InstallDir."
+    } else {
+        Write-Warn-Custom "This PERMANENTLY DELETES your loreholm data and cannot be undone:"
+        Write-Warn-Custom "  the memory database and chat history (loreholm-* Docker volumes),"
+        Write-Warn-Custom "  plus all containers and $InstallDir."
+        Write-Warn-Custom "To keep your data, cancel and re-run with -KeepData (or back up the"
+        Write-Warn-Custom "loreholm-* Docker volumes first)."
+    }
     $answer = Read-Host "Continue uninstall? [y/N]"
     if ($answer -notmatch '^(?i:y|yes)$') {
         Write-Log "Uninstall canceled."
@@ -88,9 +101,12 @@ function Stop-ComposeStack {
     Push-Location $InstallDir
     try {
         $args = Get-ComposeArgs
-        docker compose @args down -v --remove-orphans 2>$null | Out-Null
+        # -v removes named volumes (the memory data); omit it under -KeepData.
+        $downArgs = @("down", "--remove-orphans")
+        if (-not $KeepData) { $downArgs += "-v" }
+        docker compose @args @downArgs 2>$null | Out-Null
         if ($LASTEXITCODE -ne 0) {
-            docker-compose @args down -v --remove-orphans 2>$null | Out-Null
+            docker-compose @args @downArgs 2>$null | Out-Null
         }
     } catch {
         Write-Warn-Custom "Could not run compose teardown; continuing cleanup."
@@ -146,9 +162,20 @@ function Invoke-Main {
     if (Get-Command docker -ErrorAction SilentlyContinue) {
         Stop-ComposeStack
         Remove-LoreholmContainers
-        Remove-LoreholmVolumes
+        if (-not $KeepData) {
+            Remove-LoreholmVolumes
+        }
     } else {
+        if ($KeepData) {
+            Write-Warn-Custom "Docker not found and -KeepData was set; nothing to do."
+            return
+        }
         Write-Warn-Custom "Docker not found; removing local files only."
+    }
+
+    if ($KeepData) {
+        Write-Success "loreholm containers removed; data kept at $InstallDir."
+        return
     }
 
     Remove-InstallDirectory
