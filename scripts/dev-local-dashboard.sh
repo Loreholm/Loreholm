@@ -30,10 +30,6 @@ green() { printf "\033[0;32m[\xE2\x9C\x93]\033[0m %s\n" "$1"; }
 red()   { printf "\033[0;31m[\xE2\x9C\x97]\033[0m %s\n" "$1" >&2; }
 
 # ---------- sanity checks ----------
-if [[ ! -x "$VENV_PY" ]]; then
-  red "Expected Python venv at $VENV_DIR — create it and install api/requirements-local-dashboard.txt first."
-  exit 1
-fi
 if ! command -v docker >/dev/null 2>&1; then
   red "docker CLI not found on PATH."
   exit 1
@@ -43,11 +39,22 @@ if ! docker compose version >/dev/null 2>&1; then
   exit 1
 fi
 
+# ---------- bootstrap the venv ----------
+# Create ./venv and install the dashboard requirements on first run so the dev
+# loop is a single command. Idempotent — re-running only installs what's missing.
+if [[ ! -x "$VENV_PY" ]]; then
+  blue "Creating Python venv at $VENV_DIR..."
+  python3 -m venv "$VENV_DIR"
+  "$VENV_PIP" install --quiet --upgrade pip
+  green "venv created"
+fi
+
 # ---------- install missing python deps into venv ----------
-if ! "$VENV_PY" -c "import docker" >/dev/null 2>&1; then
-  blue "Installing docker SDK into venv..."
-  "$VENV_PIP" install --quiet docker
-  green "docker SDK installed"
+REQUIREMENTS_FILE="$REPO_ROOT/api/requirements-local-dashboard.txt"
+if ! "$VENV_PY" -c "import fastapi, docker" >/dev/null 2>&1; then
+  blue "Installing dashboard requirements into venv..."
+  "$VENV_PIP" install --quiet -r "$REQUIREMENTS_FILE"
+  green "dashboard requirements installed"
 fi
 
 # ---------- seed .dev-state/ ----------
@@ -142,6 +149,22 @@ fi
 
 green "Dev state seeded at $DEV_STATE"
 
+# ---------- preflight: port conflicts ----------
+# The dev stack binds 127.0.0.1:8080 (bifrost) and :2480 (arcadedb). A stray
+# `fastapi dev app/main.py` from the API step commonly squats on 8080 — surface
+# that here instead of leaving the user with a raw Docker daemon error.
+check_port() {
+  local port="$1"
+  local hint="$2"
+  if command -v ss >/dev/null 2>&1 && ss -ltn 2>/dev/null | grep -q ":${port}\b"; then
+    red "Port ${port} is already in use — ${hint}"
+    red "Free it (e.g. stop that process) and re-run this script."
+    exit 1
+  fi
+}
+check_port 8080 "likely a 'fastapi dev app/main.py' from the API dev step, or another bifrost."
+check_port 2480 "another ArcadeDB server is running."
+
 # ---------- dev stack ----------
 blue "Bringing up dev containers (arcadedb + bifrost + netns placeholder)..."
 docker compose -f "$COMPOSE_FILE" up -d
@@ -162,7 +185,6 @@ export LOCAL_DASHBOARD_CREDENTIALS_FILE="$DEV_CREDS_FILE"
 export LOCAL_DASHBOARD_PREFERENCES_FILE="$DEV_PREFS_FILE"
 export LOCAL_DASHBOARD_BIFROST_CONFIG_FILE="$DEV_BIFROST_CONFIG"
 
-export LOCAL_DASHBOARD_TAILSCALE_CONTAINER=loreholm-dev-tailscale
 export LOCAL_DASHBOARD_BIFROST_CONTAINER=loreholm-dev-bifrost
 export LOCAL_DASHBOARD_BIFROST_URL=http://127.0.0.1:8080
 export LOCAL_DASHBOARD_ARCADEDB_HOST=127.0.0.1

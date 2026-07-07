@@ -19,7 +19,7 @@ API keys are self-contained PASETO tokens that encode:
 
 ## Creating API Keys
 
-1. Log in to your dashboard at `loreholm.com/dashboard`
+1. Log in to your dashboard at `example.com/dashboard`
 2. Scroll to the "API Keys" section
 3. Click "Create API Key"
 4. Enter a name (e.g., "Claude Desktop") and expiry period
@@ -150,7 +150,7 @@ Content-Type: application/json
 Add the `X-API-Key` header to your MCP requests:
 
 ```bash
-curl -X POST https://api.loreholm.com/mcp/loreholm_search \
+curl -X POST https://api.example.com/mcp/loreholm_search \
   -H "X-API-Key: v4.local.your-api-key-here" \
   -H "Content-Type: application/json" \
   -d '{"query": "project status", "top_k": 5}'
@@ -164,7 +164,7 @@ For Claude Desktop or similar MCP clients:
 {
   "mcpServers": {
     "loreholm-myproject": {
-      "url": "https://api.loreholm.com/mcp",
+      "url": "https://api.example.com/mcp",
       "headers": {
         "X-API-Key": "v4.local.your-api-key-here"
       }

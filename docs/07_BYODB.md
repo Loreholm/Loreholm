@@ -14,7 +14,7 @@ Instead of a shared cloud database, each user runs their own ArcadeDB server (a 
 
 ### 1. User Onboarding
 
-1. User signs up at `loreholm.com` via the configured OIDC provider
+1. User signs up at `example.com` via the configured OIDC provider
 2. Backend generates a **Headscale Pre-Auth Key** (one-time use)
 3. User receives an install command (curl-to-bash)
 
@@ -393,11 +393,11 @@ topology" for rationale.
 ### For Users
 
 ```bash
-# 1. Sign up at loreholm.com
+# 1. Sign up at example.com
 # 2. Copy your install command from the dashboard
 # 3. Run it:
 
-curl -fsSL loreholm.com/install.sh | bash -s -- --key preauthkey-YOUR-KEY
+curl -fsSL example.com/install.sh | bash -s -- --key preauthkey-YOUR-KEY
 
 # 4. Open the local dashboard at the URL shown in install output
 # 5. Enter the bootstrap token
@@ -456,14 +456,30 @@ The update script backs up `docker-compose.yml`, regenerates it with the latest 
 
 ## Uninstalling
 
+Use the uninstall script — the counterpart to `install.sh`. It stops and removes
+the loreholm containers, deletes the `loreholm-*` Docker volumes, and removes the
+install directory (`~/.loreholm`), after a confirmation prompt:
+
 ```bash
-# Stop and remove containers
-cd ~/.loreholm
-docker compose down
-
-# Remove data volumes (optional)
-docker volume ls | grep loreholm | awk '{print $2}' | xargs docker volume rm
-
-# Remove install directory
-rm -rf ~/.loreholm
+# Linux / macOS
+curl -fsSL example.com/uninstall.sh | bash
 ```
+
+```powershell
+# Windows (PowerShell)
+irm example.com/uninstall.ps1 | iex
+```
+
+To skip the prompt, pass `--yes` (`curl -fsSL example.com/uninstall.sh | bash -s -- --yes`)
+or `-Yes` to the PowerShell script.
+
+<details>
+<summary>Manual teardown (if you can't run the script)</summary>
+
+```bash
+cd ~/.loreholm
+docker compose down                                                   # stop + remove containers
+docker volume ls | grep loreholm | awk '{print $2}' | xargs docker volume rm   # remove data volumes
+rm -rf ~/.loreholm                                                    # remove install directory
+```
+</details>

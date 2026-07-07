@@ -131,7 +131,7 @@ flowchart LR
     end
     subgraph infra["Your Infrastructure"]
         direction TB
-        api["MCP API<br/>(loreholm.com)"]
+        api["MCP API<br/>(example.com)"]
         hs["Headscale Control Server<br/>(Self-hosted)"]
         api --- hs
     end

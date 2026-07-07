@@ -63,7 +63,7 @@ flowchart LR
 
 ---
 
-## Documentation (3-min reads)
+## Documentation
 
 Read in order:
 
@@ -150,11 +150,19 @@ cd api
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
-fastapi dev app/main.py --host 0.0.0.0 --port 8080
+fastapi dev app/main.py --host 0.0.0.0 --port 8000
 ````
 
-This runs the MCP API locally while pointing to a reachable local dashboard (and through it, the ArcadeDB backend).
-ArcadeDB connectivity notes live in [docs/02_ArcadeDBSetup.md](docs/02_ArcadeDBSetup.md).
+This runs the MCP API locally while pointing to a reachable local dashboard
+(and through it, the ArcadeDB backend). To bring up that dashboard on port `4466`, run
+`scripts/dev-local-dashboard.sh` (or `scripts/dev-local-dashboard.ps1` on
+Windows), then open `http://127.0.0.1:4466/dev/login`.
+
+To tear the dev loop back down — dev containers + volumes, the wizard-created
+`loreholm-arcadedb-*` containers, and `.dev-state/` — run
+`scripts/clean-local-dashboard.sh` (or `scripts/clean-local-dashboard.ps1` on
+Windows). The bootstrapped `venv/` is left in place; delete it manually if you
+want a fully clean slate.
 
 ---
 

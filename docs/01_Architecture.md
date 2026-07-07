@@ -27,7 +27,7 @@ flowchart LR
     end
     subgraph cloud["Cloud Infrastructure"]
         direction TB
-        api["FastAPI MCP API<br/>(loreholm.com)"]
+        api["FastAPI MCP API<br/>(example.com)"]
         hs["Headscale Control Plane<br/>(Self-hosted)"]
         api --- hs
     end

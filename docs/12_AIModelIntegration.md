@@ -109,7 +109,7 @@ X-API-Key: your-api-key
 Send an `initialize` request to establish the session:
 
 ```bash
-curl -X POST "https://api.loreholm.com/mcp/v1/" \
+curl -X POST "https://api.example.com/mcp/v1/" \
   -H "X-API-Key: your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -150,7 +150,7 @@ curl -X POST "https://api.loreholm.com/mcp/v1/" \
 Most MCP clients then send a lifecycle notification:
 
 ```bash
-curl -X POST "https://api.loreholm.com/mcp/v1/" \
+curl -X POST "https://api.example.com/mcp/v1/" \
   -H "X-API-Key: your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -167,7 +167,7 @@ Expected behavior: HTTP `202 Accepted` (notification acknowledged, no response b
 Request: `tools/list`
 
 ```bash
-curl -X POST "https://api.loreholm.com/mcp/v1/" \
+curl -X POST "https://api.example.com/mcp/v1/" \
   -H "X-API-Key: your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -236,7 +236,7 @@ Default memory policy for assistant clients:
 Request: `tools/call`
 
 ```bash
-curl -X POST "https://api.loreholm.com/mcp/v1/" \
+curl -X POST "https://api.example.com/mcp/v1/" \
   -H "X-API-Key: your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -274,7 +274,7 @@ curl -X POST "https://api.loreholm.com/mcp/v1/" \
 
 1. Go to Claude.ai Settings → Connectors
 2. Click "Add custom connector"
-3. Enter your MCP server URL: `https://api.loreholm.com/mcp/v1/`
+3. Enter your MCP server URL: `https://api.example.com/mcp/v1/`
 4. Complete authentication with your API key
 5. Claude will automatically discover and use your tools!
 

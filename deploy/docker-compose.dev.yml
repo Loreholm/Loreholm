@@ -1,54 +1,75 @@
 # Dev-only stack for iterating on the local dashboard without deploying.
 #
-# Brings up the containers the dashboard expects to find at runtime:
-#   - loreholm-dev-tailscale: a placeholder that owns the shared network
-#     namespace (mirrors prod's loreholm-tailscale). The shared ArcadeDB server
-#     attaches via network_mode=service:dev-tailscale and inherits its published
-#     ports on 127.0.0.1.
-#   - loreholm-dev-bifrost: real bifrost, sharing the above netns so the
-#     dashboard can reach it at http://127.0.0.1:8080.
-#   - loreholm-arcadedb: the single shared ArcadeDB server. Per-database
-#     CRUD goes over HTTP against this one container; the dashboard never
-#     stands up a container per database.
+# Brings up the containers the dashboard expects to find at runtime, on a plain
+# bridge network — mirrors the current prod topology (ArcadeDB and Bifrost live
+# on the default compose bridge, not inside a shared tailscale netns):
+#   - loreholm-dev-bifrost: real bifrost, published on 127.0.0.1:8080 so the
+#     host-side dashboard can reach it at http://127.0.0.1:8080.
+#   - loreholm-arcadedb: the single shared ArcadeDB server. Per-database CRUD
+#     goes over HTTP against this one container; the dashboard never stands up a
+#     container per database. Published on 127.0.0.1:2480, plus JMX on
+#     127.0.0.1:9999/9998 for JConsole/VisualVM.
+#
+# Each container now owns its own network namespace, so its hostname resolves —
+# which is what ArcadeDB's JMX agent needs (it builds a JMXServiceURL from the
+# local hostname; under a shared netns that hostname wasn't in /etc/hosts and
+# the JVM aborted on startup).
 #
 # The uvicorn dashboard process itself runs on the host (see
 # scripts/dev-local-dashboard.sh) so --reload picks up source edits instantly.
+# It reaches both services over published 127.0.0.1 ports, not container DNS.
 
 services:
-  dev-tailscale:
-    image: alpine:3.20
-    container_name: loreholm-dev-tailscale
-    restart: unless-stopped
-    command: ["sh", "-c", "trap exit TERM; while :; do sleep 3600 & wait; done"]
-    # Ports published here are inherited by every sibling that uses
-    # network_mode: service:dev-tailscale (bifrost + shared ArcadeDB server).
-    ports:
-      - "127.0.0.1:8080:8080"   # bifrost proxy
-      - "127.0.0.1:2480:2480"   # arcadedb HTTP API
-
   dev-bifrost:
     image: maximhq/bifrost:latest
     container_name: loreholm-dev-bifrost
+    hostname: loreholm-dev-bifrost
     restart: unless-stopped
-    network_mode: service:dev-tailscale
-    depends_on:
-      - dev-tailscale
+    networks:
+      - dev
+    ports:
+      - "127.0.0.1:8080:8080"   # bifrost proxy
     volumes:
       - ../.dev-state/chat-bifrost-config.json:/app/data/config.json
 
   arcadedb:
     image: ${ARCADEDB_IMAGE:-arcadedata/arcadedb:26.3.1}
     container_name: loreholm-arcadedb
+    hostname: loreholm-arcadedb
     restart: unless-stopped
-    network_mode: service:dev-tailscale
-    depends_on:
-      - dev-tailscale
+    networks:
+      - dev
+    ports:
+      - "127.0.0.1:2480:2480"   # arcadedb HTTP API
+      - "127.0.0.1:9999:9999"   # JMX registry
+      - "127.0.0.1:9998:9998"   # JMX RMI
     environment:
       JAVA_OPTS: "-Darcadedb.server.httpIncoming.port=2480 -Darcadedb.server.rootPasswordPath=/opt/arcadedb/root-password -Darcadedb.server.mode=development -Darcadedb.profile=low-ram ${ARCADEDB_OPTS_MEMORY:--Xms512M -Xmx512M}"
+      # Re-enable ArcadeDB's JMX agent (server.sh's default) but pin the RMI
+      # stub to 127.0.0.1 so a JConsole/VisualVM on the host — reaching in via
+      # the published 9999/9998 ports — gets a loopback address to connect back
+      # to, rather than the container's internal bridge IP. Now that the
+      # container owns its netns, the local hostname resolves and the agent no
+      # longer aborts on startup.
+      #
+      # Ports are bound to 127.0.0.1 only; JMX here is unauthenticated (dev
+      # convenience) so it must never be exposed beyond loopback.
+      ARCADEDB_JMX: >-
+        -Dcom.sun.management.jmxremote=true
+        -Dcom.sun.management.jmxremote.local.only=false
+        -Dcom.sun.management.jmxremote.authenticate=false
+        -Dcom.sun.management.jmxremote.ssl=false
+        -Dcom.sun.management.jmxremote.port=9999
+        -Dcom.sun.management.jmxremote.rmi.port=9998
+        -Djava.rmi.server.hostname=127.0.0.1
     volumes:
       - dev_arcadedb_data:/home/arcadedb/databases
       - dev_arcadedb_log:/home/arcadedb/log
       - ../.dev-state/arcadedb-root.password:/opt/arcadedb/root-password:ro
+
+networks:
+  dev:
+    name: loreholm-dev
 
 volumes:
   dev_arcadedb_data:

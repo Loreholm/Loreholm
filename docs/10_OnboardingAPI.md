@@ -28,7 +28,7 @@ Initialize onboarding for a new user. Creates a Headscale pre-auth key.
 {
   "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "pre_auth_key": "preauthkey-abc123...",
-  "install_command": "curl -fsSL loreholm.com/install.sh | bash -s -- --key preauthkey-abc123...",
+  "install_command": "curl -fsSL example.com/install.sh | bash -s -- --key preauthkey-abc123...",
   "expires_at": "2026-01-31T13:00:00Z"
 }
 ```
@@ -50,7 +50,7 @@ Get the current onboarding status for the authenticated user.
   "install_command": "curl -fsSL ...",
   "node_connected": true,
   "database_connected": true,
-  "update_command": "curl -fsSL loreholm.com/update.sh | bash"
+  "update_command": "curl -fsSL example.com/update.sh | bash"
 }
 ```
 
@@ -129,7 +129,7 @@ Generate a new pre-auth key (invalidates previous key).
 {
   "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "pre_auth_key": "preauthkey-new123...",
-  "install_command": "curl -fsSL loreholm.com/install.sh | bash -s -- --key preauthkey-new123...",
+  "install_command": "curl -fsSL example.com/install.sh | bash -s -- --key preauthkey-new123...",
   "expires_at": "2026-01-31T14:00:00Z"
 }
 ```
@@ -138,7 +138,7 @@ Generate a new pre-auth key (invalidates previous key).
 
 ```mermaid
 flowchart TD
-    A["1. User signs up at loreholm.com<br/>OIDC provider handles authentication"]
+    A["1. User signs up at example.com<br/>OIDC provider handles authentication"]
     B["2. User clicks Initialize on dashboard<br/>POST /onboarding/initialize<br/>Backend creates Headscale namespace + pre-auth key"]
     C["3. User copies install command<br/>Runs on their machine<br/>Docker deploys ArcadeDB + Tailscale<br/>Tailscale connects using pre-auth key"]
     D["4. Dashboard polls for connection<br/>GET /onboarding/node-status (fast check)<br/>GET /onboarding/connection (full check)"]
@@ -162,7 +162,7 @@ The onboarding router requires:
 ```bash
 # OIDC JWT validation (any provider; endpoints are discovered from the issuer)
 OIDC_ISSUER=https://your-tenant.us.auth0.com
-OIDC_AUDIENCE=https://api.loreholm.com
+OIDC_AUDIENCE=https://api.example.com
 # OIDC_AUDIENCE_CLAIM=azp   # optional: if your provider carries the API in azp
 
 # Headscale API
@@ -170,7 +170,7 @@ HEADSCALE_API_URL=http://headscale:8080
 HEADSCALE_API_KEY=hskey-...
 
 # Install script generation
-PUBLIC_API_HOST=https://loreholm.com
+PUBLIC_API_HOST=https://example.com
 
 # Optional local-dashboard resolver overrides
 LOCAL_DASHBOARD_RESOLVER_PORT=8081
