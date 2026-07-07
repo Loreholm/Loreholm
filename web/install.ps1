@@ -108,13 +108,13 @@ function Write-Error-Custom {
 
 function Show-Banner {
     Write-Host ""
-    Write-Host "                                __           ____  " -ForegroundColor $Colors.Blue
-    Write-Host "   _________  _      ______  __/ /_______   / __ \____" -ForegroundColor $Colors.Blue
-    Write-Host "  / ___/ __ \| | /| / / __ \/ ___/ //_/  / / / / __ /" -ForegroundColor $Colors.Blue
-    Write-Host " / /__/ /_/ /| |/ |/ / /_/ / /  / ,<    / /_/ / /_/ /" -ForegroundColor $Colors.Blue
-    Write-Host " \___/\____/ |__/|__/\____/_/  /_/|_|  /_____/\__,_/" -ForegroundColor $Colors.Blue
+    Write-Host "    __    ____  ____  ________  ______  __    __  ___" -ForegroundColor $Colors.Blue
+    Write-Host "   / /   / __ \/ __ \/ ____/ / / / __ \/ /   /  |/  /" -ForegroundColor $Colors.Blue
+    Write-Host "  / /   / / / / /_/ / __/ / /_/ / / / / /   / /|_/ / " -ForegroundColor $Colors.Blue
+    Write-Host " / /___/ /_/ / _, _/ /___/ __  / /_/ / /___/ /  / /  " -ForegroundColor $Colors.Blue
+    Write-Host "/_____/\____/_/ |_/_____/_/ /_/\____/_____/_/  /_/   " -ForegroundColor $Colors.Blue
     Write-Host ""
-    Write-Host "    Bring Your Own Database - Memory for LLMs" -ForegroundColor $Colors.Blue
+    Write-Host "    Your data Lives where you do" -ForegroundColor $Colors.Blue
     Write-Host ""
 }
 
