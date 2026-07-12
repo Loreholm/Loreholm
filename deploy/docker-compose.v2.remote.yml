@@ -1,0 +1,33 @@
+services:
+  tailscale:
+    image: tailscale/tailscale:latest
+    hostname: ${LOREHOLM_V2_TAILNET_HOSTNAME:-loreholm-v2}
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      TS_AUTHKEY: ${LOREHOLM_V2_TS_AUTHKEY:?set LOREHOLM_V2_TS_AUTHKEY}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_EXTRA_ARGS: --login-server=${LOREHOLM_V2_HEADSCALE_URL:?set LOREHOLM_V2_HEADSCALE_URL}
+    volumes:
+      - tailscale_data:/var/lib/tailscale
+
+  endpoint:
+    image: python:3.13-alpine
+    restart: unless-stopped
+    network_mode: service:tailscale
+    depends_on:
+      tailscale:
+        condition: service_started
+      instance:
+        condition: service_started
+    environment:
+      LOREHOLM_V2_UPSTREAM: http://instance:8080
+    volumes:
+      - ./v2-endpoint-shim.py:/opt/loreholm/v2-endpoint-shim.py:ro
+    command: ["python", "/opt/loreholm/v2-endpoint-shim.py"]
+
+volumes:
+  tailscale_data:

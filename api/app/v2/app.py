@@ -3,15 +3,19 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import json
+import secrets
+import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 import httpx
 
-from .models import AdminStatus, InstancePolicy, ModelEndpointConfig
+from .models import AdminStatus, CaptureEnvelope, ChatStreamRequest, InstancePolicy, ModelEndpointConfig
 from .router import get_capture_service, require_device_token, router
 from .service import ArcadeCaptureStore, CaptureService
 
@@ -30,6 +34,7 @@ def create_app() -> FastAPI:
     service = CaptureService(store, InstancePolicy()) if store else None
     configured_digest = os.getenv("LOREHOLM_V2_DEVICE_TOKEN_SHA256", "").strip().lower()
     admin_digest = os.getenv("LOREHOLM_V2_ADMIN_TOKEN_SHA256", "").strip().lower()
+    sync_digest = os.getenv("LOREHOLM_V2_SYNC_TOKEN_SHA256", "").strip().lower()
     bifrost_url = os.getenv("BIFROST_URL", "http://bifrost:8080").rstrip("/")
     bifrost_dashboard_url = os.getenv("BIFROST_PUBLIC_URL", "http://127.0.0.1:8083").rstrip("/")
     bifrost_auth = (
@@ -39,6 +44,45 @@ def create_app() -> FastAPI:
 
     def bifrost_request(method: str, path: str, **kwargs) -> httpx.Response:
         return httpx.request(method, f"{bifrost_url}{path}", auth=bifrost_auth, **kwargs)
+
+    def require_sync(authorization: str | None = Header(default=None)) -> None:
+        if not sync_digest:
+            raise HTTPException(status_code=503, detail="cloud sync authentication is not configured")
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="sync credential required")
+        supplied = hashlib.sha256(authorization[7:].encode()).hexdigest()
+        if not hmac.compare_digest(supplied, sync_digest):
+            raise HTTPException(status_code=401, detail="invalid sync credential")
+
+    def uuid7() -> str:
+        millis = int(time.time() * 1000)
+        value = (millis & ((1 << 48) - 1)) << 80
+        value |= 0x7 << 76
+        value |= secrets.randbits(12) << 64
+        value |= 0b10 << 62
+        value |= secrets.randbits(62)
+        raw = f"{value:032x}"
+        return f"{raw[:8]}-{raw[8:12]}-{raw[12:16]}-{raw[16:20]}-{raw[20:]}"
+
+    def capture_chat_message(conversation_id: str, role: str, content: str) -> None:
+        envelope = CaptureEnvelope.model_validate({
+            "capture_id": uuid7(),
+            "kind": "event",
+            "class": "transcript.message",
+            "surface": "loreholm.browser-chat",
+            "session_ref": conversation_id,
+            "occurred_at": datetime.now(timezone.utc).isoformat(),
+            "payload": {"role": role, "content": content},
+            "refs": [],
+            "hints": [],
+            "meta": {
+                "contract_version": "2.0", "spine_version": "2.0.0",
+                "adapter_id": "browser-chat", "adapter_version": "2.0.0",
+                "device_id": "cloud-chat", "user_id": "instance-owner",
+                "queue_age_seconds": 0, "policy_version": service.policy.version,
+            },
+        })
+        service.ingest(envelope)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -133,6 +177,78 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=502, detail=f"Bifrost rejected model configuration: {response.text[:500]}")
         service.store.set_config("model_endpoint", config.model_dump(mode="json"))
         return {"ok": True, "provider": config.provider_name, "model": config.model_name}
+
+    @app.post("/api/chat/stream")
+    async def chat_stream(payload: ChatStreamRequest, _: None = Depends(require_sync)) -> StreamingResponse:
+        selected = service.store.get_config("model_endpoint") or {
+            "provider_name": "vllm-local", "model_name": "loreholm-local",
+        }
+        model = f"{selected['provider_name']}/{selected['model_name']}"
+        user_message = next((message for message in reversed(payload.messages) if message.role == "user"), None)
+        if user_message is None:
+            raise HTTPException(status_code=422, detail="at least one user message is required")
+        capture_chat_message(payload.conversation_id, "user", user_message.content)
+
+        async def events():
+            assistant_parts: list[str] = []
+            reasoning_buffer = ""
+            hiding_reasoning: bool | None = None
+            visible_started = False
+            timeout = httpx.Timeout(180.0, connect=5.0)
+            try:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    async with client.stream(
+                        "POST", f"{bifrost_url}/v1/chat/completions",
+                        auth=bifrost_auth,
+                        json={
+                            "model": model,
+                            "messages": [message.model_dump() for message in payload.messages],
+                            "stream": True,
+                            "chat_template_kwargs": {"enable_thinking": False},
+                        },
+                    ) as response:
+                        if response.is_error:
+                            body = (await response.aread()).decode(errors="replace")[:500]
+                            yield f"data: {json.dumps({'type': 'error', 'message': body})}\n\n"
+                            return
+                        async for line in response.aiter_lines():
+                            if not line.startswith("data: "):
+                                continue
+                            raw = line[6:]
+                            if raw == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(raw)
+                                text = chunk.get("choices", [{}])[0].get("delta", {}).get("content") or ""
+                            except (ValueError, IndexError, AttributeError):
+                                continue
+                            if text:
+                                if hiding_reasoning is None:
+                                    hiding_reasoning = text.lstrip().startswith("<think>")
+                                if hiding_reasoning:
+                                    reasoning_buffer += text
+                                    if "</think>" not in reasoning_buffer:
+                                        continue
+                                    text = reasoning_buffer.split("</think>", 1)[1].lstrip("\r\n")
+                                    reasoning_buffer = ""
+                                    hiding_reasoning = False
+                                    if not text:
+                                        continue
+                                if not visible_started:
+                                    text = text.lstrip()
+                                    if not text:
+                                        continue
+                                    visible_started = True
+                                assistant_parts.append(text)
+                                yield f"data: {json.dumps({'type': 'content', 'content': text})}\n\n"
+                assistant = "".join(assistant_parts)
+                if assistant:
+                    capture_chat_message(payload.conversation_id, "assistant", assistant)
+                yield f"data: {json.dumps({'type': 'done', 'model': model})}\n\n"
+            except httpx.HTTPError as exc:
+                yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+
+        return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
     @app.get("/health")
     def health() -> dict[str, str | bool]:

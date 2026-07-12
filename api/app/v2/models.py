@@ -99,6 +99,20 @@ class ModelEndpointConfig(BaseModel):
     allow_private_network: bool = True
 
 
+class ChatMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["system", "user", "assistant"]
+    content: str = Field(min_length=1, max_length=100_000)
+
+
+class ChatStreamRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    conversation_id: str = Field(min_length=1, max_length=128)
+    messages: list[ChatMessage] = Field(min_length=1, max_length=200)
+
+
 class AdminStatus(BaseModel):
     policy: InstancePolicy
     bifrost_ok: bool

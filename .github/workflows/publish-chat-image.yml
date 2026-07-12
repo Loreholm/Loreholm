@@ -5,10 +5,11 @@ name: Publish Chat Image
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "v2"]
     tags: ["v*"]
     paths:
       - "apps/chat/**"
+      - "apps/chat-v2/**"
       - ".github/workflows/publish-chat-image.yml"
   workflow_dispatch:
 
@@ -37,8 +38,8 @@ jobs:
       - name: Build and push chat image
         uses: docker/build-push-action@v6
         with:
-          context: apps/chat
-          file: apps/chat/Dockerfile
+          context: apps/chat-v2
+          file: apps/chat-v2/Dockerfile
           push: true
           tags: |
             ghcr.io/loreholm/loreholm-chat:latest

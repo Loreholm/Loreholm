@@ -42,9 +42,10 @@ The Bifrost management dashboard is published separately on port `8083` and
 defaults to loopback. The installer enables Bifrost's built-in authentication;
 its generated username and password are stored in the mode-0600 instance env
 file. Set `BIFROST_BIND_HOST` and `BIFROST_PUBLIC_URL` only on a trusted network.
-Inference authentication remains disabled because `/v1/*` is reachable only
-inside the Compose network, while the dashboard and management API require a
-login.
+The published dashboard passes through a narrow reverse proxy that blocks
+`/v1/*`; Bifrost's built-in login protects the remaining dashboard and
+management routes. Inference is reachable only on the private Compose bridge,
+and browser clients never receive Bifrost credentials or network access.
 
 ## Local model development
 
@@ -71,3 +72,14 @@ test another local configuration. Keep `HF_HUB_OFFLINE=1` so startup fails
 closed when weights are not already present instead of downloading implicitly.
 The development service uses eager execution because CUDA graph/FlashAttention
 capture is not reliable on the current GB10 development driver stack.
+
+## Browser chat networking
+
+The V2 browser chat remains a separate-origin static application. It sends an
+OIDC access token to the cloud API's `/chat/stream` endpoint; the cloud resolves
+the user's Tailnet address and replaces that credential with the per-user sync
+token before dialing port `8081`. The optional
+`docker-compose.v2.remote.yml` overlay runs the Tailscale sidecar and endpoint
+shim. That shim forwards `/api/chat/*` only, while the instance streams from
+Bifrost on its private Compose bridge and records both sides as raw
+`transcript.message` captures.

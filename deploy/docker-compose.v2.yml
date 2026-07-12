@@ -18,6 +18,7 @@ services:
       ARCADEDB_PASSWORD: ${ARCADEDB_ROOT_PASSWORD:?set ARCADEDB_ROOT_PASSWORD}
       LOREHOLM_V2_DEVICE_TOKEN_SHA256: ${LOREHOLM_V2_DEVICE_TOKEN_SHA256:?set LOREHOLM_V2_DEVICE_TOKEN_SHA256}
       LOREHOLM_V2_ADMIN_TOKEN_SHA256: ${LOREHOLM_V2_ADMIN_TOKEN_SHA256:?set LOREHOLM_V2_ADMIN_TOKEN_SHA256}
+      LOREHOLM_V2_SYNC_TOKEN_SHA256: ${LOREHOLM_V2_SYNC_TOKEN_SHA256:?set LOREHOLM_V2_SYNC_TOKEN_SHA256}
       BIFROST_URL: http://bifrost:8080
       BIFROST_PUBLIC_URL: ${BIFROST_PUBLIC_URL:-http://127.0.0.1:8083}
       BIFROST_ADMIN_USERNAME: ${BIFROST_ADMIN_USERNAME:?set BIFROST_ADMIN_USERNAME}
@@ -47,10 +48,19 @@ services:
   bifrost:
     image: maximhq/bifrost:latest
     restart: unless-stopped
+    volumes:
+      - bifrost_data:/app/data
+
+  bifrost-dashboard:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      bifrost:
+        condition: service_started
     ports:
       - "${BIFROST_BIND_HOST:-127.0.0.1}:${BIFROST_PORT:-8083}:8080"
     volumes:
-      - bifrost_data:/app/data
+      - ./bifrost-dashboard.nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
 volumes:
   arcadedb_data:

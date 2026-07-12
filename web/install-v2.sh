@@ -36,6 +36,8 @@ else
   device_digest="$(printf '%s' "$device_token" | sha256sum | cut -d' ' -f1)"
   admin_token="$(openssl rand -hex 32)"
   admin_digest="$(printf '%s' "$admin_token" | sha256sum | cut -d' ' -f1)"
+  sync_token="${LOREHOLM_V2_SYNC_TOKEN:-$(openssl rand -hex 32)}"
+  sync_digest="$(printf '%s' "$sync_token" | sha256sum | cut -d' ' -f1)"
   bifrost_admin_password="Lh!$(openssl rand -hex 24)"
   previous_umask="$(umask)"
   umask 077
@@ -45,6 +47,8 @@ else
     printf 'LOREHOLM_V2_DEVICE_TOKEN=%s\n' "$device_token"
     printf 'LOREHOLM_V2_ADMIN_TOKEN_SHA256=%s\n' "$admin_digest"
     printf 'LOREHOLM_V2_ADMIN_TOKEN=%s\n' "$admin_token"
+    printf 'LOREHOLM_V2_SYNC_TOKEN_SHA256=%s\n' "$sync_digest"
+    printf 'LOREHOLM_V2_SYNC_TOKEN=%s\n' "$sync_token"
     printf 'LOREHOLM_V2_PORT=%s\n' "$PORT"
     printf 'LOREHOLM_V2_BIND_HOST=%s\n' "$BIND_HOST"
     printf 'BIFROST_BIND_HOST=%s\n' "$BIFROST_BIND_HOST"
@@ -53,6 +57,16 @@ else
     printf 'BIFROST_ADMIN_USERNAME=%s\n' "loreholm"
     printf 'BIFROST_ADMIN_PASSWORD=%s\n' "$bifrost_admin_password"
   } > "$ENV_FILE"
+  umask "$previous_umask"
+fi
+
+if ! grep -q '^LOREHOLM_V2_SYNC_TOKEN=' "$ENV_FILE"; then
+  sync_token="${LOREHOLM_V2_SYNC_TOKEN:-$(openssl rand -hex 32)}"
+  sync_digest="$(printf '%s' "$sync_token" | sha256sum | cut -d' ' -f1)"
+  previous_umask="$(umask)"
+  umask 077
+  printf 'LOREHOLM_V2_SYNC_TOKEN_SHA256=%s\nLOREHOLM_V2_SYNC_TOKEN=%s\n' \
+    "$sync_digest" "$sync_token" >> "$ENV_FILE"
   umask "$previous_umask"
 fi
 
@@ -107,7 +121,7 @@ set +a
 
 say "starting Bifrost on loopback for authentication bootstrap"
 BIFROST_BIND_HOST=127.0.0.1 docker compose --env-file "$ENV_FILE" \
-  -f "$SOURCE_DIR/deploy/docker-compose.v2.yml" up -d bifrost
+  -f "$SOURCE_DIR/deploy/docker-compose.v2.yml" up -d bifrost bifrost-dashboard
 for _ in $(seq 1 60); do
   curl --fail --silent "http://127.0.0.1:$BIFROST_PORT/health" >/dev/null && break
   sleep 1
@@ -115,7 +129,7 @@ done
 curl --fail --silent --show-error -X PUT "http://127.0.0.1:$BIFROST_PORT/api/config" \
   --user "$BIFROST_ADMIN_USERNAME:$BIFROST_ADMIN_PASSWORD" \
   -H 'Content-Type: application/json' \
-  --data "{\"auth_config\":{\"is_enabled\":true,\"admin_username\":\"$BIFROST_ADMIN_USERNAME\",\"admin_password\":\"$BIFROST_ADMIN_PASSWORD\",\"disable_auth_on_inference\":true},\"client_config\":{\"log_retention_days\":30}}" \
+  --data "{\"auth_config\":{\"is_enabled\":true,\"admin_username\":\"$BIFROST_ADMIN_USERNAME\",\"admin_password\":\"$BIFROST_ADMIN_PASSWORD\"},\"client_config\":{\"log_retention_days\":30,\"enforce_auth_on_inference\":false}}" \
   >/dev/null
 
 say "building and starting the authenticated private instance"
