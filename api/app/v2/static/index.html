@@ -25,11 +25,11 @@
 
     <div id="console" hidden>
       <section class="status-strip">
-        <div><span>INSTANCE</span><strong id="instanceState">—</strong></div>
-        <div><span>ARCADEDB</span><strong class="good">ONLINE</strong></div>
-        <div><span>BIFROST</span><strong id="bifrostState">—</strong></div>
-        <div><span>LOCAL MODEL</span><strong id="modelState">—</strong></div>
-        <div><span>POLICY REV.</span><strong id="policyVersion">—</strong></div>
+        <div><span>INSTANCE <button class="tip" data-tip="The Loreholm API that receives captures, enforces policy, and serves this console." aria-label="About instance status">?</button></span><strong id="instanceState">—</strong></div>
+        <div><span>ARCADEDB <button class="tip" data-tip="The durable local store for raw captures, quarantine, policy, and the future knowledge graph." aria-label="About ArcadeDB status">?</button></span><strong class="good">ONLINE</strong></div>
+        <div><span><a class="status-link" href="https://docs.getbifrost.ai/providers/supported-providers/overview" target="_blank" rel="noopener">BIFROST ↗</a> <button class="tip" data-tip="The mandatory gateway for every model request. Loreholm never calls model providers directly." aria-label="About Bifrost status">?</button></span><strong id="bifrostState">—</strong></div>
+        <div><span>LOCAL MODEL <button class="tip" data-tip="READY means Bifrost can reach the configured vLLM endpoint and list its models." aria-label="About local model status">?</button></span><strong id="modelState">—</strong></div>
+        <div><span>POLICY REV. <button class="tip" data-tip="The durable policy version. It increments after each successful policy commit." aria-label="About policy revision">?</button></span><strong id="policyVersion">—</strong></div>
       </section>
 
       <div class="layout">
@@ -37,19 +37,21 @@
           <p class="index">01 / CAPTURE BOUNDARY</p>
           <div class="section-head"><div><h2>What enters the archive?</h2><p>Capture and model-egress are separate decisions. Tighten them independently.</p></div><button id="savePolicy" class="save">Commit policy</button></div>
           <div id="classes" class="class-list"></div>
-          <div class="mining-row"><div><span class="glyph">M</span><div><h3>Mining state</h3><p>Inference pauses do not stop capture.</p></div></div><select id="miningStatus"><option value="active">Active</option><option value="paused_budget_exhausted">Paused — budget</option><option value="paused_gateway_unavailable">Paused — gateway</option></select></div>
+          <div class="mining-row"><div><span class="glyph">M</span><div><h3>Mining state <button class="tip" data-tip="Controls whether new inference work may start. Captures continue entering staging while mining is paused." aria-label="About mining state">?</button></h3><p>Inference pauses do not stop capture.</p></div></div><select id="miningStatus" aria-label="Mining state"><option value="active">Active</option><option value="paused_budget_exhausted">Paused — budget</option><option value="paused_gateway_unavailable">Paused — gateway</option></select></div>
         </section>
 
         <aside>
           <section class="panel model-panel">
             <p class="index">02 / MODEL EGRESS</p>
-            <h2>Local reasoning engine</h2>
-            <p class="lede">Development is pinned to vLLM. No Ollama. No cloud fallback.</p>
+            <h2>Model gateway route</h2>
+            <p class="lede">Choose the OpenAI-compatible endpoint Loreholm should use through Bifrost. Local and hosted endpoints are both supported; provider charges remain yours.</p>
             <form id="modelForm">
-              <label>Endpoint<input id="modelUrl" value="http://vllm:8000" required></label>
-              <label>Served model<input id="modelName" value="loreholm-local" required></label>
-              <label class="check"><input id="privateNetwork" type="checkbox" checked><span>Permit private Docker network</span></label>
-              <button>Configure local route <b>→</b></button>
+              <label>Route name <button class="tip" data-tip="A unique Bifrost provider name for this endpoint, such as local-vllm or work-models." aria-label="About route name">?</button><input id="providerName" value="vllm-local" pattern="[a-z][a-z0-9-]{2,63}" required></label>
+              <label>Endpoint <button class="tip" data-tip="The OpenAI-compatible base URL Bifrost connects to. Docker service names work inside the instance network." aria-label="About model endpoint">?</button><input id="modelUrl" value="http://vllm:8000" required></label>
+              <label>Served model <button class="tip" data-tip="The exact model identifier advertised by the endpoint and used for Loreholm inference requests." aria-label="About served model">?</button><input id="modelName" value="loreholm-local" required></label>
+              <label class="check"><input id="privateNetwork" type="checkbox" checked><span>Permit private Docker network <button class="tip" data-tip="Allows Bifrost to connect to RFC1918 addresses and Docker service networks. Keep this off for public endpoints." aria-label="About private network access">?</button></span></label>
+              <button>Configure Bifrost route <b>→</b></button>
+              <a class="bifrost-guide" href="https://docs.getbifrost.ai/quickstart/gateway/provider-configuration" target="_blank" rel="noopener">Configure native providers in Bifrost ↗</a>
             </form>
           </section>
 

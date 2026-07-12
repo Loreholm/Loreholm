@@ -78,7 +78,8 @@ def create_app() -> FastAPI:
             response.raise_for_status()
             bifrost_ok = True
             providers = response.json().get("providers", [])
-            provider = next((item for item in providers if item.get("name") == "vllm-local"), None)
+            selected = service.store.get_config("model_endpoint") or {"provider_name": "vllm-local"}
+            provider = next((item for item in providers if item.get("name") == selected["provider_name"]), None)
             if provider:
                 base_url = provider.get("network_config", {}).get("base_url")
                 if base_url:
@@ -116,6 +117,7 @@ def create_app() -> FastAPI:
             response = httpx.post(f"{bifrost_url}/api/providers", json={"provider": config.provider_name, **provider}, timeout=15)
         if response.is_error:
             raise HTTPException(status_code=502, detail=f"Bifrost rejected model configuration: {response.text[:500]}")
+        service.store.set_config("model_endpoint", config.model_dump(mode="json"))
         return {"ok": True, "provider": config.provider_name, "model": config.model_name}
 
     @app.get("/health")
