@@ -20,7 +20,7 @@ services:
       LOREHOLM_V2_ADMIN_TOKEN_SHA256: ${LOREHOLM_V2_ADMIN_TOKEN_SHA256:?set LOREHOLM_V2_ADMIN_TOKEN_SHA256}
       BIFROST_URL: http://bifrost:8080
     ports:
-      - "127.0.0.1:${LOREHOLM_V2_PORT:-8082}:8080"
+      - "${LOREHOLM_V2_BIND_HOST:-127.0.0.1}:${LOREHOLM_V2_PORT:-8082}:8080"
 
   arcadedb:
     image: ${ARCADEDB_IMAGE:-arcadedata/arcadedb:26.3.1}

@@ -7,6 +7,9 @@ SOURCE_DIR="$INSTALL_ROOT/source"
 STATE_DIR="$INSTALL_ROOT/state"
 ENV_FILE="$STATE_DIR/instance.env"
 PORT="${LOREHOLM_V2_PORT:-8082}"
+BIND_HOST="${LOREHOLM_V2_BIND_HOST:-127.0.0.1}"
+HEALTH_HOST="$BIND_HOST"
+[[ "$HEALTH_HOST" == "0.0.0.0" ]] && HEALTH_HOST="127.0.0.1"
 
 say() { printf 'Loreholm V2: %s\n' "$*"; }
 die() { printf 'Loreholm V2: error: %s\n' "$*" >&2; exit 1; }
@@ -39,6 +42,7 @@ else
     printf 'LOREHOLM_V2_ADMIN_TOKEN_SHA256=%s\n' "$admin_digest"
     printf 'LOREHOLM_V2_ADMIN_TOKEN=%s\n' "$admin_token"
     printf 'LOREHOLM_V2_PORT=%s\n' "$PORT"
+    printf 'LOREHOLM_V2_BIND_HOST=%s\n' "$BIND_HOST"
   } > "$ENV_FILE"
   umask "$previous_umask"
 fi
@@ -75,10 +79,10 @@ docker compose --env-file "$ENV_FILE" -f "$SOURCE_DIR/deploy/docker-compose.v2.y
 
 say "waiting for the API"
 for _ in $(seq 1 60); do
-  if curl --fail --silent "http://127.0.0.1:$PORT/health" > "$tmp/health.json"; then
-    say "ready at http://127.0.0.1:$PORT"
+  if curl --fail --silent "http://$HEALTH_HOST:$PORT/health" > "$tmp/health.json"; then
+    say "ready at http://$HEALTH_HOST:$PORT"
     say "device token is stored in $ENV_FILE (mode 0600)"
-    say "dashboard ready at http://127.0.0.1:$PORT/dashboard"
+    say "dashboard ready at http://$HEALTH_HOST:$PORT/dashboard"
     cat "$tmp/health.json"
     printf '\n'
     exit 0

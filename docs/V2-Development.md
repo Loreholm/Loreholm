@@ -33,6 +33,11 @@ adapter. Bifrost is present as the sole model-egress boundary, but endpoint
 configuration remains instance-owned and is not baked into the repository.
 Mining is not enabled in this foundation milestone.
 
+For a trusted LAN, set `LOREHOLM_V2_BIND_HOST` to the host's LAN address in the
+instance environment and recreate the `instance` service. Authentication still
+applies to policy, capture, and dashboard administration. Avoid `0.0.0.0` when
+the machine also has untrusted network interfaces.
+
 ## Local model development
 
 Development inference uses vLLM only. Do not configure Ollama or paid/cloud
