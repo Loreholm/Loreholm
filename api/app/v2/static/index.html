@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Loreholm Field Console</title>
+  <link rel="stylesheet" href="/dashboard/assets/dashboard.css">
+</head>
+<body>
+  <div class="grain"></div>
+  <header>
+    <div class="mark"><span>LH</span></div>
+    <div><p class="eyebrow">PRIVATE KNOWLEDGE INSTRUMENT</p><h1>Loreholm <em>Field Console</em></h1></div>
+    <div class="header-state"><i id="overallLight"></i><span id="overallText">LOCKED</span></div>
+  </header>
+
+  <main>
+    <section id="unlock" class="unlock panel">
+      <p class="index">00 / ACCESS</p>
+      <h2>Enter the instance key.</h2>
+      <p>Your dashboard credential lives in <code>~/.local/share/loreholm-v2/state/instance.env</code>. It never leaves this instance.</p>
+      <form id="unlockForm"><input id="token" type="password" autocomplete="current-password" placeholder="LOREHOLM_V2_ADMIN_TOKEN" required><button>Open console <b>→</b></button></form>
+      <p id="unlockError" class="error"></p>
+    </section>
+
+    <div id="console" hidden>
+      <section class="status-strip">
+        <div><span>INSTANCE</span><strong id="instanceState">—</strong></div>
+        <div><span>ARCADEDB</span><strong class="good">ONLINE</strong></div>
+        <div><span>BIFROST</span><strong id="bifrostState">—</strong></div>
+        <div><span>LOCAL MODEL</span><strong id="modelState">—</strong></div>
+        <div><span>POLICY REV.</span><strong id="policyVersion">—</strong></div>
+      </section>
+
+      <div class="layout">
+        <section class="panel policy-panel">
+          <p class="index">01 / CAPTURE BOUNDARY</p>
+          <div class="section-head"><div><h2>What enters the archive?</h2><p>Capture and model-egress are separate decisions. Tighten them independently.</p></div><button id="savePolicy" class="save">Commit policy</button></div>
+          <div id="classes" class="class-list"></div>
+          <div class="mining-row"><div><span class="glyph">M</span><div><h3>Mining state</h3><p>Inference pauses do not stop capture.</p></div></div><select id="miningStatus"><option value="active">Active</option><option value="paused_budget_exhausted">Paused — budget</option><option value="paused_gateway_unavailable">Paused — gateway</option></select></div>
+        </section>
+
+        <aside>
+          <section class="panel model-panel">
+            <p class="index">02 / MODEL EGRESS</p>
+            <h2>Local reasoning engine</h2>
+            <p class="lede">Development is pinned to vLLM. No Ollama. No cloud fallback.</p>
+            <form id="modelForm">
+              <label>Endpoint<input id="modelUrl" value="http://vllm:8000" required></label>
+              <label>Served model<input id="modelName" value="loreholm-local" required></label>
+              <label class="check"><input id="privateNetwork" type="checkbox" checked><span>Permit private Docker network</span></label>
+              <button>Configure local route <b>→</b></button>
+            </form>
+          </section>
+
+          <section class="panel signal-panel">
+            <p class="index">03 / SIGNAL</p>
+            <h2>Pipeline topology</h2>
+            <div class="pipeline"><span>ADAPTER</span><i></i><span>STAGING</span><i></i><span>MINER</span><i></i><span>GRAPH</span></div>
+            <p id="notice" class="notice">Console synchronized.</p>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+  <script src="/dashboard/assets/dashboard.js"></script>
+</body>
+</html>

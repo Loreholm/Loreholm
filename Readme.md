@@ -1,267 +1,209 @@
-# loreholm
+# Loreholm V2
 
-**loreholm** is a memory proxy for LLM conversations built around the **Model Context Protocol (MCP)**.
+Loreholm is a self-hosted capture and knowledge-mining framework for assistant
+conversations. V2 owns the client contract, raw capture store, policy, model
+gateway, and knowledge graph so third-party clients never write interpreted
+facts directly into the database.
 
-It is implemented as a **BYODB (Bring Your Own Database) MCP service** with **zero-SSH CI/CD deploys**, designed to persist, retrieve, and inspect structured memories derived from LLM chats.
+V2 is greenfield. It does not migrate or remain compatible with V1 databases,
+MCP write tools, or deployment topology.
 
-At its core, loreholm is a **tool for thinking** — not an autonomous agent and not a black box.
+## Current milestone
 
----
+The executable V2 foundation currently provides:
 
-## What loreholm does
+- contract-v2 capture ingestion for transcript events and explicit pushes;
+- UUIDv7 capture identity and idempotent retry handling;
+- snapshot content-hash validation;
+- device-time normalization with the original timestamp retained;
+- durable ArcadeDB staging and quarantine of unknown capture classes;
+- authenticated client policy sync; and
+- a self-contained ArcadeDB, instance API, and Bifrost deployment.
 
-loreholm provides a structured, inspectable way to:
+Mining, graph commit, query/surfacing, retention UI, sharing, backup, and client
+adapters are specified in [Architecture-Decisions.md](notes/Architecture-Decisions.md)
+but are not implemented in this milestone.
 
-- Store human-readable memories derived from LLM conversations
-- Link those memories to entities (people, projects, tools, concepts)
-- Retrieve relevant context to ground future conversations
-- Keep humans in control of what is remembered and why
-- **Run your own database locally** while connecting to the cloud API
-- **Manage databases from a local dashboard** with an AI-powered setup wizard
-- **Bring your own AI provider** (OpenAI, Anthropic, Google, Groq, or local Ollama) via Bifrost
+## Architecture
 
-All memory interaction happens through **explicit MCP tools**.
-There are no hidden background writes or implicit memory mutation.
-
----
-
-## Architecture (BYODB)
-
-```mermaid
-flowchart LR
-    subgraph User["User's Machine"]
-        direction TB
-        Arcade["ArcadeDB containers<br/>(Apache 2.0)<br/>Graph + HNSW vectors"]
-        Bifrost["Bifrost Proxy (Docker)<br/>LLM Provider Gateway"]
-        Dashboard["Local Dashboard (Docker)<br/>DB Mgmt + Wizard +<br/>Proxy + Embeddings +<br/>Staging Reconciler"]
-        Tailscale["Tailscale Sidecar<br/>(Docker)"]
-        Arcade --- Bifrost
-        Bifrost --- Dashboard
-        Dashboard --- Tailscale
-    end
-
-    subgraph Cloud["Cloud Infrastructure"]
-        direction TB
-        API["FastAPI MCP API<br/>(loreholm.com)"]
-        Headscale["Headscale Control Plane<br/>(Self-hosted)"]
-        API --> Headscale
-    end
-
-    Tailscale <-- "Encrypted Mesh" --> Cloud
+```text
+assistant adapter
+      |
+      | contract-v2 raw captures
+      v
+embedded spine  ---> offline queue / local permission enforcement
+      |
+      v
+instance API  ---> ArcadeDB staging ---> miner (planned) ---> knowledge graph
+      |
+      +-------> Bifrost ---> user-configured model endpoints
 ```
 
-### Key characteristics
+The adapter is a sensor, not an authority. Interpretation happens inside the
+instance. Bifrost is the only permitted model-egress path.
 
-- **BYODB**: Your database runs locally, you own your data
-- **MCP-first**: LLMs interact via tools, not internal APIs
-- **Graph-backed**: ArcadeDB stores entities, memories, relationships, staging
-- **Inspectable**: every memory has provenance and confidence; LLM-proposed writes pass through an auditable staging reconciler before they commit
-- **Secure**: Tailscale mesh provides encrypted, isolated access
-- **Deployable**: containerized, CI/CD-driven, no manual SSH
-- **AI-assisted**: local dashboard includes a wizard agent for database setup and schema design
-- **Multi-provider**: Bifrost gateway supports OpenAI, Anthropic, Google, Groq, and Ollama
+## Requirements
 
----
+- Linux with Docker Engine
+- Docker Compose v2
+- `curl`, `tar`, `openssl`, and `sha256sum`
+- Host disk or volume encryption for data-at-rest protection
 
-## Documentation
+The API binds to loopback by default. Use an authenticated TLS proxy or private
+overlay network before connecting a client from another machine.
 
-Read in order:
+## Install from the V2 branch
 
-1. **[Architecture](docs/01_Architecture.md)** - System overview and BYODB design
-2. **[ArcadeDB Setup](docs/02_ArcadeDBSetup.md)** - Database configuration and connection
-3. **[MCP Tools](docs/03_McpTools.md)** - API tool reference and usage patterns
-4. **[Vector Search](docs/04_VectorSearch.md)** - How semantic search works
-5. **[Cypher Queries](docs/05_CypherQueries.md)** - Example queries for inspection
-6. **[Tool Schemas](docs/06_ToolSchemas.md)** - Complete MCP tool schema definitions
-7. **[BYODB Architecture](docs/07_BYODB.md)** - How user-owned databases work
-8. **[Frontend Setup](docs/08_FrontendSetup.md)** - Web dashboard and OIDC auth
-9. **[Headscale Setup](docs/09_HeadscaleSetup.md)** - Private networking setup
-10. **[Onboarding API](docs/10_OnboardingAPI.md)** - User registration endpoints
-11. **[API Key Auth](docs/11_ApiKeyAuth.md)** - PASETO-based API key authentication
-12. **[AI Model Integration](docs/12_AIModelIntegration.md)** - MCP protocol and REST integration
-13. **[Trust Model & Security](docs/13_SecurityModel.md)** - What the cloud can and cannot reach, and how to verify it
-14. **[Next Steps & Roadmap](docs/07_NextSteps.md)** - Planned work, including the Connection & Security panel
-
----
-
-## CI/CD philosophy (IMPORTANT)
-
-loreholm follows a **container-first, zero-SSH deployment model**.
-
-There are **no manual server mutations**.
-
-### CI/CD flow
-
-1. Push or pull request → GitHub Actions runs the test suite (`.github/workflows/ci.yml`)
-2. Push to `main` → Actions builds and publishes the public images:
-```
-
-ghcr.io/<owner>/mcp-api:latest          (+ :<sha>)
-ghcr.io/<owner>/mcp-local-dashboard:latest   (+ :<sha>, amd64 + arm64)
-
-```
-3. Deployment of the hosted service happens from a separate private
-   infrastructure repository that pins image tags published here. Nothing
-   in this repository can touch production, and no workflow here uses any
-   secret beyond its own `GITHUB_TOKEN`.
-
-This ensures:
-- Reproducible deployments — the image you run is built in the open from the source you can read
-- No configuration drift
-- Clear rollback paths (every commit on `main` has a pullable image tag)
-
----
-
-## Configure production compose
-
-Edit `deploy/docker-compose.prod.yml` and set:
-- `YOUR_GITHUB_USER_OR_ORG` for container image
-- `GRAPH_STORE_BACKEND` (defaults to `arcadedb`)
-
-See [02_ArcadeDBSetup.md](docs/02_ArcadeDBSetup.md) for connection details.
-
-## Self-hosting on your own domain
-
-loreholm is not tied to `loreholm.com` — bring your own domain. Two layers of
-configuration:
-
-- **Runtime (the API image)** reads everything domain-related from env:
-  `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_AUDIENCE` for auth,
-  `CORS_ALLOWED_ORIGINS` (CSV) for the browser apps, `PUBLIC_API_HOST` for
-  install commands, and `HEADSCALE_DOMAIN` for the mesh control plane. The
-  dashboard and chat front-ends resolve their config at runtime, so they carry
-  no hardcoded host.
-- **Deploy templates** (`deploy/nginx.conf`, `deploy/headscale-config.yaml`,
-  `web/install.*` / `web/update.*`) carry `__APP_DOMAIN__` / `__API_DOMAIN__` /
-  `__CHAT_DOMAIN__` / `__OIDC_ISSUER_ORIGIN__` placeholders that your deploy
-  pipeline substitutes (the reference pipeline derives them from a single
-  `BASE_DOMAIN`).
-
-See [web/Config.md](web/Config.md) for the OIDC setup and the full env list.
-
----
-
-## Local development (venv)
-
-For local iteration without containers:
+From a checkout:
 
 ```bash
-cd api
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt -r requirements-dev.txt
-fastapi dev app/main.py --host 0.0.0.0 --port 8000
-````
-
-This runs the MCP API locally while pointing to a reachable local dashboard
-(and through it, the ArcadeDB backend). To bring up that dashboard on port `4466`, run
-`scripts/dev-local-dashboard.sh` (or `scripts/dev-local-dashboard.ps1` on
-Windows), then open `http://127.0.0.1:4466/dev/login`.
-
-To tear the dev loop back down — dev containers + volumes, the wizard-created
-`loreholm-arcadedb-*` containers, and `.dev-state/` — run
-`scripts/clean-local-dashboard.sh` (or `scripts/clean-local-dashboard.ps1` on
-Windows). The bootstrapped `venv/` is left in place; delete it manually if you
-want a fully clean slate.
-
----
-
-## MCP tool endpoints (POC)
-
-See [02_ArcadeDBSetup.md](docs/02_ArcadeDBSetup.md) for connection configuration.
-
-- `POST /mcp/loreholm_upsert_entities`
-- `POST /mcp/loreholm_write_memory`
-- `POST /mcp/loreholm_link_entities`
-- `POST /mcp/loreholm_delete_entities`
-- `POST /mcp/loreholm_search`
-- `POST /mcp/loreholm_context`
-- `POST /mcp/loreholm_recent`
-- `POST /mcp/loreholm_stats`
-
-These routes proxy through the local dashboard's `POST /api/sync/query` endpoint to the user's ArcadeDB container.
-
-### Optional auth
-
-Set `AUTH_TOKEN` in the environment to require a bearer token on MCP routes.
-Clients can send either:
-
-- `Authorization: Bearer <token>`
-- `X-Auth-Token: <token>`
-
----
-
-## Tests
-
-```bash
-cd api
-. .venv/bin/activate
-PYTHONPATH=api pytest api/tests
+git switch v2
+LOREHOLM_SOURCE_URL=https://github.com/Loreholm/Loreholm/archive/refs/heads/v2.tar.gz \
+  bash web/install-v2.sh
 ```
 
-Tests focus on:
+The installer:
 
-* MCP tool behavior
-* Memory writes and retrieval
-* Deterministic, inspectable outputs
+- generates ArcadeDB and device credentials;
+- stores them with mode `0600` under
+  `~/.local/share/loreholm-v2/state/instance.env`;
+- installs release source under `~/.local/share/loreholm-v2/source`;
+- starts the private instance; and
+- waits for the API to become healthy.
 
----
+Re-running the installer upgrades the source while preserving credentials and
+database volumes.
 
-## Design principles (TL;DR)
+## Test the platform
 
-* Explicit over implicit
-* Inspectable over magical
-* Structured over clever
-* Reversible over permanent
+### 1. Check container and API health
 
-If a memory can’t be explained later, it doesn’t belong in the database.
+```bash
+export LOREHOLM_HOME=${LOREHOLM_HOME:-$HOME/.local/share/loreholm-v2}
+ENV_FILE="$LOREHOLM_HOME/state/instance.env"
+COMPOSE_FILE="$LOREHOLM_HOME/source/deploy/docker-compose.v2.yml"
 
----
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps
+. "$ENV_FILE"
+curl -fsS "http://127.0.0.1:${LOREHOLM_V2_PORT:-8082}/health"
+```
 
-## Project status
+Expected response:
 
-loreholm is under active development.
+```json
+{"ok":true,"version":"2.0.0","storage":"arcadedb"}
+```
 
-Current capabilities:
+### 2. Read the client policy
 
-* MCP-based memory ingestion and retrieval
-* Deterministic vector search and context retrieval
-* Local dashboard with AI-powered database setup wizard
-* Multi-provider LLM support via Bifrost (OpenAI, Anthropic, Google, Groq, Ollama)
-* User account authentication with password management
-* Multi-database management from the local dashboard
-* API key management for external agent access
+```bash
+curl -fsS \
+  -H "Authorization: Bearer $LOREHOLM_V2_DEVICE_TOKEN" \
+  "http://127.0.0.1:${LOREHOLM_V2_PORT:-8082}/v2/policy"
+```
 
----
+The response should advertise contract `2.0`, supported capture classes, their
+processing modes, and the current mining status.
 
-## What loreholm is NOT
+### 3. Ingest a transcript event
 
-* ❌ An autonomous agent brain
-* ❌ A hidden surveillance memory
-* ❌ A black-box vector store
-* ❌ A rigid ontology experiment
+Use a fresh UUIDv7 for a new test. The fixed ID below is useful for explicitly
+testing retry behavior:
 
-loreholm exists to help **humans and LLMs think together**, not to replace human judgment.
+```bash
+payload='{
+  "captures": [{
+    "capture_id": "018f5e2a-1234-7abc-8def-1234567890ab",
+    "kind": "event",
+    "class": "transcript.message",
+    "surface": "manual-smoke-test",
+    "session_ref": "readme-test",
+    "occurred_at": "2026-07-11T00:00:00Z",
+    "payload": {"role": "user", "content": "Remember this test capture."},
+    "refs": [],
+    "hints": [],
+    "meta": {
+      "contract_version": "2.0",
+      "spine_version": "2.0.0",
+      "adapter_id": "manual",
+      "adapter_version": "2.0.0",
+      "device_id": "readme-device",
+      "user_id": "local-user",
+      "queue_age_seconds": 0,
+      "policy_version": 1
+    }
+  }]
+}'
 
----
+curl -fsS \
+  -H "Authorization: Bearer $LOREHOLM_V2_DEVICE_TOKEN" \
+  -H "Content-Type: application/json" \
+  --data "$payload" \
+  "http://127.0.0.1:${LOREHOLM_V2_PORT:-8082}/v2/captures"
+```
+
+The first submission returns `accepted`. Submit the same payload again and it
+must return `duplicate`; this verifies durable transport idempotency.
+
+If this ID was already used, both calls will return `duplicate`. Change it to a
+new valid UUIDv7 to repeat the first-ingest test.
+
+### 4. Verify unknown-class quarantine
+
+Change `"class": "transcript.message"` in the payload to
+`"class": "future.test"` and use another UUIDv7. The receipt must return
+`quarantined`, proving a newer adapter cannot lose data while an older instance
+also cannot mine an unsupported payload.
+
+### 5. Run automated tests
+
+```bash
+python3 -m venv /tmp/loreholm-v2-tests
+/tmp/loreholm-v2-tests/bin/pip install \
+  -r api/requirements.txt -r api/requirements-dev.txt
+/tmp/loreholm-v2-tests/bin/python -m pytest api/tests/test_v2_capture.py -q
+```
+
+Expected result: `4 passed`.
+
+## Troubleshooting
+
+Show current state and recent logs:
+
+```bash
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" \
+  logs --tail=100 instance arcadedb bifrost
+```
+
+The most common installation failure is Docker access for the current user.
+`docker info` must work without `sudo` before running the installer.
+
+## Stop or uninstall
+
+Stop containers while preserving credentials and database volumes:
+
+```bash
+bash "$LOREHOLM_HOME/source/web/uninstall-v2.sh"
+```
+
+Permanently remove the V2 volumes, credentials, and installed source:
+
+```bash
+LOREHOLM_ERASE_DATA=1 bash "$LOREHOLM_HOME/source/web/uninstall-v2.sh"
+```
+
+The second command is destructive and cannot be undone without a backup.
+
+## Development documentation
+
+- [Architecture decisions](notes/Architecture-Decisions.md)
+- [V2 development stack](docs/V2-Development.md)
+- [Security policy](SECURITY.md)
+- [Contributing](CONTRIBUTING.md)
 
 ## License
 
-loreholm is fully open source, under two licenses drawn along the trust boundary:
-
-| Component | Path | License |
-|---|---|---|
-| Cloud API, MCP server, local dashboard server, reconciler | `api/` | [AGPL-3.0](LICENSE) |
-| Web dashboard, installers, update scripts, endpoint shim | `web/` | [MIT](web/LICENSE) |
-| Chat front-end | `apps/chat/` | [MIT](apps/chat/LICENSE) |
-| Everything else (deploy configs, scripts, docs) | repository root | [AGPL-3.0](LICENSE) |
-
-The split is deliberate: the server-side engine is AGPL so no one can take it,
-modify it, and offer it as a closed hosted service. The client-side on-ramps
-are MIT so anyone can embed, adapt, and redistribute them without legal review.
-
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). They
-require agreeing to the [Contributor License Agreement](CLA.md),
-which preserves the project's ability to offer commercial AGPL exemptions —
-the project's only monetization. **These licenses govern code, never data.
-Your memory data is yours alone — to own, to know, and to control.**
+Server-side code is licensed under [AGPL-3.0](LICENSE). Client-facing web and
+installer code under `web/` is licensed under [MIT](web/LICENSE). These licenses
+govern code, never user data.
