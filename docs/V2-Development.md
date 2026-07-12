@@ -56,3 +56,5 @@ docker compose \
 Set `VLLM_IMAGE`, `VLLM_MODEL`, or `VLLM_SERVED_MODEL` in the environment to
 test another local configuration. Keep `HF_HUB_OFFLINE=1` so startup fails
 closed when weights are not already present instead of downloading implicitly.
+The development service uses eager execution because CUDA graph/FlashAttention
+capture is not reliable on the current GB10 development driver stack.

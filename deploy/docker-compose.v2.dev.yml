@@ -21,7 +21,8 @@ services:
       - --max-model-len
       - ${VLLM_MAX_MODEL_LEN:-32768}
       - --gpu-memory-utilization
-      - ${VLLM_GPU_MEMORY_UTILIZATION:-0.50}
+      - ${VLLM_GPU_MEMORY_UTILIZATION:-0.25}
+      - --enforce-eager
     deploy:
       resources:
         reservations:
