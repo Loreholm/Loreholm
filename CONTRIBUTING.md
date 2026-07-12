@@ -31,8 +31,15 @@ the topology and `docs/07_BYODB.md` for how the pieces talk to each other.
 
 ## Pull requests
 
+- Contributions must use the fork workflow: fork `Loreholm/Loreholm`, create
+  the change branch in your fork, and open a pull request back to this
+  repository. Contributor branches cannot be created or updated in the
+  upstream repository.
+- Do not request or expect upstream write access for ordinary contributions.
+  Repository rules enforce the fork boundary even if write access is granted
+  accidentally.
 - Keep PRs focused: one change, one PR.
-- CI (tests on Python 3.11) must pass; there are no other gates.
+- CI must pass and the repository owner must approve before merge.
 - Match the style of the code you're touching; there is no linter on
   purpose — read the room instead.
 - Changes to the trust boundary (the Headscale ACL, the `:8081` shim, the
