@@ -10,6 +10,9 @@ PORT="${LOREHOLM_V2_PORT:-8082}"
 BIND_HOST="${LOREHOLM_V2_BIND_HOST:-127.0.0.1}"
 HEALTH_HOST="$BIND_HOST"
 [[ "$HEALTH_HOST" == "0.0.0.0" ]] && HEALTH_HOST="127.0.0.1"
+BIFROST_BIND_HOST="${BIFROST_BIND_HOST:-127.0.0.1}"
+BIFROST_PORT="${BIFROST_PORT:-8083}"
+BIFROST_PUBLIC_URL="${BIFROST_PUBLIC_URL:-http://$BIFROST_BIND_HOST:$BIFROST_PORT}"
 
 say() { printf 'Loreholm V2: %s\n' "$*"; }
 die() { printf 'Loreholm V2: error: %s\n' "$*" >&2; exit 1; }
@@ -33,6 +36,7 @@ else
   device_digest="$(printf '%s' "$device_token" | sha256sum | cut -d' ' -f1)"
   admin_token="$(openssl rand -hex 32)"
   admin_digest="$(printf '%s' "$admin_token" | sha256sum | cut -d' ' -f1)"
+  bifrost_admin_password="Lh!$(openssl rand -hex 24)"
   previous_umask="$(umask)"
   umask 077
   {
@@ -43,7 +47,21 @@ else
     printf 'LOREHOLM_V2_ADMIN_TOKEN=%s\n' "$admin_token"
     printf 'LOREHOLM_V2_PORT=%s\n' "$PORT"
     printf 'LOREHOLM_V2_BIND_HOST=%s\n' "$BIND_HOST"
+    printf 'BIFROST_BIND_HOST=%s\n' "$BIFROST_BIND_HOST"
+    printf 'BIFROST_PORT=%s\n' "$BIFROST_PORT"
+    printf 'BIFROST_PUBLIC_URL=%s\n' "$BIFROST_PUBLIC_URL"
+    printf 'BIFROST_ADMIN_USERNAME=%s\n' "loreholm"
+    printf 'BIFROST_ADMIN_PASSWORD=%s\n' "$bifrost_admin_password"
   } > "$ENV_FILE"
+  umask "$previous_umask"
+fi
+
+if ! grep -q '^BIFROST_ADMIN_PASSWORD=' "$ENV_FILE"; then
+  bifrost_admin_password="Lh!$(openssl rand -hex 24)"
+  previous_umask="$(umask)"
+  umask 077
+  printf 'BIFROST_ADMIN_USERNAME=%s\nBIFROST_ADMIN_PASSWORD=%s\n' \
+    "loreholm" "$bifrost_admin_password" >> "$ENV_FILE"
   umask "$previous_umask"
 fi
 
@@ -55,6 +73,14 @@ if ! grep -q '^LOREHOLM_V2_ADMIN_TOKEN=' "$ENV_FILE"; then
   previous_umask="$(umask)"
   umask 077
   printf 'LOREHOLM_V2_ADMIN_TOKEN_SHA256=%s\nLOREHOLM_V2_ADMIN_TOKEN=%s\n' "$admin_digest" "$admin_token" >> "$ENV_FILE"
+  umask "$previous_umask"
+fi
+
+if ! grep -q '^BIFROST_PUBLIC_URL=' "$ENV_FILE"; then
+  previous_umask="$(umask)"
+  umask 077
+  printf 'BIFROST_BIND_HOST=%s\nBIFROST_PORT=%s\nBIFROST_PUBLIC_URL=%s\n' \
+    "$BIFROST_BIND_HOST" "$BIFROST_PORT" "$BIFROST_PUBLIC_URL" >> "$ENV_FILE"
   umask "$previous_umask"
 fi
 
@@ -74,7 +100,25 @@ if [[ -d "$SOURCE_DIR" ]]; then mv "$SOURCE_DIR" "$SOURCE_DIR.previous"; fi
 mv "$SOURCE_DIR.next" "$SOURCE_DIR"
 rm -rf "$SOURCE_DIR.previous"
 
-say "building and starting the private instance"
+set -a
+# shellcheck disable=SC1090
+. "$ENV_FILE"
+set +a
+
+say "starting Bifrost on loopback for authentication bootstrap"
+BIFROST_BIND_HOST=127.0.0.1 docker compose --env-file "$ENV_FILE" \
+  -f "$SOURCE_DIR/deploy/docker-compose.v2.yml" up -d bifrost
+for _ in $(seq 1 60); do
+  curl --fail --silent "http://127.0.0.1:$BIFROST_PORT/health" >/dev/null && break
+  sleep 1
+done
+curl --fail --silent --show-error -X PUT "http://127.0.0.1:$BIFROST_PORT/api/config" \
+  --user "$BIFROST_ADMIN_USERNAME:$BIFROST_ADMIN_PASSWORD" \
+  -H 'Content-Type: application/json' \
+  --data "{\"auth_config\":{\"is_enabled\":true,\"admin_username\":\"$BIFROST_ADMIN_USERNAME\",\"admin_password\":\"$BIFROST_ADMIN_PASSWORD\",\"disable_auth_on_inference\":true},\"client_config\":{\"log_retention_days\":30}}" \
+  >/dev/null
+
+say "building and starting the authenticated private instance"
 docker compose --env-file "$ENV_FILE" -f "$SOURCE_DIR/deploy/docker-compose.v2.yml" up -d --build
 
 say "waiting for the API"
@@ -83,6 +127,8 @@ for _ in $(seq 1 60); do
     say "ready at http://$HEALTH_HOST:$PORT"
     say "device token is stored in $ENV_FILE (mode 0600)"
     say "dashboard ready at http://$HEALTH_HOST:$PORT/dashboard"
+    say "Bifrost dashboard ready at $BIFROST_PUBLIC_URL (username: $BIFROST_ADMIN_USERNAME)"
+    say "Bifrost password is stored in $ENV_FILE (mode 0600)"
     cat "$tmp/health.json"
     printf '\n'
     exit 0

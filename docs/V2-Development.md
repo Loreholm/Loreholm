@@ -38,6 +38,14 @@ instance environment and recreate the `instance` service. Authentication still
 applies to policy, capture, and dashboard administration. Avoid `0.0.0.0` when
 the machine also has untrusted network interfaces.
 
+The Bifrost management dashboard is published separately on port `8083` and
+defaults to loopback. The installer enables Bifrost's built-in authentication;
+its generated username and password are stored in the mode-0600 instance env
+file. Set `BIFROST_BIND_HOST` and `BIFROST_PUBLIC_URL` only on a trusted network.
+Inference authentication remains disabled because `/v1/*` is reachable only
+inside the Compose network, while the dashboard and management API require a
+login.
+
 ## Local model development
 
 Development inference uses vLLM only. Do not configure Ollama or paid/cloud

@@ -31,6 +31,14 @@ def create_app() -> FastAPI:
     configured_digest = os.getenv("LOREHOLM_V2_DEVICE_TOKEN_SHA256", "").strip().lower()
     admin_digest = os.getenv("LOREHOLM_V2_ADMIN_TOKEN_SHA256", "").strip().lower()
     bifrost_url = os.getenv("BIFROST_URL", "http://bifrost:8080").rstrip("/")
+    bifrost_dashboard_url = os.getenv("BIFROST_PUBLIC_URL", "http://127.0.0.1:8083").rstrip("/")
+    bifrost_auth = (
+        os.getenv("BIFROST_ADMIN_USERNAME", ""),
+        os.getenv("BIFROST_ADMIN_PASSWORD", ""),
+    )
+
+    def bifrost_request(method: str, path: str, **kwargs) -> httpx.Response:
+        return httpx.request(method, f"{bifrost_url}{path}", auth=bifrost_auth, **kwargs)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -74,7 +82,7 @@ def create_app() -> FastAPI:
         bifrost_ok = False
         vllm_ok = False
         try:
-            response = httpx.get(f"{bifrost_url}/api/providers", timeout=5)
+            response = bifrost_request("GET", "/api/providers", timeout=5)
             response.raise_for_status()
             bifrost_ok = True
             providers = response.json().get("providers", [])
@@ -86,7 +94,13 @@ def create_app() -> FastAPI:
                     vllm_ok = httpx.get(f"{base_url.rstrip('/')}/v1/models", timeout=5).is_success
         except (httpx.HTTPError, ValueError):
             pass
-        return AdminStatus(policy=service.policy, bifrost_ok=bifrost_ok, model_provider=provider, vllm_ok=vllm_ok)
+        return AdminStatus(
+            policy=service.policy,
+            bifrost_ok=bifrost_ok,
+            model_provider=provider,
+            vllm_ok=vllm_ok,
+            bifrost_dashboard_url=bifrost_dashboard_url,
+        )
 
     @app.put("/v2/admin/policy", response_model=InstancePolicy)
     def update_policy(policy: InstancePolicy, _: None = Depends(require_admin)) -> InstancePolicy:
@@ -110,11 +124,11 @@ def create_app() -> FastAPI:
                 "allowed_requests": {"list_models": True, "chat_completion": True, "chat_completion_stream": True},
             },
         }
-        existing = httpx.get(f"{bifrost_url}/api/providers", timeout=10).json().get("providers", [])
+        existing = bifrost_request("GET", "/api/providers", timeout=10).json().get("providers", [])
         if any(item.get("name") == config.provider_name for item in existing):
-            response = httpx.put(f"{bifrost_url}/api/providers/{config.provider_name}", json=provider, timeout=15)
+            response = bifrost_request("PUT", f"/api/providers/{config.provider_name}", json=provider, timeout=15)
         else:
-            response = httpx.post(f"{bifrost_url}/api/providers", json={"provider": config.provider_name, **provider}, timeout=15)
+            response = bifrost_request("POST", "/api/providers", json={"provider": config.provider_name, **provider}, timeout=15)
         if response.is_error:
             raise HTTPException(status_code=502, detail=f"Bifrost rejected model configuration: {response.text[:500]}")
         service.store.set_config("model_endpoint", config.model_dump(mode="json"))

@@ -27,7 +27,7 @@
       <section class="status-strip">
         <div><span>INSTANCE <button class="tip" data-tip="The Loreholm API that receives captures, enforces policy, and serves this console." aria-label="About instance status">?</button></span><strong id="instanceState">—</strong></div>
         <div><span>ARCADEDB <button class="tip" data-tip="The durable local store for raw captures, quarantine, policy, and the future knowledge graph." aria-label="About ArcadeDB status">?</button></span><strong class="good">ONLINE</strong></div>
-        <div><span><a class="status-link" href="https://docs.getbifrost.ai/providers/supported-providers/overview" target="_blank" rel="noopener">BIFROST ↗</a> <button class="tip" data-tip="The mandatory gateway for every model request. Loreholm never calls model providers directly." aria-label="About Bifrost status">?</button></span><strong id="bifrostState">—</strong></div>
+        <div><span><a id="bifrostDashboardLink" class="status-link" href="#" target="_blank" rel="noopener">BIFROST ↗</a> <button class="tip" data-tip="Open your Bifrost dashboard to add provider credentials, inspect model traffic, and manage routing." aria-label="About Bifrost status">?</button></span><strong id="bifrostState">—</strong></div>
         <div><span>LOCAL MODEL <button class="tip" data-tip="READY means Bifrost can reach the configured vLLM endpoint and list its models." aria-label="About local model status">?</button></span><strong id="modelState">—</strong></div>
         <div><span>POLICY REV. <button class="tip" data-tip="The durable policy version. It increments after each successful policy commit." aria-label="About policy revision">?</button></span><strong id="policyVersion">—</strong></div>
       </section>
@@ -51,7 +51,7 @@
               <label>Served model <button class="tip" data-tip="The exact model identifier advertised by the endpoint and used for Loreholm inference requests." aria-label="About served model">?</button><input id="modelName" value="loreholm-local" required></label>
               <label class="check"><input id="privateNetwork" type="checkbox" checked><span>Permit private Docker network <button class="tip" data-tip="Allows Bifrost to connect to RFC1918 addresses and Docker service networks. Keep this off for public endpoints." aria-label="About private network access">?</button></span></label>
               <button>Configure Bifrost route <b>→</b></button>
-              <a class="bifrost-guide" href="https://docs.getbifrost.ai/quickstart/gateway/provider-configuration" target="_blank" rel="noopener">Configure native providers in Bifrost ↗</a>
+              <a id="bifrostConfigureLink" class="bifrost-guide" href="#" target="_blank" rel="noopener">Open your Bifrost dashboard ↗</a>
             </form>
           </section>
 
