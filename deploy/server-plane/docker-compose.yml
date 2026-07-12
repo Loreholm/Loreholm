@@ -1,0 +1,108 @@
+name: loreholm-plane
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      CHAT_DOMAIN: ${CHAT_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
+      MESH_DOMAIN: ${MESH_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  chat:
+    image: ${CHAT_IMAGE:-ghcr.io/loreholm/loreholm-chat:latest}
+    restart: unless-stopped
+
+  headscale-init:
+    build:
+      context: .
+      dockerfile: headscale-init.Dockerfile
+    volumes:
+      - headscale_data:/var/lib/headscale
+      - headscale_run:/var/run/headscale
+      - plane_secrets:/run/loreholm
+      - ./headscale.yaml:/etc/headscale/config.yaml:ro
+      - ./acl.hujson:/etc/headscale/acl.hujson:ro
+      - ./headscale-bootstrap.sh:/bootstrap.sh:ro
+    entrypoint: ["/bin/sh", "/bootstrap.sh"]
+    depends_on:
+      headscale: {condition: service_started}
+    restart: "no"
+
+  headscale:
+    image: headscale/headscale:0.25.1
+    command: serve
+    restart: unless-stopped
+    volumes:
+      - headscale_data:/var/lib/headscale
+      - headscale_run:/var/run/headscale
+      - ./headscale.yaml:/etc/headscale/config.yaml:ro
+      - ./acl.hujson:/etc/headscale/acl.hujson:ro
+
+  tailscale-api:
+    image: tailscale/tailscale:latest
+    hostname: loreholm-plane-api
+    restart: unless-stopped
+    depends_on:
+      headscale: {condition: service_started}
+      headscale-init: {condition: service_completed_successfully}
+    cap_add: [NET_ADMIN]
+    devices: ["/dev/net/tun:/dev/net/tun"]
+    environment:
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_EXTRA_ARGS: --login-server=https://${MESH_DOMAIN}
+      MESH_DOMAIN: ${MESH_DOMAIN}
+    volumes:
+      - tailscale_api_data:/var/lib/tailscale
+      - plane_secrets:/run/loreholm:ro
+      - ./tailscale-api.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+
+  api:
+    image: ${API_IMAGE:-ghcr.io/loreholm/mcp-api:latest}
+    restart: unless-stopped
+    network_mode: service:tailscale-api
+    depends_on:
+      tailscale-api: {condition: service_started}
+      redis: {condition: service_healthy}
+    environment:
+      APP_ENV: production
+      OIDC_ISSUER: ${OIDC_ISSUER}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE}
+      OIDC_FRONTEND_AUDIENCE: ${OIDC_AUDIENCE}
+      PUBLIC_API_HOST: https://${API_DOMAIN}
+      CORS_ALLOWED_ORIGINS: https://${CHAT_DOMAIN}
+      HEADSCALE_API_URL: http://headscale:8080
+      HEADSCALE_API_KEY_FILE: /run/loreholm/headscale-api-key
+      LOCAL_SYNC_SIGNING_SECRET: ${LOCAL_SYNC_SIGNING_SECRET}
+      API_KEY_SIGNING_SECRET: ${API_KEY_SIGNING_SECRET}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes:
+      - plane_secrets:/run/loreholm:ro
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  caddy_data:
+  caddy_config:
+  headscale_data:
+  headscale_run:
+  tailscale_api_data:
+  plane_secrets:

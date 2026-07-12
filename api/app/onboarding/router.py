@@ -394,9 +394,15 @@ async def get_public_auth_config(request: Request) -> dict:
 
 def get_headscale_config() -> dict:
     """Get Headscale configuration from environment."""
+    api_key = os.getenv("HEADSCALE_API_KEY", "").strip()
+    if not api_key:
+        try:
+            api_key = Path(os.getenv("HEADSCALE_API_KEY_FILE", "")).read_text().strip()
+        except OSError:
+            pass
     return {
         "api_url": os.getenv("HEADSCALE_API_URL", "http://headscale:8080"),
-        "api_key": os.getenv("HEADSCALE_API_KEY", ""),
+        "api_key": api_key,
     }
 
 
