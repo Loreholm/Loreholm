@@ -9,6 +9,8 @@ import lifecycle from '../../../docs/08_DataLifecycle.md?raw';
 import chat from '../../../docs/09_Chat.md?raw';
 import security from '../../../docs/13_SecurityModel.md?raw';
 import development from '../../../docs/10_Development.md?raw';
+import selfHosting from '../../../docs/11_SelfHosting.md?raw';
+import organizations from '../../../docs/12_Organizations.md?raw';
 
 export const regions = [
   {id: 'threshold', name: 'The Threshold', kicker: 'Enter here', color: '#d9f99d'},
@@ -44,43 +46,55 @@ export const documents = [
     summary: 'Installation, containers, credentials, configuration, health, updates, and destructive removal.',
   },
   {
-    id: 'policy', file: '05_PolicyAndModels.md', numeral: 'V', title: 'Policy & Models',
+    id: 'self-hosting', file: '11_SelfHosting.md', numeral: 'V', title: 'Self-Hosting',
+    short: 'Keep the hearth—or the whole harbor—under your flag.', region: 'instance', status: 'implemented', depth: 2,
+    time: '6 min', color: '#e9bd72', raw: selfHosting,
+    summary: 'Run your private instance, host the complete public server plane, or keep Loreholm local-only.',
+  },
+  {
+    id: 'organizations', file: '12_Organizations.md', numeral: 'VI', title: 'For Organizations',
+    short: 'Decide whether this expedition belongs inside your walls.', region: 'threshold', status: 'mixed', depth: 2,
+    time: '7 min', color: '#cfe99c', raw: organizations,
+    summary: 'Organizational fit, pilot scope, deployment choices, licensing, security duties, and adoption gates.',
+  },
+  {
+    id: 'policy', file: '05_PolicyAndModels.md', numeral: 'VII', title: 'Policy & Models',
     short: 'Set the laws that govern capture and egress.', region: 'instance', status: 'mixed', depth: 3,
     time: '9 min', color: '#efad67', raw: policy,
     summary: 'Capture classes, remote processing modes, Bifrost routing, model roles, and planned budgets.',
   },
   {
-    id: 'clients', file: '06_ClientsAndSpine.md', numeral: 'VI', title: 'Clients & Spine',
+    id: 'clients', file: '06_ClientsAndSpine.md', numeral: 'VIII', title: 'Clients & Spine',
     short: 'Design a sensor that never becomes the judge.', region: 'workshop', status: 'planned', depth: 3,
     time: '7 min', color: '#a9a6ff', raw: clients,
     summary: 'Adapter responsibilities, embedded spine, offline queues, policy refresh, and revocation.',
   },
   {
-    id: 'mining', file: '07_MiningAndKnowledge.md', numeral: 'VII', title: 'Mining & Knowledge',
+    id: 'mining', file: '07_MiningAndKnowledge.md', numeral: 'IX', title: 'Mining & Knowledge',
     short: 'Descend into identity, evidence, and time.', region: 'depths', status: 'planned', depth: 5,
     time: '14 min', color: '#e87951', raw: mining,
     summary: 'Salience, mining stages, entity resolution, claims, provenance, vectors, schema, and surfacing.',
   },
   {
-    id: 'lifecycle', file: '08_DataLifecycle.md', numeral: 'VIII', title: 'Data Lifecycle',
+    id: 'lifecycle', file: '08_DataLifecycle.md', numeral: 'X', title: 'Data Lifecycle',
     short: 'Understand what can be kept, erased, restored, or shared.', region: 'depths', status: 'planned', depth: 4,
     time: '9 min', color: '#df8b6c', raw: lifecycle,
     summary: 'Retention, grace-period deletion, inference preservation, backups, restore, and disclosure.',
   },
   {
-    id: 'chat', file: '09_Chat.md', numeral: 'IX', title: 'Browser Chat',
+    id: 'chat', file: '09_Chat.md', numeral: 'XI', title: 'Browser Chat',
     short: 'Follow the first complete Loreholm expedition.', region: 'threshold', status: 'implemented', depth: 1,
     time: '6 min', color: '#bfe886', raw: chat,
     summary: 'OIDC, front-door relay, private streaming, Bifrost inference, and passive transcript capture.',
   },
   {
-    id: 'security', file: '13_SecurityModel.md', numeral: 'X', title: 'Security Model',
+    id: 'security', file: '13_SecurityModel.md', numeral: 'XII', title: 'Security Model',
     short: 'Inspect every gate and every promise.', region: 'boundary', status: 'mixed', depth: 4,
     time: '9 min', color: '#7dded7', raw: security,
     summary: 'Local and tunnel boundaries, credential separation, model egress, deletion limits, and verification.',
   },
   {
-    id: 'development', file: '10_Development.md', numeral: 'XI', title: 'Development Stack',
+    id: 'development', file: '10_Development.md', numeral: 'XIII', title: 'Development Stack',
     short: 'Enter the workshop with the right instruments.', region: 'workshop', status: 'implemented', depth: 3,
     time: '6 min', color: '#b8b5ff', raw: development,
     summary: 'Local Compose development, vLLM GPU overlay, model constraints, and browser-chat networking.',
@@ -88,13 +102,156 @@ export const documents = [
 ];
 
 export const entryQuestions = [
-  {name: 'Rune of Memory', label: 'Could Loreholm help me remember why we made a decision?', next: 'remember', mark: 'ᛗ'},
-  {name: 'Rune of the Hearth', label: 'Can I use it without giving away my private work?', next: 'private', mark: 'ᛉ'},
-  {name: 'Rune of Insight', label: 'What would it know that ordinary search does not?', next: 'different', mark: 'ᚨ'},
-  {name: 'Rune of First Light', label: 'What can I actually do with Loreholm today?', next: 'today', mark: 'ᛏ'},
+  {name: 'Rune of the Map', label: 'What is this exactly?', next: 'what', mark: 'ᚨ'},
+  {name: 'Rune of the Traveler', label: 'Who is this for?', next: 'audience', mark: 'ᛗ'},
+  {name: 'Rune of the Beacon', label: 'Where is this project at?', next: 'today', mark: 'ᛏ'},
+  {name: 'Rune of the Banner', label: 'Can I use this in my organization?', next: 'organization', mark: 'ᛟ'},
 ];
 
 export const adventureNodes = {
+  what: {
+    depth: 1, eyebrow: 'Start with the shape of it', question: 'What is this exactly?',
+    answer: [
+      'Loreholm is a new way to surface the useful data you are already sharing with large language models. Think retrieval-augmented generation—RAG—but with a major upgrade to how the database is constructed.',
+      'Conventional RAG often cuts documents into chunks, embeds them, and hopes similarity search retrieves enough context. Loreholm keeps the original context, uses dedicated mining stages to turn it into structured, provenance-rich material, and only then builds retrieval and graph layers. The goal is memory that can recover not only matching words, but people, decisions, relationships, changes, and the evidence behind them.',
+    ],
+    status: 'mixed', docs: ['architecture', 'mining'], scene: 'evidence',
+    options: [
+      {label: 'How did the database get an upgrade?', next: 'upgrade'},
+      {label: 'What could that help me recover later?', next: 'examples'},
+      {label: 'Where would all of this data live?', next: 'private'},
+    ],
+  },
+  upgrade: {
+    depth: 2, eyebrow: 'Beyond a bucket of chunks', question: 'How did the database get an upgrade?',
+    answer: [
+      'Instead of immediately throwing raw chunks into a vector store, Loreholm first preserves the source as an immutable capture with identity, time, source, policy, and delivery metadata. A dedicated mining role can then select worthwhile material and extract episodes, mentions, candidate claims, temporal signals, and provenance before anything becomes durable knowledge.',
+      'Vector indexes are built from selected derived records and used for candidate matching rather than treated as the source of truth. Exact retries reuse prior work, while repeated observations can strengthen one claim instead of creating a pile of cloned facts. Graph-maintenance stages then resolve identity, validate the schema, and place evidence-backed claims and connections into the graph, giving them far more to work with than toothpick-thin links guessed from isolated chunks.',
+    ],
+    status: 'planned', docs: ['mining', 'architecture'], scene: 'evidence',
+    options: [
+      {label: 'Why not just embed document chunks?', next: 'chunks'},
+      {label: 'How does this avoid duplicate pollution?', next: 'dedup'},
+      {label: 'Why give graph building its own specialist?', next: 'graphagent'},
+    ],
+  },
+  chunks: {
+    depth: 3, eyebrow: 'The limits of similarity', question: 'Why not just embed document chunks?',
+    answer: [
+      'A chunk knows where it came from, but usually not what role it plays in the larger story. Similar passages may flood results, changed facts may compete without time attached, and a retrieved paragraph may not say which person or decision it concerns.',
+      'Loreholm keeps raw source material for inspection, but creates vectors only for selected derived records such as mentions in context. Retrieval becomes one instrument for resolving and finding knowledge—not the database’s definition of truth.',
+    ],
+    status: 'planned', docs: ['mining', 'architecture'], scene: 'evidence',
+    options: [
+      {label: 'What selects the useful material?', next: 'mining'},
+      {label: 'How does it connect two mentions?', next: 'identity'},
+      {label: 'Can I still inspect the original source?', next: 'evidence'},
+    ],
+  },
+  dedup: {
+    depth: 3, eyebrow: 'One truth, many witnesses', question: 'How does Loreholm avoid polluting memory with duplicates?',
+    answer: [
+      'Duplicate control happens at several layers instead of being left to a nearest-neighbor search. Capture IDs make delivery retries idempotent, and mining fingerprints let an identical processing run reuse its successful output.',
+      'At the knowledge layer, the same claim seen again should add independent evidence rather than mint another fact. Similar mentions are resolved conservatively against stable entities, and uncertain matches remain separate instead of being forced together. This does not promise magical semantic perfection, but it makes duplicate pollution a first-class pipeline responsibility with inspectable decisions.',
+    ],
+    status: 'mixed', docs: ['capture', 'mining'], scene: 'evidence',
+    options: [
+      {label: 'How are exact retries recognized today?', next: 'contract'},
+      {label: 'How are similar people or things resolved?', next: 'identity'},
+      {label: 'How can repeated evidence strengthen one claim?', next: 'evidence'},
+    ],
+  },
+  graphagent: {
+    depth: 3, eyebrow: 'A cartographer with one purpose', question: 'Why give graph building its own specialist?',
+    answer: [
+      'A source integration sees only one narrow slice of work, so it should not decide graph truth. The graph-building specialist can look across mined candidates, stable identities, relation rules, time, and existing claims before making a connection.',
+      'It receives rich metadata telling it where an observation came from, when it applied, what evidence supports it, and which schema shapes are allowed. Deterministic validation still guards the final commit, so an LLM suggestion is not automatically accepted as fact. Keeping this responsibility inside the instance also means every connected tool benefits when graph policy improves.',
+    ],
+    status: 'planned', docs: ['mining', 'architecture', 'clients'], scene: 'evidence',
+    options: [
+      {label: 'Walk me through the mining stages.', next: 'mining'},
+      {label: 'How does it decide two names are one entity?', next: 'identity'},
+      {label: 'What makes a committed connection trustworthy?', next: 'evidence'},
+    ],
+  },
+  audience: {
+    depth: 1, eyebrow: 'Choose the right expedition', question: 'Who is this for?',
+    answer: [
+      'Loreholm is for people who use LLMs as part of real work and keep losing valuable context at the edge of each conversation. It is especially relevant when decisions, relationships, changing facts, and their sources matter more than finding one matching paragraph.',
+      'An individual can use it as private long-term working memory. A team or organization can use the same boundaries to keep each knowledge world under its own policy and infrastructure. At this stage, it is best suited to technical early adopters and organizations willing to operate a bounded pilot while the complete mining and recall experience is still being built.',
+    ],
+    status: 'mixed', docs: ['architecture', 'organizations', 'chat'], scene: 'recall',
+    options: [
+      {label: 'What would this do for one person?', next: 'individual'},
+      {label: 'How would an organization approach it?', next: 'organization'},
+      {label: 'Do I need to be technical right now?', next: 'technicalfit'},
+    ],
+  },
+  individual: {
+    depth: 2, eyebrow: 'Memory for one traveler', question: 'What would Loreholm do for one person?',
+    answer: [
+      'It can keep the context around your conversations on infrastructure you control, without requiring a separate “save this” ritual for every useful moment. The longer-term goal is to help future-you recover why a decision was made, when an understanding changed, who or what was involved, and which source supports the answer.',
+      'The browser-chat capture path works today. Connected-tool capture and evidence-backed recall are the deeper experience still being built.',
+    ],
+    status: 'mixed', docs: ['chat', 'architecture', 'self-hosting'], scene: 'recall',
+    options: [
+      {label: 'Show me an everyday example.', next: 'recall'},
+      {label: 'Would I need to tell it what to save?', next: 'habit'},
+      {label: 'Can I keep all of this on my own machine?', next: 'selfhost'},
+    ],
+  },
+  technicalfit: {
+    depth: 2, eyebrow: 'The state of the trail', question: 'Do I need to be technical to use Loreholm right now?',
+    answer: [
+      'To understand the idea, no. To operate the current foundation, yes: installation expects Linux, Docker, command-line access, and comfort managing credentials and model endpoints.',
+      'The public browser chat removes some day-to-day friction once an instance is connected. The project does not yet have a polished consumer installer, guided backup and restore, or a complete nontechnical administration experience. That makes today’s audience different from the broader audience Loreholm is being designed to serve.',
+    ],
+    status: 'mixed', docs: ['operations', 'organizations', 'development'], scene: 'builder',
+    options: [
+      {label: 'What can I run today?', next: 'today'},
+      {label: 'What does installation involve?', next: 'operations'},
+      {label: 'Could my organization operate it for me?', next: 'organization'},
+    ],
+  },
+  organization: {
+    depth: 1, eyebrow: 'Bring the memory inside your walls', question: 'Can I use this in my organization?',
+    answer: [
+      'Yes—especially as a bounded technical pilot for an organization that already uses LLMs and wants durable context under its own control. Each private instance can keep its raw context, future knowledge, policy, and model configuration on organization-managed infrastructure.',
+      'The organization may use Loreholm’s front door or operate the complete server plane itself. The current foundation can demonstrate authentication, private routing, browser-chat capture, storage, and model configuration. It should not yet be treated as mission-critical organizational memory because evidence-backed recall, supported backup and restore, retention workflows, and production operations are still incomplete.',
+    ],
+    status: 'mixed', docs: ['organizations', 'self-hosting', 'security'], scene: 'privacy',
+    options: [
+      {label: 'What would a sensible pilot look like?', next: 'pilot'},
+      {label: 'Can we host the complete service?', next: 'selfhost'},
+      {label: 'What licenses apply inside an organization?', next: 'licensing'},
+    ],
+  },
+  pilot: {
+    depth: 2, eyebrow: 'A first voyage with clear shores', question: 'What would a sensible organizational pilot look like?',
+    answer: [
+      'Choose a small group, non-critical work, and one bounded source such as Loreholm browser chat. Decide what you want to recover later—a decision, a changing fact, or the evidence behind a recommendation—before collecting anything.',
+      'Run the instance on organization-controlled infrastructure, choose a model route appropriate for the data, and review the network and capture boundaries. Measure reliability and operator burden now, while treating graph-backed recall as the planned outcome rather than a feature already delivered.',
+    ],
+    status: 'mixed', docs: ['organizations', 'operations', 'security'], scene: 'builder',
+    options: [
+      {label: 'What works in that pilot today?', next: 'today'},
+      {label: 'How should we control model access?', next: 'models'},
+      {label: 'Which security boundary do we own?', next: 'privacy'},
+    ],
+  },
+  licensing: {
+    depth: 3, eyebrow: 'The terms of passage', question: 'What licenses apply inside an organization?',
+    answer: [
+      'Loreholm’s server-side code is AGPL-3.0, while the client-facing code under `web/` and `apps/chat/` is MIT-licensed. Organizations can run and modify the software, but should review the AGPL source obligations that may apply when modified server software is offered over a network.',
+      'Those software licenses govern the code, not the organization’s captured data. Dependencies, model weights, identity providers, and model services keep their own terms, so a production review must include them too.',
+    ],
+    status: 'implemented', docs: ['organizations', 'self-hosting', 'development'], scene: 'builder',
+    options: [
+      {label: 'What would we need to operate ourselves?', next: 'serverplane'},
+      {label: 'What data remains under our control?', next: 'ownership'},
+      {label: 'Where is the project incomplete?', next: 'today'},
+    ],
+  },
   remember: {
     depth: 1, eyebrow: 'A memory that keeps its reasons', question: 'What would Loreholm remember for me?',
     answer: [
@@ -155,9 +312,35 @@ export const adventureNodes = {
     ],
     status: 'implemented', docs: ['networking', 'security'], scene: 'privacy',
     options: [
-      {label: 'What does “my own instance” really mean?', next: 'ownership'},
+      {label: 'Can I host Loreholm on my own server?', next: 'selfhost'},
       {label: 'Can I reach it when I am away from home?', next: 'access'},
       {label: 'Could I choose to share something later?', next: 'sharing'},
+    ],
+  },
+  selfhost: {
+    depth: 2, eyebrow: 'Your hearth, your harbor', question: 'Can I host Loreholm on my own server?',
+    answer: [
+      'Yes. You can run your private Loreholm instance on a Linux workstation, home server, or private server with Docker. That is where your lasting context, knowledge, policies, and model configuration live.',
+      'You can also host the public-facing server plane yourself if you want control of sign-in, TLS, Headscale, and the front door. Loreholm keeps that entrance separate from every private instance, even when you operate both.',
+    ],
+    status: 'implemented', docs: ['self-hosting', 'operations', 'networking'], scene: 'privacy',
+    options: [
+      {label: 'What does running the whole server involve?', next: 'serverplane'},
+      {label: 'What stays under my control?', next: 'ownership'},
+      {label: 'How would I reach it away from home?', next: 'access'},
+    ],
+  },
+  serverplane: {
+    depth: 3, eyebrow: 'Fly your own standard', question: 'What does running the whole Loreholm server involve?',
+    answer: [
+      'The repository includes a containerized server plane for the browser app, front-door API, Caddy HTTPS, Headscale coordination, a Tailscale network identity, and Redis. You bring a public Linux host, DNS names, an OIDC provider, secrets, and normal production operations.',
+      'It is operator infrastructure rather than a one-click consumer install today. You are responsible for hardening, monitoring, upgrades, persistent volumes, and recovery—but you control the public entrance as well as the private hearth.',
+    ],
+    status: 'implemented', docs: ['self-hosting', 'networking', 'security', 'development'], scene: 'builder',
+    options: [
+      {label: 'Show me the network boundary.', next: 'privacy'},
+      {label: 'What operations already exist?', next: 'operations'},
+      {label: 'Could content still reach a remote model?', next: 'egress'},
     ],
   },
   ownership: {
@@ -166,7 +349,7 @@ export const adventureNodes = {
       'The saved source material, the knowledge built from it, and the models that can process it locally belong inside your instance. The database and model service are not opened directly to the internet.',
       'Ownership also means responsibility: backups, device security, and deletion need clear tools. Some of those lifecycle tools are designed but not yet built.',
     ],
-    status: 'mixed', docs: ['security', 'lifecycle', 'operations'], scene: 'privacy',
+    status: 'mixed', docs: ['security', 'lifecycle', 'operations', 'self-hosting'], scene: 'privacy',
     options: [
       {label: 'How is it protected from the public internet?', next: 'privacy'},
       {label: 'What would a proper backup include?', next: 'backup'},
@@ -252,16 +435,16 @@ export const adventureNodes = {
     ],
   },
   today: {
-    depth: 1, eyebrow: 'What is real now', question: 'What part of Loreholm works today?',
+    depth: 1, eyebrow: 'What is real now', question: 'Where is this project at?',
     answer: [
-      'The foundation can run a private instance, accept and safely store context, protect that instance behind the private network, and capture browser-chat conversations.',
-      'The deeper promise—turning that history into connected, evidence-backed knowledge you can question—is the next major territory. The site marks that distinction throughout.',
+      'Loreholm is at the working-foundation stage, not at the finished-product stage. You can run a containerized private instance, authenticate clients, accept and safely stage context, configure model routing, and protect remote access behind the private network.',
+      'Browser chat already captures both sides of a conversation without a separate save command. The mining pipeline, derived vector regions, evidence-backed graph, lifecycle tools, and natural-language surfacing experience are accepted design that still needs to be implemented. That makes the project useful today for technical evaluation and bounded pilots, but not yet as the only memory system an individual or organization depends on.',
     ],
-    status: 'implemented', docs: ['operations', 'architecture', 'chat'], scene: 'builder',
+    status: 'mixed', docs: ['operations', 'architecture', 'chat'], scene: 'builder',
     options: [
-      {label: 'Show me the part I can use as an example.', next: 'recall'},
-      {label: 'How is the private instance operated?', next: 'operations'},
-      {label: 'How do I tell built features from future plans?', next: 'promise'},
+      {label: 'What can I run and test today?', next: 'operations'},
+      {label: 'What is the biggest unfinished piece?', next: 'mining'},
+      {label: 'How do the docs separate reality from roadmap?', next: 'promise'},
     ],
   },
   promise: {
@@ -519,7 +702,7 @@ export const adventureNodes = {
     ],
     status: 'implemented', docs: ['operations', 'development', 'architecture'], scene: 'builder',
     options: [
-      {label: 'Show me the private boundary.', next: 'privacy'},
+      {label: 'What can I host myself?', next: 'selfhost'},
       {label: 'Try the browser-chat journey.', next: 'recall'},
       {label: 'What should be built next?', next: 'mining'},
     ],
@@ -527,7 +710,7 @@ export const adventureNodes = {
 };
 
 export const looseThreads = [
-  'examples', 'recording', 'access', 'search', 'today', 'models', 'sharing', 'mistakes',
+  'upgrade', 'individual', 'pilot', 'selfhost', 'dedup', 'graphagent', 'privacy', 'mistakes',
 ];
 
 export const fileToId = Object.fromEntries(documents.map((doc) => [doc.file.toLowerCase(), doc.id]));

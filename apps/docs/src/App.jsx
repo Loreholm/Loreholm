@@ -110,6 +110,7 @@ const StoryProof = ({docId, setRoute, primary}) => {
 const Adventure = ({trail, choose, back, reset, setRoute}) => {
   const currentId = trail[trail.length - 1];
   const node = getAdventureNode(currentId);
+  const previousNode = trail.length > 1 ? getAdventureNode(trail[trail.length - 2]) : null;
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   if (!node) return (
     <section className="adventure empty-adventure" id="adventure">
@@ -159,7 +160,17 @@ const Adventure = ({trail, choose, back, reset, setRoute}) => {
         </div>
       </div>
       <div className="next-questions">
-        <div><small>THE FIRE SHIFTS</small><h3>What do you ask next?</h3></div>
+        <button className="next-back" onClick={() => {
+          if (previousNode) back(trail.length - 2);
+          else { reset(); window.scrollTo({top: 0, behavior: 'smooth'}); }
+        }}>
+          <i>←</i>
+          <span>
+            <b>{previousNode ? 'Back to the previous answer' : 'Back to the beginning'}</b>
+            <small>{previousNode ? previousNode.question : 'Choose another first question'}</small>
+          </span>
+          <em>↖</em>
+        </button>
         {node.options.map((option, index) => {
           const targetDepth = getAdventureNode(option.next).depth;
           const direction = targetDepth > node.depth ? `Descend to ${depthLabels[targetDepth]}` : targetDepth < node.depth ? `Return to ${depthLabels[targetDepth]}` : `Explore ${depthLabels[targetDepth]}`;

@@ -19,6 +19,8 @@ remain inside the user's instance.
 | [Data lifecycle](08_DataLifecycle.md) | Planned retention, deletion, backup, restore, and sharing |
 | [Browser chat](09_Chat.md) | Implemented OIDC, tunnel, streaming, and transcript-capture path |
 | [Loreholm development stack](10_Development.md) | Local stack, model development, and tunnel overlay |
+| [Self-hosting](11_SelfHosting.md) | Host a private instance or operate the complete server plane |
+| [Organizations](12_Organizations.md) | Evaluate fit, plan a pilot, and understand operational and licensing responsibilities |
 | [Loreholm security model](13_SecurityModel.md) | Local and front-door/tunnel trust boundaries |
 
 The architecture page uses explicit **Implemented** and **Planned** labels.

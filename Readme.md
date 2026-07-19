@@ -42,7 +42,14 @@ Loreholm's remote trust boundary lets browsers and remote clients enter
 through the public front door, which authenticates them and reaches their
 containerized instance over a Headscale-managed Tailscale tunnel. ArcadeDB,
 Bifrost, and durable context remain local and are never exposed directly on
-the Tailnet. See [Loreholm networking](docs/02_Networking.md).
+the Tailnet. You can run only your private instance or operate the public
+server plane too; see [self-hosting](docs/11_SelfHosting.md) and
+[Loreholm networking](docs/02_Networking.md).
+
+Organizations can run a bounded pilot on their own infrastructure and may
+operate the complete front door. The current foundation is not yet a finished
+mission-critical knowledge platform; see
+[using Loreholm in an organization](docs/12_Organizations.md).
 
 ## Requirements
 

@@ -3,7 +3,9 @@
 Loreholm uses a public front door and a private tunnel to make a user-owned
 instance reachable without making its database, model service, or host machine
 public. The public service helps users reach their data; it does not become the
-place where that data lives.
+place where that data lives. The front door may be operated by Loreholm or
+self-hosted alongside the Headscale control plane; the same boundaries apply
+in either arrangement. See [self-hosting](11_SelfHosting.md).
 
 ## Topology
 

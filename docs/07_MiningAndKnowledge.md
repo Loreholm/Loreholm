@@ -3,6 +3,25 @@
 **Status:** Accepted design, not implemented in the foundation milestone. The
 current code stops after raw capture staging and quarantine.
 
+## The idea in plain language
+
+Loreholm does not use a vector store as a dumping ground for every source
+chunk. It first preserves the raw context, then gives specialized mining stages
+the job of deciding what is salient, which people or concepts are mentioned,
+what may be a claim, when it applies, and where its evidence lives.
+
+Only selected derived records receive embeddings. Those vector indexes help
+find candidate matches—for example, whether a mention may refer to an existing
+entity—but they do not decide graph truth. A graph-maintenance stage starts
+with richer material: source and time metadata, candidate claims, identity
+matches, existing schema, existing knowledge, and provenance.
+
+The final write is still validated deterministically. An LLM can propose an
+interpretation or help judge an ambiguous identity, but it cannot bypass schema,
+idempotency, evidence, lifecycle, or instance policy. Exact retries reuse prior
+work, and an independently repeated observation should strengthen the evidence
+for one claim instead of polluting the graph with cloned facts.
+
 ## Pipeline
 
 ```text

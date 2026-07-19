@@ -10,6 +10,42 @@ identity, evidence, and graph changes under one instance-owned policy. A public
 front door can reach the containerized instance through a Headscale-managed
 Tailscale tunnel while the data itself stays local.
 
+Both sides are self-hostable. Most users only need to operate the private
+instance, while operators who want control of authentication, TLS, and network
+coordination can also run the repository's server-plane stack. See
+[self-hosting](11_SelfHosting.md).
+
+## What makes this more than ordinary RAG
+
+Conventional retrieval-augmented generation often begins by splitting source
+material into chunks, embedding every chunk, and retrieving whichever vectors
+are closest to a question. That can be useful, but it makes the retrieval index
+carry responsibilities it was never designed to own: identity, duplicate
+control, time, relationships, evidence, and the difference between a repeated
+observation and a changed fact.
+
+Loreholm keeps the raw context first. Every capture arrives with stable
+identity, source, time, policy, and delivery metadata, so retries can be
+recognized without losing the original record. The planned pipeline admits
+useful material, interprets it into episodes and mentions, and derives only the
+vectors needed for tasks such as entity resolution and schema maintenance.
+Raw captures are not indiscriminately embedded.
+
+The vector regions are working indexes, not the final authority. A specialized
+instance-owned mining and graph-maintenance pipeline receives structured
+candidates plus their provenance, resolves them against stable entities,
+checks the relation schema, and attaches evidence before deterministic graph
+commit. Repeated support for the same claim adds evidence rather than requiring
+a duplicate fact, while uncertainty can remain explicit instead of being
+forced into a brittle link.
+
+That is the database upgrade Loreholm is pursuing: raw history remains
+inspectable, vector retrieval works over selected derived material, and the
+graph is built from rich metadata and evidence rather than isolated chunks.
+The capture and idempotent staging foundation works today. The derived vector,
+mining, graph-commit, and surfacing layers are accepted design and remain to be
+implemented.
+
 ## Status legend
 
 This document distinguishes running code from accepted design:
