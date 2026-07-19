@@ -17,7 +17,15 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 import httpx
 
-from .models import AdminStatus, CaptureEnvelope, ChatStreamRequest, InstancePolicy, ModelEndpointConfig
+from .models import (
+    AdminStatus,
+    CaptureEnvelope,
+    ChatStreamRequest,
+    InstancePolicy,
+    MiningRunView,
+    ModelEndpointConfig,
+)
+from .mining import BifrostExtractionGateway, MiningWorker
 from .router import get_capture_service, require_device_token, router
 from .salience import SalienceWorker
 from .service import ArcadeCaptureStore, CaptureService
@@ -60,6 +68,27 @@ def create_app() -> FastAPI:
         os.getenv("BIFROST_ADMIN_USERNAME", ""),
         os.getenv("BIFROST_ADMIN_PASSWORD", ""),
     )
+    mining_poll_seconds = max(1, int(os.getenv("LOREHOLM_V2_MINING_POLL_SECONDS", "5")))
+    extraction_gateway = BifrostExtractionGateway(bifrost_url, bifrost_auth)
+
+    def selected_endpoint() -> ModelEndpointConfig:
+        stored = service.store.get_config("model_endpoint") if service is not None else None
+        if stored is None:
+            return ModelEndpointConfig()
+        # Older endpoint records did not state whether inference crossed the
+        # instance boundary. Treat that ambiguity as remote until the operator
+        # saves an explicit choice in the field console.
+        if "processing_location" not in stored:
+            stored = {**stored, "processing_location": "remote"}
+        return ModelEndpointConfig.model_validate(stored)
+
+    mining_worker = MiningWorker(
+        store,
+        extraction_gateway,
+        worker_id=f"mining-{os.getpid()}-{secrets.token_hex(4)}",
+        policy=lambda: service.policy,
+        endpoint=selected_endpoint,
+    ) if store else None
 
     def bifrost_request(method: str, path: str, **kwargs) -> httpx.Response:
         return httpx.request(method, f"{bifrost_url}{path}", auth=bifrost_auth, **kwargs)
@@ -107,8 +136,10 @@ def create_app() -> FastAPI:
     async def lifespan(_: FastAPI):
         stop_salience = asyncio.Event()
         salience_task: asyncio.Task | None = None
+        mining_task: asyncio.Task | None = None
         if store is not None:
             store.bootstrap()
+            store.backfill_mining_work()
             service.load_policy()
             async def run_salience() -> None:
                 while not stop_salience.is_set():
@@ -121,13 +152,27 @@ def create_app() -> FastAPI:
                     except TimeoutError:
                         pass
 
+            async def run_mining() -> None:
+                while not stop_salience.is_set():
+                    try:
+                        await asyncio.to_thread(mining_worker.process_once)
+                    except Exception:
+                        logger.exception("mining worker sweep failed")
+                    try:
+                        await asyncio.wait_for(stop_salience.wait(), timeout=mining_poll_seconds)
+                    except TimeoutError:
+                        pass
+
             salience_task = asyncio.create_task(run_salience(), name="loreholm-v2-salience")
+            mining_task = asyncio.create_task(run_mining(), name="loreholm-v2-mining")
         try:
             yield
         finally:
             stop_salience.set()
             if salience_task is not None:
                 await salience_task
+            if mining_task is not None:
+                await mining_task
 
     app = FastAPI(title="Loreholm Instance", version="1.0.0", lifespan=lifespan)
 
@@ -180,6 +225,7 @@ def create_app() -> FastAPI:
             policy=service.policy,
             bifrost_ok=bifrost_ok,
             model_provider=provider,
+            model_endpoint=selected_endpoint(),
             vllm_ok=vllm_ok,
             bifrost_dashboard_url=bifrost_dashboard_url,
         )
@@ -187,6 +233,15 @@ def create_app() -> FastAPI:
     @app.put("/v2/admin/policy", response_model=InstancePolicy)
     def update_policy(policy: InstancePolicy, _: None = Depends(require_admin)) -> InstancePolicy:
         return service.update_policy(policy)
+
+    @app.get("/v2/admin/mining/runs", response_model=list[MiningRunView])
+    def mining_runs(
+        limit: int = 50, _: None = Depends(require_admin)
+    ) -> list[MiningRunView]:
+        bounded = max(1, min(limit, 250))
+        return [MiningRunView.model_validate(run.__dict__) for run in service.store.list_mining_runs(
+            limit=bounded
+        )]
 
     @app.put("/v2/admin/model")
     def configure_model(config: ModelEndpointConfig, _: None = Depends(require_admin)) -> dict:

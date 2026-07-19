@@ -203,6 +203,7 @@ class SalienceWorker:
                         raise RuntimeError("admission work has no source captures")
                     record = evaluate_salience(work, captures, config=self.config, now=claimed_at)
                     record = self.store.put_salience_record(record)
+                self.store.schedule_mining(record)
                 if not self.store.complete_work(work.work_id, self.worker_id, now=claimed_at):
                     raise RuntimeError("worker lost its lease before completion")
                 processed.append(record)

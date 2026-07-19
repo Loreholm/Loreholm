@@ -46,7 +46,7 @@ Example response:
       "remote_processing": "sanitized_remote"
     }
   },
-  "mining_status": "unavailable_not_implemented"
+  "mining_status": "paused"
 }
 ```
 
@@ -197,15 +197,17 @@ Work claims use fixed-duration, reclaimable leases. An expired lease can be
 claimed by another worker, while completion and retry require the recorded
 lease owner. The current store contract does not provide an active lease-renewal
 operation. A scheduled instance worker consumes ready items into durable
-`V2SalienceRecord` documents, then completes the work lease. There is no
-inference worker in this milestone, so admitted records stop before model
-processing.
+`V2SalienceRecord` documents, schedules admitted records onto independent
+`V2MiningWork` leases, then completes the admission lease. Paused mining leaves
+that durable work unclaimed. Active mining performs policy-gated structured
+extraction through Bifrost.
 
 The accepted Loreholm storage design later divides events, snapshots, external
 payloads, sessions, derived content, vectors, and graph knowledge into the
 appropriate ArcadeDB models. The session, work-item, and salience-record
 document types implement the admission and deterministic-gating slice of that
-design. `V2MiningRun` stores reusable stage output, compatible predecessor
+design. `V2MiningWork` provides recoverable inference claims, while
+`V2MiningRun` stores validated candidate output, compatible predecessor
 lineage, covered captures, and the captures eligible to become new evidence.
 The production event, snapshot, broader derived, vector, and graph layout
 remains open implementation work.

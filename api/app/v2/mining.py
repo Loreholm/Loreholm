@@ -3,9 +3,139 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from typing import Callable, Literal, Protocol
 
+import httpx
+from pydantic import BaseModel, ConfigDict, Field
+
+from .models import InstancePolicy, ModelEndpointConfig
 from .service import CaptureStore, MiningRun, SalienceRecord, _new_uuid7
+
+
+MINER_VERSION = "structured-extractor-v1"
+STAGE = "interpret_extract"
+
+
+class SourceReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    capture_id: str
+    start: int = Field(ge=0)
+    end: int = Field(gt=0)
+    quote: str = Field(min_length=1, max_length=2_000)
+
+
+class EpisodeCandidate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    summary: str = Field(min_length=1, max_length=2_000)
+    evidence: list[SourceReference] = Field(min_length=1, max_length=50)
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+
+
+class MentionCandidate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    surface: str = Field(min_length=1, max_length=500)
+    entity_type: str = Field(min_length=1, max_length=128)
+    context: str = Field(min_length=1, max_length=2_000)
+    evidence: SourceReference
+
+
+class ClaimCandidate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    subject: str = Field(min_length=1, max_length=500)
+    relation: str = Field(pattern=r"^[a-z][a-z0-9_]{1,127}$")
+    object: str = Field(min_length=1, max_length=2_000)
+    object_kind: Literal["entity", "literal"]
+    evidence: list[SourceReference] = Field(min_length=1, max_length=50)
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+
+
+class ExtractionOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    episodes: list[EpisodeCandidate] = Field(default_factory=list, max_length=100)
+    mentions: list[MentionCandidate] = Field(default_factory=list, max_length=500)
+    candidate_claims: list[ClaimCandidate] = Field(default_factory=list, max_length=250)
+
+    def source_references(self) -> list[SourceReference]:
+        references: list[SourceReference] = []
+        for episode in self.episodes:
+            references.extend(episode.evidence)
+        for mention in self.mentions:
+            references.append(mention.evidence)
+        for claim in self.candidate_claims:
+            references.extend(claim.evidence)
+        return references
+
+    def evidence_capture_ids(self) -> list[str]:
+        return list(dict.fromkeys(item.capture_id for item in self.source_references()))
+
+
+class ExtractionGateway(Protocol):
+    def extract(self, preparation: "MiningPreparation", endpoint: ModelEndpointConfig) -> dict: ...
+
+
+class BifrostExtractionGateway:
+    def __init__(self, base_url: str, auth: tuple[str, str]) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.auth = auth
+        self.timeout = httpx.Timeout(180.0, connect=5.0)
+
+    def extract(self, preparation: "MiningPreparation", endpoint: ModelEndpointConfig) -> dict:
+        schema = ExtractionOutput.model_json_schema()
+        prompt = {
+            "instructions": [
+                "Extract only new episodes, mentions, and candidate claims supported by delta captures.",
+                "Every evidence item must quote an exact delta substring and give its zero-based start/end offsets.",
+                "Context and prior output may disambiguate the delta but must not be cited as new evidence.",
+                "Do not invent missing temporal bounds; use null.",
+                "Return JSON matching the supplied schema and no prose.",
+            ],
+            "evidence_eligible_capture_ids": preparation.evidence_eligible_capture_ids,
+            "prior_output": preparation.prior_output,
+            "context_only": preparation.context,
+            "delta": preparation.delta,
+        }
+        response = httpx.post(
+            f"{self.base_url}/v1/chat/completions",
+            auth=self.auth,
+            timeout=self.timeout,
+            json={
+                "model": f"{endpoint.provider_name}/{endpoint.model_name}",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are Loreholm's conservative structured context extractor.",
+                    },
+                    {"role": "user", "content": json.dumps(prompt, separators=(",", ":"))},
+                ],
+                "stream": False,
+                "temperature": 0,
+                "chat_template_kwargs": {"enable_thinking": False},
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "loreholm_extraction",
+                        "strict": True,
+                        "schema": schema,
+                    },
+                },
+            },
+        )
+        if response.is_error:
+            raise RuntimeError(f"Bifrost extraction failed ({response.status_code}): {response.text[:500]}")
+        try:
+            body = response.json()
+            content = body["choices"][0]["message"]["content"]
+            return json.loads(content)
+        except (ValueError, KeyError, IndexError, TypeError) as exc:
+            raise RuntimeError("Bifrost returned an invalid structured extraction response") from exc
 
 
 def _fingerprint(value: object) -> str:
@@ -190,3 +320,137 @@ class MiningRunCoordinator:
             completed_at=completed_at,
         )
         return self.store.put_mining_run(run)
+
+
+class MiningWorker:
+    """Claim admitted scopes and persist validated, policy-gated extraction output."""
+
+    def __init__(
+        self,
+        store: CaptureStore,
+        gateway: ExtractionGateway,
+        *,
+        worker_id: str,
+        policy: Callable[[], InstancePolicy],
+        endpoint: Callable[[], ModelEndpointConfig],
+        lease_for: timedelta = timedelta(minutes=5),
+        retry_after: timedelta = timedelta(seconds=30),
+        batch_size: int = 2,
+    ) -> None:
+        self.store = store
+        self.gateway = gateway
+        self.worker_id = worker_id
+        self.policy = policy
+        self.endpoint = endpoint
+        self.lease_for = lease_for
+        self.retry_after = retry_after
+        self.batch_size = batch_size
+        self.coordinator = MiningRunCoordinator(store)
+
+    def _enforce_egress(
+        self, preparation: MiningPreparation, endpoint: ModelEndpointConfig, policy: InstancePolicy
+    ) -> None:
+        sent_ids = list(dict.fromkeys(
+            [item["capture_id"] for item in preparation.context + preparation.delta]
+        ))
+        denied: list[str] = []
+        for capture_id in sent_ids:
+            capture = self.store.get_capture(capture_id)
+            if capture is None:
+                denied.append(f"{capture_id}:missing")
+                continue
+            class_policy = policy.classes.get(capture.envelope.capture_class)
+            if class_policy is None or not class_policy.capture:
+                denied.append(f"{capture_id}:capture_disabled")
+                continue
+            mode = class_policy.remote_processing
+            if endpoint.processing_location == "remote" and mode != "unrestricted":
+                denied.append(f"{capture_id}:{mode}")
+        if denied:
+            raise PermissionError(
+                "extraction is blocked by current capture or model-egress policy: "
+                + ", ".join(denied)
+            )
+
+    def process_once(self, now: datetime | None = None) -> list[MiningRun]:
+        started_at = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+        policy = self.policy()
+        if policy.mining_status != "active":
+            return []
+        endpoint = self.endpoint()
+        claimed = self.store.claim_ready_mining_work(
+            self.worker_id,
+            now=started_at,
+            lease_for=self.lease_for,
+            limit=self.batch_size,
+        )
+        completed: list[MiningRun] = []
+        for work in claimed:
+            preparation: MiningPreparation | None = None
+            try:
+                salience = self.store.get_salience_record(work.admission_work_id)
+                if salience is None or salience.salience_id != work.salience_id:
+                    raise RuntimeError("mining work has no matching salience record")
+                config = {
+                    "output_schema": MINER_VERSION,
+                    "base_url": endpoint.base_url,
+                    "provider_name": endpoint.provider_name,
+                    "model_name": endpoint.model_name,
+                    "processing_location": endpoint.processing_location,
+                    "temperature": 0,
+                }
+                preparation = self.coordinator.prepare(
+                    salience,
+                    stage=STAGE,
+                    miner_version=MINER_VERSION,
+                    config=config,
+                )
+                if preparation.reusable_run is not None:
+                    run = preparation.reusable_run
+                else:
+                    self._enforce_egress(preparation, endpoint, policy)
+                    raw_output = self.gateway.extract(preparation, endpoint)
+                    output = ExtractionOutput.model_validate(raw_output)
+                    evidence_ids = output.evidence_capture_ids()
+                    invalid = sorted(
+                        set(evidence_ids) - set(preparation.evidence_eligible_capture_ids)
+                    )
+                    if invalid:
+                        raise ValueError(
+                            "extraction cited context-only or unknown captures: " + ", ".join(invalid)
+                        )
+                    delta_content = {
+                        item["capture_id"]: item["content"] for item in preparation.delta
+                    }
+                    for reference in output.source_references():
+                        content = delta_content[reference.capture_id]
+                        if reference.end > len(content) or reference.start >= reference.end:
+                            raise ValueError(
+                                f"extraction returned invalid source offsets for {reference.capture_id}"
+                            )
+                        if content[reference.start:reference.end] != reference.quote:
+                            raise ValueError(
+                                f"extraction source quote does not match {reference.capture_id}"
+                            )
+                    run = self.coordinator.record_success(
+                        preparation,
+                        output=output.model_dump(mode="json"),
+                        evidence_capture_ids=evidence_ids,
+                        now=started_at,
+                    )
+                if not self.store.complete_mining_work(
+                    work.mining_work_id, self.worker_id, now=started_at
+                ):
+                    raise RuntimeError("worker lost its mining lease before completion")
+                completed.append(run)
+            except Exception as exc:
+                if preparation is not None and not isinstance(exc, PermissionError):
+                    self.coordinator.record_failure(preparation, error=str(exc), now=started_at)
+                self.store.retry_mining_work(
+                    work.mining_work_id,
+                    self.worker_id,
+                    now=started_at,
+                    retry_after=self.retry_after,
+                    error=str(exc),
+                )
+        return completed

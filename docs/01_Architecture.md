@@ -81,7 +81,10 @@ session assembly + admission work      [implemented]
 mechanical trim + salience record      [implemented]
     |
     v
-interpret -> mine -> resolve           [planned]
+interpret + candidate extraction       [implemented]
+    |
+    v
+resolve                                [planned]
     |
     v
 knowledge graph + provenance           [planned]
@@ -137,21 +140,26 @@ Admission items have generation-numbered identities and fixed-duration leases.
 Workers can reclaim expired leases, complete work they currently own, or return
 owned work to the pending state with a delayed retry. The instance worker now
 consumes ready items, builds a bounded derived view without changing raw
-captures, and stores an idempotent admitted-or-skipped salience record. Nothing
-yet sends admitted material to inference or the graph.
+captures, and stores an idempotent admitted-or-skipped salience record. Admitted
+records receive separate durable mining work. When mining is active, the
+extractor sends policy-permitted bounded input through Bifrost and persists
+strictly validated episode, mention, and candidate-claim output. It does not
+write the graph.
 
 ### Policy
 
 Authenticated clients read instance policy from `GET /v2/policy`. Policy
 advertises the supported contract range, capture-class controls, remote
-processing mode, and the sealed `unavailable_not_implemented` mining status.
+processing mode, and an `active` or `paused` mining status.
 Administrators can update the persisted capture-class policy through the local
 Loreholm dashboard API. The instance enforces disabled capture classes before
 storage.
 
 The future embedded spine will cache and enforce the same policy before upload.
-That client-side spine and its offline queue are not implemented yet, and
-remote-processing policy still awaits enforcement by the future miner.
+That client-side spine and its offline queue are not implemented yet. The
+extractor enforces processing location and remote-processing policy before
+model egress; sanitizer and derived-only transformations remain unimplemented
+and therefore fail closed for remote extraction.
 
 ### Browser chat capture
 
@@ -251,8 +259,9 @@ graph commit must later use that lineage so a new successful generation can
 supersede covered derived output without replacing stable accreted identities
 or destroying independent evidence.
 
-No model-backed interpreter, extractor, entity-resolution worker, graph-commit
-worker, or query stage is implemented in the current foundation milestone.
+The structured interpreter/extractor is implemented. No entity-resolution
+worker, graph-commit worker, or query stage is implemented in the current
+foundation milestone.
 
 See [mining and knowledge](07_MiningAndKnowledge.md) for the accepted identity,
 provenance, schema, vector, and surfacing decisions, and
@@ -270,13 +279,17 @@ provenance, schema, vector, and surfacing decisions, and
 | Tailnet endpoint shim | Implemented for chat | Allow-listed application ingress on port 8081 |
 | Surface adapters | Planned | Convert IDE, browser, mobile, and other native context into captures |
 | Embedded spine | Planned | Identity, policy enforcement, redaction, ordering, and offline delivery |
-| Interpreter/miner | Planned | Turn raw captures into episodes, mentions, entities, claims, and evidence |
+| Structured extractor | Implemented | Turn admitted captures into versioned episode, mention, and candidate-claim output |
+| Resolver and graph miner | Planned | Resolve entities and commit claims with first-class evidence |
 | Graph query/surfacing | Planned | Retrieve mined knowledge for users and assistants |
 
 ## Source map
 
 - `api/app/v2/models.py` — capture, policy, model, and chat contracts
 - `api/app/v2/service.py` — capture ingestion and ArcadeDB persistence
+- `api/app/v2/salience.py` — bounded mechanical views and admission decisions
+- `api/app/v2/mining.py` — incremental preparation, Bifrost extraction, policy
+  enforcement, validation, and mining-run persistence
 - `api/app/v2/app.py` — Loreholm application, administration, and chat capture
 - `deploy/docker-compose.v2.yml` — private instance deployment
 - `deploy/docker-compose.v2.remote.yml` — retained tunnel topology, currently wired for chat

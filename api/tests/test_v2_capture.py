@@ -1,10 +1,11 @@
+import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
 from pydantic import ValidationError
 
-from app.v2.mining import MiningRunCoordinator
-from app.v2.models import CaptureEnvelope, InstancePolicy
+from app.v2.mining import BifrostExtractionGateway, MiningRunCoordinator, MiningWorker
+from app.v2.models import CaptureEnvelope, InstancePolicy, ModelEndpointConfig
 from app.v2.salience import SalienceConfig, SalienceWorker, mechanically_trim
 from app.v2.service import ArcadeCaptureStore, CaptureService, MemoryCaptureStore, _epoch_millis
 
@@ -98,23 +99,22 @@ def test_existing_capture_remains_a_duplicate_after_policy_is_disabled() -> None
     assert len(store.captures) == 1
 
 
-def test_mining_is_unavailable_until_a_worker_exists() -> None:
-    assert InstancePolicy().mining_status == "unavailable_not_implemented"
-    with pytest.raises(ValidationError, match="unavailable_not_implemented"):
-        InstancePolicy.model_validate({"mining_status": "active"})
+def test_mining_is_paused_by_default_and_can_be_activated() -> None:
+    assert InstancePolicy().mining_status == "paused"
+    assert InstancePolicy.model_validate({"mining_status": "active"}).mining_status == "active"
 
 
-def test_stored_active_mining_policy_is_migrated_closed() -> None:
+def test_legacy_unavailable_mining_policy_is_migrated_to_paused() -> None:
     store = MemoryCaptureStore()
     stored = InstancePolicy().model_dump(mode="json")
-    stored["mining_status"] = "active"
+    stored["mining_status"] = "unavailable_not_implemented"
     store.set_config("policy", stored)
     service = CaptureService(store, InstancePolicy())
 
     service.load_policy()
 
-    assert service.policy.mining_status == "unavailable_not_implemented"
-    assert store.get_config("policy")["mining_status"] == "unavailable_not_implemented"
+    assert service.policy.mining_status == "paused"
+    assert store.get_config("policy")["mining_status"] == "paused"
 
 
 def test_transcript_session_assembles_out_of_order_and_waits_for_quiescence() -> None:
@@ -491,3 +491,244 @@ def test_failed_mining_run_can_retry_without_hiding_successful_output() -> None:
         miner_version="miner-v1",
         config={"schema": 1},
     ).reusable_run == succeeded
+
+
+class StubExtractionGateway:
+    def __init__(self, outputs: list[dict]) -> None:
+        self.outputs = outputs
+        self.calls = []
+
+    def extract(self, preparation, endpoint) -> dict:
+        self.calls.append((preparation, endpoint))
+        output = self.outputs[min(len(self.calls) - 1, len(self.outputs) - 1)]
+        if isinstance(output, Exception):
+            raise output
+        return output
+
+
+def admitted_mining_fixture(policy: InstancePolicy | None = None):
+    store = MemoryCaptureStore()
+    selected_policy = policy or InstancePolicy()
+    service = CaptureService(
+        store,
+        selected_policy,
+        session_quiescence=timedelta(seconds=1),
+    )
+    now = datetime(2026, 7, 10, 12, tzinfo=timezone.utc)
+    capture = envelope(
+        payload={"role": "user", "content": "We decided to keep all deployment data local."}
+    )
+    service.ingest(capture, now)
+    SalienceWorker(store, "salience-a").process_once(now + timedelta(seconds=1))
+    return store, selected_policy, capture, now + timedelta(seconds=1)
+
+
+def extraction_for(capture_id: str) -> dict:
+    quote = "We decided to keep all deployment data local."
+    evidence = {"capture_id": capture_id, "start": 0, "end": len(quote), "quote": quote}
+    return {
+        "episodes": [{
+            "summary": "A local deployment decision was made.",
+            "evidence": [evidence],
+            "valid_from": None,
+            "valid_to": None,
+        }],
+        "mentions": [{
+            "surface": "deployment data",
+            "entity_type": "data_collection",
+            "context": "keep all deployment data local",
+            "evidence": evidence,
+        }],
+        "candidate_claims": [{
+            "subject": "deployment data",
+            "relation": "storage_location",
+            "object": "local",
+            "object_kind": "literal",
+            "evidence": [evidence],
+            "valid_from": None,
+            "valid_to": None,
+        }],
+    }
+
+
+def test_paused_mining_leaves_durable_work_unclaimed() -> None:
+    store, policy, capture, now = admitted_mining_fixture()
+    gateway = StubExtractionGateway([extraction_for(capture.capture_id)])
+    worker = MiningWorker(
+        store,
+        gateway,
+        worker_id="mining-a",
+        policy=lambda: policy,
+        endpoint=lambda: ModelEndpointConfig(),
+    )
+
+    assert worker.process_once(now) == []
+    assert gateway.calls == []
+    assert store.mining_work_items[0].state == "pending"
+
+
+def test_startup_backfills_mining_work_for_existing_admission() -> None:
+    store, _, _, _ = admitted_mining_fixture()
+    store._mining_work.clear()
+
+    assert store.backfill_mining_work() == 1
+    assert len(store.mining_work_items) == 1
+    assert store.backfill_mining_work() == 0
+
+
+def test_active_local_mining_persists_strict_candidate_output() -> None:
+    policy = InstancePolicy(mining_status="active")
+    store, policy, capture, now = admitted_mining_fixture(policy)
+    gateway = StubExtractionGateway([extraction_for(capture.capture_id)])
+    worker = MiningWorker(
+        store,
+        gateway,
+        worker_id="mining-a",
+        policy=lambda: policy,
+        endpoint=lambda: ModelEndpointConfig(processing_location="local"),
+    )
+
+    runs = worker.process_once(now)
+
+    assert len(runs) == 1
+    assert runs[0].status == "succeeded"
+    assert runs[0].evidence_capture_ids == [capture.capture_id]
+    assert runs[0].output["candidate_claims"][0]["relation"] == "storage_location"
+    assert store.mining_work_items[0].state == "completed"
+    assert len(gateway.calls) == 1
+    assert store.list_mining_runs(limit=1) == runs
+
+
+def test_remote_mining_fails_closed_without_unrestricted_policy() -> None:
+    policy = InstancePolicy(mining_status="active")
+    store, policy, capture, now = admitted_mining_fixture(policy)
+    gateway = StubExtractionGateway([extraction_for(capture.capture_id)])
+    worker = MiningWorker(
+        store,
+        gateway,
+        worker_id="mining-a",
+        policy=lambda: policy,
+        endpoint=lambda: ModelEndpointConfig(processing_location="remote"),
+    )
+
+    assert worker.process_once(now) == []
+    assert gateway.calls == []
+    assert store.mining_work_items[0].state == "pending"
+    assert "sanitized_remote" in store.mining_work_items[0].last_error
+
+
+def test_local_mining_rechecks_disabled_capture_class() -> None:
+    policy = InstancePolicy(mining_status="active")
+    store, policy, capture, now = admitted_mining_fixture(policy)
+    policy.classes["transcript.message"].capture = False
+    gateway = StubExtractionGateway([extraction_for(capture.capture_id)])
+    worker = MiningWorker(
+        store,
+        gateway,
+        worker_id="mining-a",
+        policy=lambda: policy,
+        endpoint=lambda: ModelEndpointConfig(processing_location="local"),
+    )
+
+    assert worker.process_once(now) == []
+    assert gateway.calls == []
+    assert "capture_disabled" in store.mining_work_items[0].last_error
+
+
+def test_malformed_extraction_is_recorded_and_retried() -> None:
+    policy = InstancePolicy(mining_status="active")
+    store, policy, capture, now = admitted_mining_fixture(policy)
+    invalid = extraction_for(capture.capture_id)
+    invalid["candidate_claims"][0]["unexpected"] = True
+    gateway = StubExtractionGateway([invalid, extraction_for(capture.capture_id)])
+    worker = MiningWorker(
+        store,
+        gateway,
+        worker_id="mining-a",
+        policy=lambda: policy,
+        endpoint=lambda: ModelEndpointConfig(),
+        retry_after=timedelta(seconds=5),
+    )
+
+    assert worker.process_once(now) == []
+    assert store.mining_runs[0].status == "failed"
+    assert store.mining_work_items[0].state == "pending"
+
+    runs = worker.process_once(now + timedelta(seconds=5))
+
+    assert len(runs) == 1
+    assert runs[0].status == "succeeded"
+    assert runs[0].run_id == store.mining_runs[0].run_id
+    assert len(gateway.calls) == 2
+
+
+def test_extraction_cannot_cite_context_only_capture() -> None:
+    policy = InstancePolicy(mining_status="active")
+    store, policy, capture, now = admitted_mining_fixture(policy)
+    invalid = extraction_for("018f5e2a-1234-7abc-8def-1234567890ff")
+    gateway = StubExtractionGateway([invalid])
+    worker = MiningWorker(
+        store,
+        gateway,
+        worker_id="mining-a",
+        policy=lambda: policy,
+        endpoint=lambda: ModelEndpointConfig(),
+    )
+
+    assert worker.process_once(now) == []
+    assert "context-only or unknown" in store.mining_work_items[0].last_error
+
+
+def test_extraction_source_span_must_match_delta_text() -> None:
+    policy = InstancePolicy(mining_status="active")
+    store, policy, capture, now = admitted_mining_fixture(policy)
+    invalid = extraction_for(capture.capture_id)
+    invalid["episodes"][0]["evidence"][0]["quote"] = "invented quote"
+    gateway = StubExtractionGateway([invalid])
+    worker = MiningWorker(
+        store,
+        gateway,
+        worker_id="mining-a",
+        policy=lambda: policy,
+        endpoint=lambda: ModelEndpointConfig(),
+    )
+
+    assert worker.process_once(now) == []
+    assert "source quote does not match" in store.mining_work_items[0].last_error
+
+
+def test_bifrost_gateway_requests_strict_json_schema(monkeypatch) -> None:
+    store, _, capture, _ = admitted_mining_fixture()
+    salience = store.salience_records[0]
+    preparation = MiningRunCoordinator(store).prepare(
+        salience,
+        stage="interpret_extract",
+        miner_version="structured-extractor-v1",
+        config={"temperature": 0},
+    )
+    seen = {}
+
+    class Response:
+        is_error = False
+
+        def json(self):
+            return {"choices": [{"message": {
+                "content": json.dumps(extraction_for(capture.capture_id))
+            }}]}
+
+    def fake_post(url, **kwargs):
+        seen["url"] = url
+        seen["payload"] = kwargs["json"]
+        return Response()
+
+    monkeypatch.setattr("app.v2.mining.httpx.post", fake_post)
+
+    output = BifrostExtractionGateway("http://bifrost:8080", ("user", "pass")).extract(
+        preparation,
+        ModelEndpointConfig(),
+    )
+
+    assert output["episodes"][0]["evidence"][0]["capture_id"] == capture.capture_id
+    assert seen["url"] == "http://bifrost:8080/v1/chat/completions"
+    assert seen["payload"]["response_format"]["type"] == "json_schema"
+    assert seen["payload"]["response_format"]["json_schema"]["strict"] is True

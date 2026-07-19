@@ -32,7 +32,7 @@ export const documents = [
     id: 'architecture', file: '01_Architecture.md', numeral: 'II', title: 'Architecture',
     short: 'See the whole machine before opening it.', region: 'threshold', status: 'mixed', depth: 1,
     time: '8 min', color: '#d9f99d', raw: architecture,
-    summary: 'How passive capture, durable admission, the private network, and the planned knowledge-building pipeline fit together.',
+    summary: 'How passive capture, durable extraction, the private network, and the planned graph-building pipeline fit together.',
   },
   {
     id: 'networking', file: '02_Networking.md', numeral: 'III', title: 'Private Network',
@@ -44,7 +44,7 @@ export const documents = [
     id: 'capture', file: '03_CaptureAPI.md', numeral: 'IV', title: 'Capture Contract',
     short: 'Learn the language spoken by every observer.', region: 'instance', status: 'implemented', depth: 2,
     time: '10 min', color: '#f4b860', raw: capture,
-    summary: 'Envelope fields, policy blocking, receipts, retries, quarantine, session assembly, and admission work.',
+    summary: 'Envelope fields, policy blocking, receipts, retries, quarantine, session assembly, admission, and mining work.',
   },
   {
     id: 'operations', file: '04_InstanceOperations.md', numeral: 'V', title: 'Instance Operations',
@@ -80,7 +80,7 @@ export const documents = [
     id: 'mining', file: '07_MiningAndKnowledge.md', numeral: 'X', title: 'Mining & Knowledge',
     short: 'Descend into identity, evidence, and time.', region: 'depths', status: 'mixed', depth: 5,
     time: '14 min', color: '#e87951', raw: mining,
-    summary: 'Implemented session admission, salience, and incremental run lineage plus planned inference, identity, provenance, schema, and surfacing.',
+    summary: 'Implemented admission, salience, policy-gated extraction, and run lineage plus planned identity, graph provenance, schema, and surfacing.',
   },
   {
     id: 'lifecycle', file: '08_DataLifecycle.md', numeral: 'XI', title: 'Data Lifecycle',
@@ -276,7 +276,7 @@ export const adventureNodes = {
     depth: 4, eyebrow: 'The same delivery, only once', question: 'How are exact retries recognized today?',
     answer: [
       'Every capture receives a stable UUIDv7 `capture_id` before delivery. The instance stores that identifier under a unique index, so retrying the same envelope returns `duplicate` and creates no second record.',
-      'A client must reuse the original ID after a timeout rather than minting a new one. This transport-level idempotency works today. Mining-run identity and stage, input, miner, and configuration fingerprints are also implemented, so a future inference worker can reuse an identical successful result without making the model call again.',
+      'A client must reuse the original ID after a timeout rather than minting a new one. This transport-level idempotency works today. The extraction worker also uses stage, input, miner, and configuration fingerprints so an identical successful result is reused without making another model call.',
     ],
     status: 'mixed', docs: ['capture', 'mining'], scene: 'offline',
     options: [
@@ -756,8 +756,8 @@ export const adventureNodes = {
   localonly: {
     depth: 5, eyebrow: 'No silent road to the cloud', question: 'How is local-only model processing enforced?',
     answer: [
-      'Instance policy records a remote-processing mode for each capture class, including `local_only`. The accepted design requires the embedded spine to enforce that choice before upload and the miner to enforce it again before any representation reaches a model endpoint.',
-      'All permitted model calls must travel through Bifrost, and there is no direct-provider fallback. The policy value and Bifrost boundary exist today, but mining enforcement and the reusable spine do not, so local-only is not yet an end-to-end implemented guarantee for future mining.',
+      'Instance policy records a remote-processing mode for each capture class, including `local_only`. The structured extractor now checks current capture policy, the operator-declared processing location, and every source class before it sends bounded input through Bifrost.',
+      'A remote endpoint receives raw extraction input only when every involved class is `unrestricted`; `local_only`, `sanitized_remote`, and `derived_only` fail closed today. The reusable client spine is still planned, so pre-upload enforcement is not yet universal.',
     ],
     status: 'mixed', docs: ['policy', 'security', 'clients'], scene: 'privacy',
     options: [
@@ -769,10 +769,10 @@ export const adventureNodes = {
   minerrole: {
     depth: 5, eyebrow: 'Models with bounded assignments', question: 'What does the miner need a model for?',
     answer: [
-      'Planned model-assisted work includes extracting mentions and candidate claims, interpreting episodes, judging ambiguous entity matches, summarizing admitted context, and proposing or reviewing schema changes. Those jobs are separate roles with capability tiers, even when an operator maps several roles to the same model.',
-      'Mechanical trimming, salience admission, schema validation, idempotency checks, and final graph commit do not become optional just because a model is involved. Every call must pass through Bifrost under instance-owned egress and budget policy, and the mining roles themselves are not implemented yet.',
+      'The first model-backed role now extracts versioned episodes, mentions, temporal signals, and candidate claims from admitted context. Ambiguous entity judging, summaries, schema maintenance, and tier-to-model assignment remain planned roles.',
+      'Mechanical trimming, salience admission, strict output validation, incremental idempotency, and the evidence-eligible capture boundary remain deterministic. Every extraction call passes through Bifrost; graph commit remains sealed.',
     ],
-    status: 'planned', docs: ['policy', 'mining'], scene: 'evidence',
+    status: 'mixed', docs: ['policy', 'mining'], scene: 'evidence',
     options: [
       {next: 'salience'},
       {next: 'models'},
@@ -783,7 +783,7 @@ export const adventureNodes = {
     depth: 5, eyebrow: 'The laws written on the instance', question: 'What is on the exact policy surface?',
     answer: [
       'The implemented instance policy advertises its revision, supported capture-contract range, known capture classes, whether each class may be captured, each class’s remote-processing mode, and the mining status. Authenticated clients read it from `GET /v2/policy`, while administrators update persisted policy through `PUT /v2/admin/policy` or the local dashboard.',
-      'The current service stores and advertises these decisions and rejects a disabled capture class before storage. The future embedded spine must enforce that rule before upload, while the future inference worker must enforce remote-processing policy before egress. Mining status remains sealed until model-assisted processing and graph commit exist.',
+      'The service rejects disabled classes before storage, and the extraction worker rechecks capture and remote-processing policy before model egress. Mining defaults to paused and can be activated independently of capture; the future embedded spine must still enforce policy before upload.',
     ],
     status: 'mixed', docs: ['policy', 'capture'], scene: 'builder',
     options: [
@@ -809,9 +809,9 @@ export const adventureNodes = {
     depth: 3, eyebrow: 'From history to meaning', question: 'How does saved history become connected knowledge?',
     answer: [
       'Saved history preserves what happened. It does not automatically know that two names mean the same person, that a statement replaced an older one, or which source supports a conclusion.',
-      'The planned knowledge builder selects useful context, connects people and ideas, records change over time, and keeps the trail back to the source.',
+      'Loreholm now selects admitted context and extracts source-linked episode, mention, and candidate-claim records. Connecting identities, committing time-aware claims, and surfacing grounded answers remain planned.',
     ],
-    status: 'planned', docs: ['mining', 'architecture'], scene: 'evidence',
+    status: 'mixed', docs: ['mining', 'architecture'], scene: 'evidence',
     options: [
       {next: 'mining'},
       {next: 'identity'},
@@ -821,10 +821,10 @@ export const adventureNodes = {
   mining: {
     depth: 4, eyebrow: 'The quiet librarian', question: 'How does the knowledge-building pipeline commit graph knowledge?',
     answer: [
-      'Only the instance miner is allowed to make that commitment. It interprets captures, checks salience, resolves identities, forms claims and episodes, attaches evidence, and commits an idempotent result.',
-      'This pipeline is accepted Loreholm design and remains planned. Clients stay deliberately less powerful: they observe and deliver, but never decide graph truth.',
+      'The instance now admits context, claims durable mining work, and asks a model through Bifrost for strictly validated episodes, mentions, temporal signals, and candidate claims. Those versioned candidates cite exact spans from eligible new captures and are inspectable through the administrator mining-runs endpoint.',
+      'Entity resolution, schema-backed validation, first-class Evidence records, and graph commit remain planned. Clients stay deliberately less powerful: they observe and deliver, but never decide graph truth.',
     ],
-    status: 'planned', docs: ['mining', 'architecture'], scene: 'evidence',
+    status: 'mixed', docs: ['mining', 'architecture'], scene: 'evidence',
     options: [
       {next: 'identity'},
       {next: 'evidence'},
@@ -848,9 +848,9 @@ export const adventureNodes = {
     depth: 4, eyebrow: 'Trust, but inspect', question: 'How is a graph claim tied back to inspectable evidence?',
     answer: [
       'Claims link many-to-many with first-class Evidence records. Evidence points back to the capture, source span, mining lineage, and lifecycle state that justify the claim.',
-      'Surfacing should prefer grounded claims and make the source inspectable. The evidence model is accepted; the mining and query experience that uses it is still planned.',
+      'Structured extraction now validates that candidate citations belong to the new evidence-eligible capture delta. First-class graph Evidence records and the query experience that uses them are still planned.',
     ],
-    status: 'planned', docs: ['mining', 'lifecycle', 'architecture'], scene: 'evidence',
+    status: 'mixed', docs: ['mining', 'lifecycle', 'architecture'], scene: 'evidence',
     options: [
       {next: 'deletion'},
       {next: 'recall'},
@@ -925,8 +925,8 @@ export const adventureNodes = {
   operations: {
     depth: 3, eyebrow: 'Raise the world', question: 'What services and operations exist in the current foundation?',
     answer: [
-      'The current foundation installs a containerized Loreholm instance, generates separated credentials, exposes the authenticated instance boundary through the tunnel shim, persists captures in ArcadeDB, assembles transcript sessions, queues quiet sessions and explicit pushes durably, records deterministic salience decisions, and supports browser-chat capture.',
-      'Model-assisted interpretation, the reusable client spine, retention coordinator, graph commit, and evidence-backed recall experience remain clearly marked planned work.',
+      'The current foundation installs a containerized Loreholm instance, generates separated credentials, exposes the authenticated instance boundary through the tunnel shim, persists captures in ArcadeDB, assembles transcript sessions, records deterministic salience, and runs policy-gated structured extraction through Bifrost.',
+      'Entity resolution, the reusable client spine, retention coordinator, graph commit, and evidence-backed recall experience remain clearly marked planned work.',
     ],
     status: 'implemented', docs: ['operations', 'development', 'architecture'], scene: 'builder',
     options: [

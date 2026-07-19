@@ -221,8 +221,8 @@ export const visualizations = {
   ], 'The aim is an auditable memory, not an unquestionable oracle.'),
 
   today: stack('The project today', [
-    item('Planned', 'Mining, graph-backed recall, lifecycle, reusable spine'),
-    item('Partly available', 'Policy surface, passive path, model boundary'),
+    item('Planned', 'Entity resolution, graph-backed recall, lifecycle, reusable spine'),
+    item('Partly available', 'Policy surface, structured extraction, model boundary'),
     item('Works today', 'Private instance, capture, tunnel, chat, operations'),
   ], 'The foundation is executable; the deeper knowledge experience remains under construction.'),
 
@@ -300,7 +300,7 @@ export const visualizations = {
 
   securitygaps: compare('Foundation versus unfinished guarantees',
     side('Implemented boundary', ['Authenticated capture and administration', 'Private tunnel and local service isolation', 'Separated application credentials']),
-    side('Still incomplete', ['End-to-end policy and revocation', 'Mining egress, retention, and deletion', 'Coordinated backup and sharing']),
+    side('Still incomplete', ['Client-side policy and revocation', 'Budgets, retention, and deletion', 'Coordinated backup and sharing']),
     'A containerized private foundation is not yet a complete production security program.'),
 
   egress: flow('Every model call crosses one policy seam', [
@@ -308,25 +308,25 @@ export const visualizations = {
     item('Instance policy', 'Local-only or explicitly remote-capable?'),
     item('Bifrost route', 'No direct-provider fallback'),
     item('Chosen model', 'Local endpoint or permitted remote endpoint'),
-  ], 'The boundary exists today; complete mining enforcement and budgets remain unfinished.'),
+  ], 'Structured extraction enforces this path today; budgets and safe remote transformations remain unfinished.'),
 
   localonly: boundary('Two gates and no hidden cloud road', [
     item('Client-side gate', 'The future spine blocks disallowed upload'),
-    item('Instance-side gate', 'The future miner checks again before egress'),
+    item('Instance-side gate', 'The extractor rechecks every source before egress'),
     item('Bifrost only', 'Permitted calls have no direct-provider fallback'),
-  ], 'Policy and routing exist; end-to-end enforcement awaits the spine and miner.'),
+  ], 'Instance-side mining enforcement works; end-to-end enforcement still awaits the spine.'),
 
   minerrole: compare('Models advise; deterministic rules commit',
-    side('Model-assisted', ['Extract mentions and candidate claims', 'Interpret episodes and ambiguous identity', 'Summarize and propose schema changes']),
+    side('Model-assisted', ['Extract mentions and candidate claims now', 'Ambiguous identity remains planned', 'Summaries and schema proposals remain planned']),
     side('Mechanical', ['Trim and salience admission', 'Fingerprint and idempotency checks', 'Schema validation and final commit']),
     'A model has a bounded assignment—not permission to bypass the pipeline.'),
 
   policysurface: stack('The policy clients can read', [
-    item('Mining status', 'Sealed unavailable until a worker exists'),
+    item('Mining status', 'Paused by default or explicitly active'),
     item('Per-class decision', 'Capture allowed and remote-processing mode'),
     item('Known classes', 'Supported context categories'),
     item('Contract range + revision', 'Which envelope versions and policy generation apply'),
-  ], 'The instance rejects disabled classes today; future clients and miners must enforce earlier too.'),
+  ], 'The instance and extractor enforce today; future clients must enforce before upload too.'),
 
   deletion: flow('Deletion follows the evidence graph', [
     item('Delete source', 'Begin a recoverable grace period'),
@@ -396,8 +396,8 @@ export const visualizations = {
   ], 'A quarantined receipt preserves the observation until explicit support exists.'),
 
   operations: compare('What the foundation runs today',
-    side('Operational now', ['Containerized private instance', 'Separated credentials and tunnel shim', 'Capture, transcript assembly, durable queues, chat']),
-    side('Still planned', ['Knowledge miner', 'Reusable embedded spine', 'Retention and coordinated recovery', 'Evidence-backed recall']),
+    side('Operational now', ['Containerized private instance', 'Separated credentials and tunnel shim', 'Capture, durable queues, structured extraction, chat']),
+    side('Still planned', ['Resolver and graph miner', 'Reusable embedded spine', 'Retention and coordinated recovery', 'Evidence-backed recall']),
     'The current system is a working capture foundation, not yet the complete memory experience.'),
 };
 

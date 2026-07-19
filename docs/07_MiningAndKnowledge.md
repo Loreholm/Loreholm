@@ -2,9 +2,10 @@
 
 **Status:** Accepted design, partially implemented. Raw capture staging,
 quarantine, durable session assembly, quiescence, immediate push admission, and
-the leased work queue exist. Mechanical trimming, scheduled work consumption,
-and durable salience decisions also exist. Inference, graph commit, and
-surfacing do not.
+the leased admission and mining work queues exist. Mechanical trimming,
+scheduled work consumption, durable salience decisions, and policy-gated
+structured extraction through Bifrost also exist. Entity resolution, graph
+commit, and surfacing do not.
 
 ## The idea in plain language
 
@@ -62,8 +63,10 @@ The implemented admission and salience boundary:
 - makes transcript-session work available after a configurable quiet period;
 - makes explicit-push work available immediately;
 - lets the scheduled instance worker claim ready or expired work with a
-  fixed-duration lease; and
-- persists one idempotent salience record before completing each work item.
+  fixed-duration lease;
+- persists one idempotent salience record before completing each admission item;
+- schedules admitted records onto a separate, recoverable mining lease; and
+- backfills mining work for admitted records created by older releases.
 
 A periodic straggler sweep and slower independent schema-maintenance cadence
 remain planned.
@@ -71,7 +74,30 @@ remain planned.
 The durable unit for transcript processing is a session, not an individual
 message job. Messages remain immutable captures; the salience worker reads each
 generation in normalized-time order with capture identity as tie-breaker. The
-planned interpreter will consume admitted derived records.
+implemented `structured-extractor-v1` worker consumes admitted derived records
+when mining is active.
+
+## Structured extraction
+
+The first model-backed stage sends bounded, policy-permitted input only through
+Bifrost. It requests strict JSON for episodes, mentions, temporal bounds, and
+candidate claims. Every candidate carries an exact source quote with character
+offsets. Pydantic validation rejects extra or malformed fields, every cited
+capture ID must belong to the incremental delta rather than the context-only
+tail, and the worker verifies the quote against that bounded delta text. Valid
+output is stored in `V2MiningRun`; malformed output and
+gateway failures are recorded and the owned mining work returns for delayed
+retry. Exact successful work is reused without another model call.
+
+Administrators can inspect the newest candidate or failure records through
+`GET /v2/admin/mining/runs?limit=50`. This local authenticated endpoint exposes
+versioned extraction output and lineage; it is not a graph query or recall API.
+
+The configured endpoint declares whether processing is local to the instance
+or remote. Local extraction still honors a currently disabled capture class.
+Remote extraction currently permits raw input only for classes set to
+`unrestricted`; `local_only`, `sanitized_remote`, and `derived_only` fail
+closed because sanitizer and local-derived transformations do not exist yet.
 
 ## Salience gate
 
@@ -247,7 +273,7 @@ A practical sequence is:
 3. mechanical trim and salience records — implemented;
 4. mining-run identity, compatible predecessor selection, reusable output
    store, incremental delta, and context-only evidence boundary — implemented;
-5. mention and candidate-claim extraction through Bifrost;
+5. mention and candidate-claim extraction through Bifrost — implemented;
 6. vector regions and entity resolution;
 7. schema-backed deterministic claim commit and Evidence records;
 8. maintenance notices, re-mining, and scoped supersession; and

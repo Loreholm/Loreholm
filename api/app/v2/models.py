@@ -89,11 +89,7 @@ class InstancePolicy(BaseModel):
         "push.document": CaptureClassPolicy(),
         "push.screen": CaptureClassPolicy(),
     })
-    # Mining is deliberately not user-activatable until a worker exists that
-    # consumes the policy. Keeping this as a single-value enum makes both old
-    # clients and the dashboard fail closed instead of presenting inert state
-    # as an operational control.
-    mining_status: Literal["unavailable_not_implemented"] = "unavailable_not_implemented"
+    mining_status: Literal["active", "paused"] = "paused"
 
 
 class ModelEndpointConfig(BaseModel):
@@ -101,6 +97,7 @@ class ModelEndpointConfig(BaseModel):
     model_name: str = Field(default="loreholm-local", min_length=1, max_length=256)
     provider_name: str = Field(default="vllm-local", pattern=r"^[a-z][a-z0-9-]{2,63}$")
     allow_private_network: bool = True
+    processing_location: Literal["local", "remote"] = "local"
 
 
 class ChatMessage(BaseModel):
@@ -121,6 +118,24 @@ class AdminStatus(BaseModel):
     policy: InstancePolicy
     bifrost_ok: bool
     model_provider: dict[str, Any] | None = None
+    model_endpoint: ModelEndpointConfig
     vllm_ok: bool
     bifrost_dashboard_url: str
     version: str = "1.0.0"
+
+
+class MiningRunView(BaseModel):
+    run_id: str
+    salience_id: str
+    scope_id: str
+    generation: int
+    stage: str
+    miner_version: str
+    parent_run_id: str | None
+    status: Literal["succeeded", "failed"]
+    output: dict[str, Any]
+    covered_capture_ids: list[str]
+    evidence_capture_ids: list[str]
+    error: str | None
+    created_at: datetime
+    completed_at: datetime

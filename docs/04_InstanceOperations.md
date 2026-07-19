@@ -110,11 +110,29 @@ The current dashboard can:
 
 - show instance, Bifrost, and configured model status;
 - edit capture-class and remote-processing policy;
-- set the advertised mining status; and
-- configure an OpenAI-compatible model endpoint through Bifrost.
+- pause or activate structured extraction; and
+- configure an OpenAI-compatible model endpoint and declare its local or remote
+  processing location through Bifrost.
+
+Mining defaults to paused. Activating it permits candidate extraction only;
+entity resolution and graph commit remain unavailable. A remote endpoint
+receives raw extraction input only for classes whose processing mode is
+`unrestricted`.
 
 It does not yet provide capture inventory, deletion, mining runs, graph
 inspection, backup, or restore.
+
+Mining runs are currently inspectable as JSON outside the dashboard:
+
+```bash
+curl -fsS \
+  -H "Authorization: Bearer $LOREHOLM_V2_ADMIN_TOKEN" \
+  "http://127.0.0.1:${LOREHOLM_V2_PORT:-8082}/v2/admin/mining/runs?limit=20"
+```
+
+The response contains candidate output, source capture IDs, lineage, and
+retryable failure details. It is administrator-only because derived output may
+contain sensitive context.
 
 ## Updating
 

@@ -65,14 +65,24 @@ rest.
 - Token digests are compared with constant-time comparison.
 
 Capture authorization controls who may submit context; it does not make every
-captured statement true. Capture hints are non-authoritative, and the planned
-server-side miner remains responsible for interpretation and graph commit.
+captured statement true. Capture hints are non-authoritative. The implemented
+extractor produces candidates only, and the planned graph miner remains
+responsible for identity resolution, validation, and graph commit.
 
 ## Model-egress boundary
 
 Bifrost is the only permitted path from the instance to a model endpoint. The
 instance does not fall back to direct provider calls. Provider selection,
-processing mode, and future mining budgets belong to instance policy.
+processing mode, and future mining budgets belong to instance policy. Before
+structured extraction, the worker rechecks current capture policy for every
+source and applies the endpoint's operator-declared `local` or `remote`
+processing location. Remote raw extraction requires `unrestricted` for every
+involved class; the other modes fail closed until their transformations exist.
+
+The processing-location declaration is a security assertion, not network
+detection. Marking an externally hosted endpoint as `local` defeats the remote
+egress gate. Operators must use `local` only for a model running inside the
+Loreholm instance boundary.
 
 For development, the supported configuration is the local `loreholm-local`
 model through vLLM with no cloud fallback. Production operators may configure

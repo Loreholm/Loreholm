@@ -37,7 +37,7 @@
           <p class="index">01 / CAPTURE BOUNDARY</p>
           <div class="section-head"><div><h2>What enters the archive?</h2><p>Capture and model-egress are separate decisions. Tighten them independently.</p></div><button id="savePolicy" class="save">Commit policy</button></div>
           <div id="classes" class="class-list"></div>
-          <div class="mining-row"><div><span class="glyph glyph-sealed">M</span><div><h3>Mining state <button class="tip" data-tip="Session assembly, durable admission, and deterministic salience are installed. The inference miner is not commissioned yet, so no admitted material can reach a model or graph." aria-label="About mining state">?</button></h3><p>Captures are trimmed and classified without model egress.</p></div></div><input id="miningStatus" type="hidden" value="unavailable_not_implemented"><div class="sealed-state" role="status"><span>SEALED</span><strong>INFERENCE NOT COMMISSIONED</strong></div></div>
+          <div class="mining-row"><div><span class="glyph">M</span><div><h3>Mining state <button class="tip" data-tip="Active claims admitted scopes for structured extraction through Bifrost. Paused keeps capturing and admission running without model egress." aria-label="About mining state">?</button></h3><p>Extraction produces versioned candidates only; it does not commit graph truth.</p></div></div><select id="miningStatus" aria-label="Mining state"><option value="paused">Paused</option><option value="active">Active</option></select></div>
         </section>
 
         <aside>
@@ -49,6 +49,7 @@
               <label>Route name <button class="tip" data-tip="A unique Bifrost provider name for this endpoint, such as local-vllm or work-models." aria-label="About route name">?</button><input id="providerName" value="vllm-local" pattern="[a-z][a-z0-9-]{2,63}" required></label>
               <label>Endpoint <button class="tip" data-tip="The OpenAI-compatible base URL Bifrost connects to. Docker service names work inside the instance network." aria-label="About model endpoint">?</button><input id="modelUrl" value="http://vllm:8000" required></label>
               <label>Served model <button class="tip" data-tip="The exact model identifier advertised by the endpoint and used for Loreholm inference requests." aria-label="About served model">?</button><input id="modelName" value="loreholm-local" required></label>
+              <label>Processing location <button class="tip" data-tip="Local means the model runs inside this Loreholm instance. Remote applies each capture class's remote-processing rule and currently requires Unrestricted for raw extraction." aria-label="About processing location">?</button><select id="processingLocation"><option value="local">Local instance</option><option value="remote">Remote endpoint</option></select></label>
               <label class="check"><input id="privateNetwork" type="checkbox" checked><span>Permit private Docker network <button class="tip" data-tip="Allows Bifrost to connect to RFC1918 addresses and Docker service networks. Keep this off for public endpoints." aria-label="About private network access">?</button></span></label>
               <button>Configure Bifrost route <b>→</b></button>
               <a id="bifrostConfigureLink" class="bifrost-guide" href="#" target="_blank" rel="noopener">Open your Bifrost dashboard ↗</a>
@@ -58,7 +59,7 @@
           <section class="panel signal-panel">
             <p class="index">03 / SIGNAL</p>
             <h2>Pipeline topology</h2>
-            <div class="pipeline"><span>ADAPTER</span><i></i><span>STAGING</span><i></i><span class="pipeline-sealed">MINER / SEALED</span><i></i><span>GRAPH</span></div>
+            <div class="pipeline"><span>ADAPTER</span><i></i><span>STAGING</span><i></i><span>EXTRACTOR</span><i></i><span class="pipeline-sealed">GRAPH / SEALED</span></div>
             <p id="notice" class="notice">Console synchronized.</p>
           </section>
         </aside>

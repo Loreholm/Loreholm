@@ -47,16 +47,17 @@ class before storage and returns a `policy_blocked` receipt for that item. An
 already-stored ID remains a truthful `duplicate` even when current policy now
 disables its class. The planned spine will enforce the current decision before
 upload so blocked content ordinarily remains on the originating device. The
-eventual mining pipeline must independently defend policy at its own boundary.
+mining pipeline independently checks current capture and egress policy before
+calling a model.
 
 ### Remote-processing modes
 
 | Mode | Meaning | Enforcement status |
 |---|---|---|
-| `local_only` | No representation leaves the instance for model processing | Planned mining enforcement |
-| `sanitized_remote` | Only a deterministic sanitized representation may leave | Planned sanitizer and enforcement |
-| `derived_only` | Only locally derived artifacts may leave | Planned mining enforcement |
-| `unrestricted` | Raw content may reach the configured endpoint | Planned mining enforcement |
+| `local_only` | No representation leaves the instance for model processing | Enforced; remote extraction fails closed |
+| `sanitized_remote` | Only a deterministic sanitized representation may leave | Sanitizer planned; remote extraction currently fails closed |
+| `derived_only` | Only locally derived artifacts may leave | Transformation planned; remote extraction currently fails closed |
+| `unrestricted` | Raw content may reach the configured endpoint | Enforced by the extraction worker |
 
 Permission to capture and permission to send content to a model are separate.
 Changing model egress must not silently enable a disabled capture class.
@@ -73,21 +74,17 @@ longer allows upload.
 
 ## Mining status
 
-The current policy schema advertises only
-`unavailable_not_implemented`. The dashboard renders that state as sealed and
-does not offer an inert activation control. Existing stored policies are
-migrated to this value at startup.
-
-Session assembly and the durable admission queue operate while mining is
-unavailable, but nothing consumes those items or sends them to a model. The
-future miner will add active and paused states when it can actually enforce
-them. Capture will continue during a mining pause.
+The policy exposes `active` and `paused`, defaults to `paused`, and migrates the
+retired `unavailable_not_implemented` value to `paused`. Session assembly,
+salience, and durable mining-work creation continue while paused, but the
+mining worker claims nothing and performs no model egress. Active mining runs
+the structured extraction stage; it does not activate graph commit.
 
 ## Bifrost model boundary
 
-**Status:** Gateway deployment, endpoint configuration, health probing, and
-chat inference are implemented. Tiered mining roles and quality checks are
-planned.
+**Status:** Gateway deployment, endpoint configuration, health probing, chat
+inference, and structured mining extraction are implemented. Tiered role maps,
+budgets, and quality checks are planned.
 
 All instance model calls go through Bifrost. A miner must never fall back to a
 provider directly because that would bypass endpoint trust, egress policy,
@@ -104,11 +101,14 @@ Content-Type: application/json
   "base_url": "http://vllm:8000",
   "model_name": "loreholm-local",
   "provider_name": "vllm-local",
-  "allow_private_network": true
+  "allow_private_network": true,
+  "processing_location": "local"
 }
 ```
 
-The endpoint must expose an OpenAI-compatible model list and chat-completions
+`processing_location` is an operator assertion used by the egress gate; use
+`local` only when the model runs inside the Loreholm instance boundary. The
+endpoint must expose an OpenAI-compatible model list and chat-completions
 surface. The foundation configures it as a keyless Bifrost provider. Provider
 credentials and richer provider-specific configuration should be managed in
 Bifrost rather than added to capture clients.

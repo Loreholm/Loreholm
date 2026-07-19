@@ -71,6 +71,21 @@ class SalienceRecord:
     created_at: datetime
 
 
+@dataclass
+class MiningWorkItem:
+    mining_work_id: str
+    salience_id: str
+    admission_work_id: str
+    state: Literal["pending", "leased", "completed"]
+    available_at: datetime
+    created_at: datetime
+    updated_at: datetime
+    attempts: int = 0
+    lease_owner: str | None = None
+    leased_until: datetime | None = None
+    last_error: str | None = None
+
+
 @dataclass(frozen=True)
 class MiningRun:
     run_id: str
@@ -169,6 +184,38 @@ class CaptureStore:
     def put_salience_record(self, record: SalienceRecord) -> SalienceRecord:
         raise NotImplementedError
 
+    def schedule_mining(self, record: SalienceRecord) -> MiningWorkItem | None:
+        raise NotImplementedError
+
+    def backfill_mining_work(self) -> int:
+        raise NotImplementedError
+
+    def claim_ready_mining_work(
+        self,
+        worker_id: str,
+        *,
+        now: datetime,
+        lease_for: timedelta,
+        limit: int = 1,
+    ) -> list[MiningWorkItem]:
+        raise NotImplementedError
+
+    def complete_mining_work(
+        self, mining_work_id: str, worker_id: str, *, now: datetime
+    ) -> bool:
+        raise NotImplementedError
+
+    def retry_mining_work(
+        self,
+        mining_work_id: str,
+        worker_id: str,
+        *,
+        now: datetime,
+        retry_after: timedelta,
+        error: str,
+    ) -> bool:
+        raise NotImplementedError
+
     def get_mining_run(self, run_key: str) -> MiningRun | None:
         raise NotImplementedError
 
@@ -186,6 +233,9 @@ class CaptureStore:
     def put_mining_run(self, run: MiningRun) -> MiningRun:
         raise NotImplementedError
 
+    def list_mining_runs(self, *, limit: int = 50) -> list[MiningRun]:
+        raise NotImplementedError
+
 
 class MemoryCaptureStore(CaptureStore):
     """Deterministic development/test store, never selected in production."""
@@ -198,6 +248,7 @@ class MemoryCaptureStore(CaptureStore):
         self._work: dict[str, WorkItem] = {}
         self._session_members: dict[str, tuple[str, int]] = {}
         self._salience: dict[str, SalienceRecord] = {}
+        self._mining_work: dict[str, MiningWorkItem] = {}
         self._mining_runs: dict[str, MiningRun] = {}
         self._scheduled_captures: set[str] = set()
         self._lock = Lock()
@@ -237,6 +288,10 @@ class MemoryCaptureStore(CaptureStore):
     @property
     def mining_runs(self) -> tuple[MiningRun, ...]:
         return tuple(self._mining_runs.values())
+
+    @property
+    def mining_work_items(self) -> tuple[MiningWorkItem, ...]:
+        return tuple(self._mining_work.values())
 
     def _new_work(
         self,
@@ -430,6 +485,93 @@ class MemoryCaptureStore(CaptureStore):
             self._salience[record.work_id] = record
             return record
 
+    def schedule_mining(self, record: SalienceRecord) -> MiningWorkItem | None:
+        if record.status != "admitted":
+            return None
+        with self._lock:
+            existing = next(
+                (item for item in self._mining_work.values() if item.salience_id == record.salience_id),
+                None,
+            )
+            if existing is not None:
+                return existing
+            item = MiningWorkItem(
+                mining_work_id=_new_uuid7(),
+                salience_id=record.salience_id,
+                admission_work_id=record.work_id,
+                state="pending",
+                available_at=record.created_at,
+                created_at=record.created_at,
+                updated_at=record.created_at,
+            )
+            self._mining_work[item.mining_work_id] = item
+            return item
+
+    def backfill_mining_work(self) -> int:
+        before = len(self._mining_work)
+        for record in tuple(self._salience.values()):
+            self.schedule_mining(record)
+        return len(self._mining_work) - before
+
+    def claim_ready_mining_work(
+        self,
+        worker_id: str,
+        *,
+        now: datetime,
+        lease_for: timedelta,
+        limit: int = 1,
+    ) -> list[MiningWorkItem]:
+        if not worker_id or limit < 1:
+            return []
+        with self._lock:
+            ready = [
+                item for item in self._mining_work.values()
+                if (item.state == "pending" and item.available_at <= now)
+                or (item.state == "leased" and item.leased_until is not None and item.leased_until <= now)
+            ]
+            ready.sort(key=lambda item: (item.available_at, item.mining_work_id))
+            for item in ready[:limit]:
+                item.state = "leased"
+                item.lease_owner = worker_id
+                item.leased_until = now + lease_for
+                item.attempts += 1
+                item.updated_at = now
+            return ready[:limit]
+
+    def complete_mining_work(
+        self, mining_work_id: str, worker_id: str, *, now: datetime
+    ) -> bool:
+        with self._lock:
+            item = self._mining_work.get(mining_work_id)
+            if item is None or item.state != "leased" or item.lease_owner != worker_id:
+                return False
+            item.state = "completed"
+            item.lease_owner = None
+            item.leased_until = None
+            item.updated_at = now
+            return True
+
+    def retry_mining_work(
+        self,
+        mining_work_id: str,
+        worker_id: str,
+        *,
+        now: datetime,
+        retry_after: timedelta,
+        error: str,
+    ) -> bool:
+        with self._lock:
+            item = self._mining_work.get(mining_work_id)
+            if item is None or item.state != "leased" or item.lease_owner != worker_id:
+                return False
+            item.state = "pending"
+            item.available_at = now + retry_after
+            item.lease_owner = None
+            item.leased_until = None
+            item.last_error = error[:1000]
+            item.updated_at = now
+            return True
+
     def get_mining_run(self, run_key: str) -> MiningRun | None:
         return self._mining_runs.get(run_key)
 
@@ -462,6 +604,14 @@ class MemoryCaptureStore(CaptureStore):
                 run = replace(run, run_id=existing.run_id, created_at=existing.created_at)
             self._mining_runs[run.run_key] = run
             return run
+
+    def list_mining_runs(self, *, limit: int = 50) -> list[MiningRun]:
+        bounded = max(1, min(limit, 250))
+        return sorted(
+            self._mining_runs.values(),
+            key=lambda run: (run.completed_at, run.run_id),
+            reverse=True,
+        )[:bounded]
 
 
 class ArcadeCaptureStore(CaptureStore):
@@ -578,6 +728,22 @@ class ArcadeCaptureStore(CaptureStore):
             "CREATE INDEX IF NOT EXISTS ON V2SalienceRecord (salience_id) UNIQUE",
             "CREATE INDEX IF NOT EXISTS ON V2SalienceRecord (work_id) UNIQUE",
             "CREATE INDEX IF NOT EXISTS ON V2SalienceRecord (status, created_at) NOTUNIQUE",
+            "CREATE DOCUMENT TYPE V2MiningWork IF NOT EXISTS",
+            "CREATE PROPERTY V2MiningWork.mining_work_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MiningWork.salience_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MiningWork.admission_work_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MiningWork.state IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MiningWork.available_at IF NOT EXISTS DATETIME",
+            "CREATE PROPERTY V2MiningWork.created_at IF NOT EXISTS DATETIME",
+            "CREATE PROPERTY V2MiningWork.updated_at IF NOT EXISTS DATETIME",
+            "CREATE PROPERTY V2MiningWork.attempts IF NOT EXISTS INTEGER",
+            "CREATE PROPERTY V2MiningWork.lease_owner IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MiningWork.leased_until IF NOT EXISTS DATETIME",
+            "CREATE PROPERTY V2MiningWork.last_error IF NOT EXISTS STRING",
+            "CREATE INDEX IF NOT EXISTS ON V2MiningWork (mining_work_id) UNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2MiningWork (salience_id) UNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2MiningWork (state, available_at) NOTUNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2MiningWork (state, leased_until) NOTUNIQUE",
             "CREATE DOCUMENT TYPE V2MiningRun IF NOT EXISTS",
             "CREATE PROPERTY V2MiningRun.run_id IF NOT EXISTS STRING",
             "CREATE PROPERTY V2MiningRun.run_key IF NOT EXISTS STRING",
@@ -1095,6 +1261,160 @@ class ArcadeCaptureStore(CaptureStore):
         return record
 
     @classmethod
+    def _mining_work_from_row(cls, row: dict) -> MiningWorkItem:
+        return MiningWorkItem(
+            mining_work_id=row["mining_work_id"],
+            salience_id=row["salience_id"],
+            admission_work_id=row["admission_work_id"],
+            state=row["state"],
+            available_at=cls._datetime(row["available_at"]),
+            created_at=cls._datetime(row["created_at"]),
+            updated_at=cls._datetime(row["updated_at"]),
+            attempts=int(row.get("attempts") or 0),
+            lease_owner=row.get("lease_owner"),
+            leased_until=cls._datetime(row.get("leased_until")),
+            last_error=row.get("last_error"),
+        )
+
+    def schedule_mining(self, record: SalienceRecord) -> MiningWorkItem | None:
+        if record.status != "admitted":
+            return None
+        rows = self._command(
+            "SELECT FROM V2MiningWork WHERE salience_id = :salience_id LIMIT 1",
+            {"salience_id": record.salience_id},
+        ).get("result", [])
+        if rows:
+            return self._mining_work_from_row(rows[0])
+        item = MiningWorkItem(
+            mining_work_id=_new_uuid7(),
+            salience_id=record.salience_id,
+            admission_work_id=record.work_id,
+            state="pending",
+            available_at=record.created_at,
+            created_at=record.created_at,
+            updated_at=record.created_at,
+        )
+        try:
+            self._command(
+                "INSERT INTO V2MiningWork SET mining_work_id = :mining_work_id, "
+                "salience_id = :salience_id, admission_work_id = :admission_work_id, "
+                "state = 'pending', available_at = :available_at, created_at = :created_at, "
+                "updated_at = :updated_at, attempts = 0",
+                {
+                    "mining_work_id": item.mining_work_id,
+                    "salience_id": item.salience_id,
+                    "admission_work_id": item.admission_work_id,
+                    "available_at": _epoch_millis(item.available_at),
+                    "created_at": _epoch_millis(item.created_at),
+                    "updated_at": _epoch_millis(item.updated_at),
+                },
+            )
+        except RuntimeError:
+            rows = self._command(
+                "SELECT FROM V2MiningWork WHERE salience_id = :salience_id LIMIT 1",
+                {"salience_id": record.salience_id},
+            ).get("result", [])
+            if not rows:
+                raise
+            return self._mining_work_from_row(rows[0])
+        return item
+
+    def backfill_mining_work(self) -> int:
+        rows = self._command(
+            "SELECT FROM V2SalienceRecord WHERE status = 'admitted' ORDER BY created_at"
+        ).get("result", [])
+        created = 0
+        for row in rows:
+            record = self._salience_from_row(row)
+            existed = self._command(
+                "SELECT mining_work_id FROM V2MiningWork WHERE salience_id = :salience_id LIMIT 1",
+                {"salience_id": record.salience_id},
+            ).get("result", [])
+            self.schedule_mining(record)
+            if not existed:
+                created += 1
+        return created
+
+    def claim_ready_mining_work(
+        self,
+        worker_id: str,
+        *,
+        now: datetime,
+        lease_for: timedelta,
+        limit: int = 1,
+    ) -> list[MiningWorkItem]:
+        if not worker_id or limit < 1:
+            return []
+        limit = min(limit, 250)
+        rows = self._command(
+            "SELECT FROM V2MiningWork WHERE (state = 'pending' AND available_at <= :now) "
+            "OR (state = 'leased' AND leased_until <= :now) "
+            f"ORDER BY available_at, mining_work_id LIMIT {limit}",
+            {"now": _epoch_millis(now)},
+        ).get("result", [])
+        claimed: list[MiningWorkItem] = []
+        for row in rows:
+            updated = self._command(
+                "UPDATE V2MiningWork SET state = 'leased', lease_owner = :worker_id, "
+                "leased_until = :leased_until, attempts = attempts + 1, updated_at = :updated_at "
+                "RETURN AFTER @this WHERE mining_work_id = :mining_work_id AND "
+                "((state = 'pending' AND available_at <= :now) OR "
+                "(state = 'leased' AND leased_until <= :now))",
+                {
+                    "worker_id": worker_id,
+                    "leased_until": _epoch_millis(now + lease_for),
+                    "updated_at": _epoch_millis(now),
+                    "mining_work_id": row["mining_work_id"],
+                    "now": _epoch_millis(now),
+                },
+            ).get("result", [])
+            if updated and updated[0].get("lease_owner") == worker_id:
+                claimed.append(self._mining_work_from_row(updated[0]))
+        return claimed
+
+    def complete_mining_work(
+        self, mining_work_id: str, worker_id: str, *, now: datetime
+    ) -> bool:
+        rows = self._command(
+            "UPDATE V2MiningWork SET state = 'completed', lease_owner = null, "
+            "leased_until = null, updated_at = :updated_at RETURN AFTER @this "
+            "WHERE mining_work_id = :mining_work_id AND state = 'leased' "
+            "AND lease_owner = :worker_id",
+            {
+                "updated_at": _epoch_millis(now),
+                "mining_work_id": mining_work_id,
+                "worker_id": worker_id,
+            },
+        ).get("result", [])
+        return bool(rows and rows[0].get("state") == "completed")
+
+    def retry_mining_work(
+        self,
+        mining_work_id: str,
+        worker_id: str,
+        *,
+        now: datetime,
+        retry_after: timedelta,
+        error: str,
+    ) -> bool:
+        available_at = now + retry_after
+        rows = self._command(
+            "UPDATE V2MiningWork SET state = 'pending', available_at = :available_at, "
+            "lease_owner = null, leased_until = null, last_error = :last_error, "
+            "updated_at = :updated_at RETURN AFTER @this "
+            "WHERE mining_work_id = :mining_work_id AND state = 'leased' "
+            "AND lease_owner = :worker_id",
+            {
+                "available_at": _epoch_millis(available_at),
+                "last_error": error[:1000],
+                "updated_at": _epoch_millis(now),
+                "mining_work_id": mining_work_id,
+                "worker_id": worker_id,
+            },
+        ).get("result", [])
+        return bool(rows and rows[0].get("state") == "pending")
+
+    @classmethod
     def _mining_run_from_row(cls, row: dict) -> MiningRun:
         return MiningRun(
             run_id=row["run_id"],
@@ -1200,6 +1520,13 @@ class ArcadeCaptureStore(CaptureStore):
             return existing
         return run
 
+    def list_mining_runs(self, *, limit: int = 50) -> list[MiningRun]:
+        bounded = max(1, min(limit, 250))
+        rows = self._command(
+            f"SELECT FROM V2MiningRun ORDER BY completed_at DESC, run_id DESC LIMIT {bounded}"
+        ).get("result", [])
+        return [self._mining_run_from_row(row) for row in rows]
+
 
 class CaptureService:
     def __init__(
@@ -1218,8 +1545,8 @@ class CaptureService:
     def load_policy(self) -> None:
         stored = self.store.get_config("policy")
         if stored:
-            if stored.get("mining_status") != "unavailable_not_implemented":
-                stored = {**stored, "mining_status": "unavailable_not_implemented"}
+            if stored.get("mining_status") not in {"active", "paused"}:
+                stored = {**stored, "mining_status": "paused"}
                 self.store.set_config("policy", stored)
             self.policy = InstancePolicy.model_validate(stored)
 

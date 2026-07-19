@@ -2,7 +2,8 @@
 
 The current executable slice implements contract-v2 capture ingestion, policy sync,
 server-side capture blocking, idempotent staging, clock normalization,
-unknown-class quarantine, session assembly, and the durable admission queue.
+unknown-class quarantine, session assembly, durable admission and mining work,
+salience, and policy-gated structured extraction.
 
 The installation path uses the installer; it checks prerequisites, generates instance
 and device credentials, installs under `~/.local/share/loreholm-v2`, starts the
@@ -32,11 +33,11 @@ remote architecture uses the public front door and Headscale/Tailscale tunnel
 described in [Loreholm networking](02_Networking.md); do not publish the instance
 directly as a substitute. Bifrost is present as the sole model-egress boundary,
 but endpoint configuration remains instance-owned and is not baked into the
-repository. Model-assisted mining is not enabled in this foundation milestone.
-The scheduled deterministic worker consumes admission work into salience
-records without calling a model. The mining-run coordinator and durable output
-store are available for future stages, but no background process invokes a
-model-backed interpreter. The transcript quiet period defaults to 300 seconds;
+repository. Mining defaults to paused. When activated through the dashboard or
+policy API, the background extractor claims durable mining work, enforces the
+declared local or remote processing boundary, calls the configured model only
+through Bifrost, and stores strict candidate output in `V2MiningRun`. It does
+not resolve entities or write the graph. The transcript quiet period defaults to 300 seconds;
 `LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS` in the Compose environment overrides
 it and is passed into the API container.
 

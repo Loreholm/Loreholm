@@ -27,12 +27,13 @@ The executable Loreholm foundation currently provides:
 - durable transcript-session assembly and leased admission work;
 - deterministic mechanical trimming and durable salience decisions;
 - reusable mining-run identity and incremental-input lineage;
+- policy-gated structured episode, mention, and candidate-claim extraction through Bifrost;
 - authenticated client policy sync; and
 - a self-contained ArcadeDB, instance API, and Bifrost deployment.
 
-Model-assisted interpretation and extraction, graph commit, query/surfacing,
-retention UI, sharing, backup, and client adapters are designed but are not
-implemented in this milestone.
+Entity resolution, graph commit, query/surfacing, retention UI, sharing,
+backup, and client adapters are designed but are not implemented in this
+milestone. Extraction output remains versioned candidate data, not graph truth.
 
 ## Architecture
 
@@ -47,10 +48,10 @@ embedded spine  ---> offline queue / local permission enforcement
 instance API  ---> ArcadeDB staging ---> admission queue ---> salience gate
       |                                      |
       |                                      v
-      |                               interpreter (planned)
+      |                               structured extractor
       |                                      |
       |                                      v
-      |                               knowledge graph
+      |                               knowledge graph (planned)
       |
       +-------> Bifrost ---> user-configured model endpoints
 ```
