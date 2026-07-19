@@ -151,6 +151,7 @@ const Adventure = ({trail, choose, back, reset, setRoute}) => {
             compositionHeight={480}
             fps={30}
             autoPlay={!reducedMotion}
+            moveToBeginningWhenEnded={false}
             controls
             acknowledgeRemotionLicense
             style={{width: '100%', aspectRatio: '25 / 12'}}
