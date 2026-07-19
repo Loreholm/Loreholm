@@ -143,9 +143,12 @@ const Adventure = ({trail, choose, back, reset, setRoute}) => {
         <div className="vision-panel">
           <div className="vision-corners" />
           <Player
-            key={`${currentId}-${node.scene}`}
+            key={currentId}
             component={SystemMap}
-            inputProps={{scenario: node.scene}}
+            inputProps={{
+              visualizationId: currentId,
+              color: getDocument(node.docs[0]).color,
+            }}
             durationInFrames={360}
             compositionWidth={1000}
             compositionHeight={480}
@@ -156,7 +159,7 @@ const Adventure = ({trail, choose, back, reset, setRoute}) => {
             acknowledgeRemotionLicense
             style={{width: '100%', aspectRatio: '25 / 12'}}
           />
-          <div className="vision-caption"><span>THE SEER'S POOL</span><p>This is how the idea would feel in use—not merely how packets travel.</p></div>
+          <div className="vision-caption"><span>THE SEER'S POOL</span><p>A visual model of the idea—not a second copy of the answer.</p></div>
         </div>
       </div>
       <div className="next-questions">

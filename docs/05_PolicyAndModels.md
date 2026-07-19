@@ -19,8 +19,9 @@ or durable egress ledger across connected tools. See
 
 ## Instance policy
 
-**Status:** Persistence, API access, and dashboard editing are implemented.
-Client-side spine enforcement and mining enforcement are planned.
+**Status:** Persistence, API access, dashboard editing, and server-side capture
+enforcement are implemented. Client-side spine and mining-egress enforcement
+are planned.
 
 Policy is instance-owned and stored in ArcadeDB as `V2InstanceConfig`. It is
 not owned by the public front door. Clients authenticate to `GET /v2/policy`
@@ -41,11 +42,11 @@ Each class has two current controls:
 | `capture` | Boolean | Whether an authorized adapter may upload this class |
 | `remote_processing` | See below | Which representation a non-local model endpoint may receive |
 
-The implemented server currently advertises and persists these controls. It
-does not yet reject capture ingestion based on `capture: false`; enforcement
-belongs in the planned spine and must also be defended by the eventual mining
-pipeline. Until those pieces exist, the toggle is policy state rather than a
-complete end-to-end guarantee.
+The server rejects disabled classes before storage and returns a
+`policy_blocked` receipt for that item. The planned spine will enforce the same
+decision before upload so blocked content ordinarily remains on the originating
+device. The eventual mining pipeline must independently defend the policy at
+its own boundary.
 
 ### Remote-processing modes
 
@@ -71,15 +72,15 @@ longer allows upload.
 
 ## Mining status
 
-The current policy schema advertises:
+The current policy schema advertises only
+`unavailable_not_implemented`. The dashboard renders that state as sealed and
+does not offer an inert activation control. Existing stored policies are
+migrated to this value at startup.
 
-- `active`
-- `paused_budget_exhausted`
-- `paused_gateway_unavailable`
-
-The dashboard can edit this field, but no miner currently consumes it. In the
-accepted design, capture continues during either pause while new inference
-waits in the instance queue.
+Session assembly and the durable admission queue operate while mining is
+unavailable, but nothing consumes those items or sends them to a model. The
+future miner will add active and paused states when it can actually enforce
+them. Capture will continue during a mining pause.
 
 ## Bifrost model boundary
 

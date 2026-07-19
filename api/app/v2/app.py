@@ -7,7 +7,7 @@ import json
 import secrets
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
@@ -31,7 +31,15 @@ def create_app() -> FastAPI:
         required["ARCADEDB_URL"], required["ARCADEDB_DATABASE"],
         required["ARCADEDB_USERNAME"], required["ARCADEDB_PASSWORD"],
     ) if all(required.values()) else None
-    service = CaptureService(store, InstancePolicy()) if store else None
+    session_quiescence_seconds = max(
+        1,
+        int(os.getenv("LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS", "300")),
+    )
+    service = CaptureService(
+        store,
+        InstancePolicy(),
+        session_quiescence=timedelta(seconds=session_quiescence_seconds),
+    ) if store else None
     configured_digest = os.getenv("LOREHOLM_V2_DEVICE_TOKEN_SHA256", "").strip().lower()
     admin_digest = os.getenv("LOREHOLM_V2_ADMIN_TOKEN_SHA256", "").strip().lower()
     sync_digest = os.getenv("LOREHOLM_V2_SYNC_TOKEN_SHA256", "").strip().lower()

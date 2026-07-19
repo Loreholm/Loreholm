@@ -37,7 +37,7 @@
           <p class="index">01 / CAPTURE BOUNDARY</p>
           <div class="section-head"><div><h2>What enters the archive?</h2><p>Capture and model-egress are separate decisions. Tighten them independently.</p></div><button id="savePolicy" class="save">Commit policy</button></div>
           <div id="classes" class="class-list"></div>
-          <div class="mining-row"><div><span class="glyph">M</span><div><h3>Mining state <button class="tip" data-tip="Controls whether new inference work may start. Captures continue entering staging while mining is paused." aria-label="About mining state">?</button></h3><p>Inference pauses do not stop capture.</p></div></div><select id="miningStatus" aria-label="Mining state"><option value="active">Active</option><option value="paused_budget_exhausted">Paused — budget</option><option value="paused_gateway_unavailable">Paused — gateway</option></select></div>
+          <div class="mining-row"><div><span class="glyph glyph-sealed">M</span><div><h3>Mining state <button class="tip" data-tip="Session assembly and the durable admission queue are installed. The inference miner is not commissioned yet, so no queued material can reach a model or graph." aria-label="About mining state">?</button></h3><p>Captures wait durably at the admission boundary.</p></div></div><input id="miningStatus" type="hidden" value="unavailable_not_implemented"><div class="sealed-state" role="status"><span>SEALED</span><strong>MINER NOT COMMISSIONED</strong></div></div>
         </section>
 
         <aside>
@@ -58,7 +58,7 @@
           <section class="panel signal-panel">
             <p class="index">03 / SIGNAL</p>
             <h2>Pipeline topology</h2>
-            <div class="pipeline"><span>ADAPTER</span><i></i><span>STAGING</span><i></i><span>MINER</span><i></i><span>GRAPH</span></div>
+            <div class="pipeline"><span>ADAPTER</span><i></i><span>STAGING</span><i></i><span class="pipeline-sealed">MINER / SEALED</span><i></i><span>GRAPH</span></div>
             <p id="notice" class="notice">Console synchronized.</p>
           </section>
         </aside>

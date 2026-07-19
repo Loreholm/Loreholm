@@ -23,6 +23,8 @@ The executable Loreholm foundation currently provides:
 - snapshot content-hash validation;
 - device-time normalization with the original timestamp retained;
 - durable ArcadeDB staging and quarantine of unknown capture classes;
+- server-side rejection of capture classes disabled by instance policy;
+- durable transcript-session assembly and leased admission work;
 - authenticated client policy sync; and
 - a self-contained ArcadeDB, instance API, and Bifrost deployment.
 

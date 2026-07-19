@@ -25,4 +25,4 @@ jobs:
           pip install -r api/requirements.txt -r api/requirements-dev.txt
 
       - name: Run tests
-        run: PYTHONPATH=api pytest api/tests
+        run: PYTHONPATH=api pytest api/tests plane-wizard/test_wizard.py

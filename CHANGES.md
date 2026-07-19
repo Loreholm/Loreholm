@@ -1,5 +1,11 @@
 # CHANGES
 
+## 2026-07-19
+
+### Completed work
+- **Every documentation Q&A now has a meaningful companion animation.** The Remotion player previously reused five generic scene stories across 63 questions. It now selects an explicitly authored visualization for the active question: process flows, trust boundaries, comparisons, timelines, relationship maps, layer diagrams, and selection funnels illustrate concrete examples and relationships that add to the prose instead of repeating it. A shared visual grammar keeps the Nordic seer's-pool presentation cohesive while each scene supplies question-specific labels, structure, and takeaway. Files: `apps/docs/src/App.jsx`, `apps/docs/src/SystemMap.jsx`, `apps/docs/src/visualizations.js`.
+- **Capture policy enforcement and the durable V2 admission queue.** Disabled capture classes now return `policy_blocked` before storage, while already-stored IDs remain truthful `duplicate` receipts. Mining defaults and migrates to the sealed `unavailable_not_implemented` state until a real worker exists. Accepted transcripts assemble into durable session scopes with idempotent membership and a configurable quiet period; explicit pushes are ready immediately. Generation-numbered work items support exclusive leases, expired-lease recovery, owner-checked completion, and delayed retry. ArcadeDB datetime values now bind as epoch milliseconds and the dedicated database enables millisecond formatting, avoiding the silent `null` values produced by ISO-string parameters in ArcadeDB 26.3.1. The field console exposes the sealed boundary instead of an inert activation control, and CI now includes the plane-wizard tests. Files: `api/app/v2/models.py`, `api/app/v2/service.py`, `api/app/v2/app.py`, `api/app/v2/static/index.html`, `api/app/v2/static/dashboard.css`, `api/tests/test_v2_capture.py`, `.github/workflows/ci.yml`, `Readme.md`, `docs/03_CaptureAPI.md`, `docs/05_PolicyAndModels.md`, `docs/07_MiningAndKnowledge.md`, `docs/10_Development.md`, `apps/docs/src/docs.js`.
+
 ## 2026-06-12
 
 ### Completed work

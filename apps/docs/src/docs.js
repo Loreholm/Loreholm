@@ -250,7 +250,7 @@ export const adventureNodes = {
     depth: 4, eyebrow: 'Useful signal before expensive work', question: 'What selects the useful material?',
     answer: [
       'The planned pipeline begins with a mechanical trim and salience gate before it calls a model or creates an embedding. It removes or truncates obvious tool noise and retry loops at read time, then considers signals such as user-authored volume, turn count, source surface, and an explicit “remember this” push.',
-      'Material below the threshold is marked skipped rather than deleted, so a later miner or policy can reconsider it. This admission stage is designed but not yet implemented; today the instance durably stages the raw capture and stops there.',
+      'Material below the threshold is marked skipped rather than deleted, so a later miner or policy can reconsider it. The instance now assembles transcript sessions and places quiet sessions or explicit pushes into a durable admission queue, but the trim and salience decision that consumes those items is not yet implemented.',
     ],
     status: 'planned', docs: ['mining', 'policy'], scene: 'evidence',
     options: [
@@ -783,7 +783,7 @@ export const adventureNodes = {
     depth: 5, eyebrow: 'The laws written on the instance', question: 'What is on the exact policy surface?',
     answer: [
       'The implemented instance policy advertises its revision, supported capture-contract range, known capture classes, whether each class may be captured, each class’s remote-processing mode, and the mining status. Authenticated clients read it from `GET /v2/policy`, while administrators update persisted policy through `PUT /v2/admin/policy` or the local dashboard.',
-      'The current service stores and advertises these decisions, but the future embedded spine and miner must still enforce them at their respective boundaries. A policy toggle is therefore visible state today, not proof that every planned processing path already obeys it.',
+      'The current service stores and advertises these decisions and rejects a disabled capture class before storage. The future embedded spine must enforce that rule before upload, while the miner must enforce remote-processing policy before egress. The mining status is sealed as unavailable until such a worker exists.',
     ],
     status: 'mixed', docs: ['policy', 'capture'], scene: 'builder',
     options: [
@@ -925,7 +925,7 @@ export const adventureNodes = {
   operations: {
     depth: 3, eyebrow: 'Raise the world', question: 'What services and operations exist in the current foundation?',
     answer: [
-      'The current foundation installs a containerized Loreholm instance, generates separated credentials, exposes the authenticated instance boundary through the tunnel shim, persists captures in ArcadeDB, and supports browser-chat capture.',
+      'The current foundation installs a containerized Loreholm instance, generates separated credentials, exposes the authenticated instance boundary through the tunnel shim, persists captures in ArcadeDB, assembles transcript sessions, queues quiet sessions and explicit pushes durably, and supports browser-chat capture.',
       'The miner, reusable client spine, retention coordinator, and evidence-backed recall experience remain clearly marked planned work.',
     ],
     status: 'implemented', docs: ['operations', 'development', 'architecture'], scene: 'builder',

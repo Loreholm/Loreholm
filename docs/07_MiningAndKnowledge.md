@@ -1,7 +1,9 @@
 # Loreholm mining and knowledge model
 
-**Status:** Accepted design, not implemented in the foundation milestone. The
-current code stops after raw capture staging and quarantine.
+**Status:** Accepted design, partially implemented. Raw capture staging,
+quarantine, durable session assembly, quiescence, immediate push admission, and
+the leased work queue exist. Salience, inference, graph commit, and surfacing do
+not.
 
 ## The idea in plain language
 
@@ -206,8 +208,8 @@ not be inferred from retired search-tool behavior.
 
 A practical sequence is:
 
-1. production capture/session storage schema;
-2. durable session quiescence and work queue;
+1. production capture/session storage schema — session scope and membership implemented;
+2. durable session quiescence and work queue — implemented;
 3. mechanical trim and salience records;
 4. mining-run identity and reusable output store;
 5. mention and candidate-claim extraction through Bifrost;

@@ -46,13 +46,14 @@ Example response:
       "remote_processing": "sanitized_remote"
     }
   },
-  "mining_status": "active"
+  "mining_status": "unavailable_not_implemented"
 }
 ```
 
-Clients should refresh policy before uploading an offline queue. The planned
-spine will enforce `capture: false` locally and may always make instance policy
-stricter through a user pause or surface-specific control.
+Clients should refresh policy before uploading an offline queue. The instance
+also enforces `capture: false` as a defense-in-depth boundary. The planned spine
+will enforce the same rule locally and may always make instance policy stricter
+through a user pause or surface-specific control.
 
 ## Submit captures
 
@@ -152,6 +153,11 @@ URL, or document ID, belongs in the payload or references.
 | `accepted` | The class is known to policy and the capture was stored as `staged` |
 | `duplicate` | That `capture_id` was already stored; the retry made no new record |
 | `quarantined` | The class is unknown and was stored as `quarantined_unknown_class` |
+| `policy_blocked` | The class is known but disabled; the instance stored no copy |
+
+`policy_blocked` is a per-capture receipt rather than a batch-level HTTP error,
+so a mixed batch can acknowledge permitted captures while telling the client to
+retain or delete blocked material locally.
 
 Unknown classes are deliberately durable. They cannot enter interpretation,
 mining, sharing, or model egress until the instance supports their class.
@@ -180,7 +186,17 @@ inside the stored envelope.
 
 The foundation stores each complete envelope as JSON in an ArcadeDB
 `V2Capture` document with indexed identity, class, kind, state, surface,
-session reference, device time, receipt time, and normalized time.
+session reference, device time, receipt time, and normalized time. Accepted
+transcript captures also assemble into `V2Session` records through idempotent
+`V2SessionCapture` membership. Each session owns a generation-numbered
+`V2WorkItem` that becomes available after the last received capture has been
+quiet for the configured interval. Explicit pushes receive an immediately
+available admission item.
+
+Work claims use renewable leases. An expired lease can be claimed by another
+worker, while completion and retry require the current lease owner. There is no
+inference worker in this milestone, so these records stop at the admission
+boundary.
 
 The accepted Loreholm storage design later divides events, snapshots, external
 payloads, sessions, derived content, vectors, and graph knowledge into the

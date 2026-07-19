@@ -1,7 +1,8 @@
 # Loreholm development stack
 
 The current executable slice implements contract-v2 capture ingestion, policy sync,
-idempotent staging, clock normalization, and unknown-class quarantine.
+server-side capture blocking, idempotent staging, clock normalization,
+unknown-class quarantine, session assembly, and the durable admission queue.
 
 The installation path uses the installer; it checks prerequisites, generates instance
 and device credentials, installs under `~/.local/share/loreholm-v2`, starts the
@@ -31,7 +32,10 @@ remote architecture uses the public front door and Headscale/Tailscale tunnel
 described in [Loreholm networking](02_Networking.md); do not publish the instance
 directly as a substitute. Bifrost is present as the sole model-egress boundary,
 but endpoint configuration remains instance-owned and is not baked into the
-repository. Mining is not enabled in this foundation milestone.
+repository. Mining is not enabled in this foundation milestone. Admission work
+waits durably without being consumed. Set
+`LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS` to change the transcript quiet period
+from its 300-second default.
 
 For a trusted LAN, set `LOREHOLM_V2_BIND_HOST` to the host's LAN address in the
 instance environment and recreate the `instance` service. Authentication still

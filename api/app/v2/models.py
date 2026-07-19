@@ -61,7 +61,7 @@ class CaptureEnvelope(BaseModel):
 
 class CaptureReceipt(BaseModel):
     capture_id: str
-    status: Literal["accepted", "duplicate", "quarantined"]
+    status: Literal["accepted", "duplicate", "quarantined", "policy_blocked"]
     received_at: datetime
     normalized_at: datetime
     clock_adjusted: bool
@@ -89,7 +89,11 @@ class InstancePolicy(BaseModel):
         "push.document": CaptureClassPolicy(),
         "push.screen": CaptureClassPolicy(),
     })
-    mining_status: Literal["active", "paused_budget_exhausted", "paused_gateway_unavailable"] = "active"
+    # Mining is deliberately not user-activatable until a worker exists that
+    # consumes the policy. Keeping this as a single-value enum makes both old
+    # clients and the dashboard fail closed instead of presenting inert state
+    # as an operational control.
+    mining_status: Literal["unavailable_not_implemented"] = "unavailable_not_implemented"
 
 
 class ModelEndpointConfig(BaseModel):
