@@ -72,7 +72,10 @@ embedded spine                         [planned]
 POST /v2/captures                      [implemented]
     |
     v
-append-only V2Capture staging          [implemented]
+policy gate + capture staging          [implemented]
+    |
+    v
+session assembly + admission work      [implemented]
     |
     v
 interpret -> mine -> resolve           [planned]
@@ -112,20 +115,39 @@ The instance stores the complete envelope in ArcadeDB's append-only
 idempotent. Device timestamps are retained, while gross clock skew is
 normalized using receipt time and the adapter-reported queue age.
 
-Capture classes present in instance policy enter the `staged` state. Unknown
-classes are accepted into `quarantined_unknown_class` rather than rejected or
-silently lost. Quarantined captures cannot enter the future mining pipeline
-until the instance supports their class.
+Known classes enabled by instance policy enter the `staged` state. For a new
+capture ID, a known but disabled class returns a `policy_blocked` receipt and is
+not stored. An ID that was already stored still returns `duplicate`, even if
+the class is now disabled. Unknown classes are accepted into
+`quarantined_unknown_class` rather than rejected or silently lost. Quarantined
+captures cannot enter the future mining pipeline until the instance supports
+their class.
+
+### Admission boundary
+
+Accepted `transcript.message` captures assemble into durable session scopes
+with idempotent membership. A session work item becomes available after the
+latest received member has been quiet for the configured interval. Accepted
+explicit pushes receive immediately available admission work.
+
+Admission items have generation-numbered identities and fixed-duration leases.
+Workers can reclaim expired leases, complete work they currently own, or return
+owned work to the pending state with a delayed retry. No worker consumes the
+queue in this milestone, so no admitted material reaches salience, inference,
+or the graph.
 
 ### Policy
 
 Authenticated clients read instance policy from `GET /v2/policy`. Policy
 advertises the supported contract range, capture-class controls, remote
-processing mode, and mining status. Administrators can update the persisted
-policy through the local Loreholm dashboard API.
+processing mode, and the sealed `unavailable_not_implemented` mining status.
+Administrators can update the persisted capture-class policy through the local
+Loreholm dashboard API. The instance enforces disabled capture classes before
+storage.
 
-The future embedded spine will cache and enforce this policy before upload.
-That client-side spine and its offline queue are not implemented yet.
+The future embedded spine will cache and enforce the same policy before upload.
+That client-side spine and its offline queue are not implemented yet, and
+remote-processing policy still awaits enforcement by the future miner.
 
 ### Browser chat capture
 
@@ -197,13 +219,13 @@ The implemented HTTP envelope and receipt semantics are documented in the
 [capture API](03_CaptureAPI.md). The planned adapter side is documented in
 [clients and spine](06_ClientsAndSpine.md).
 
-## Planned mining pipeline
+## Admission and the planned mining pipeline
 
 The accepted Loreholm design calls for the instance to turn staged context into
 inspectable knowledge:
 
-1. **Trigger:** process transcript sessions after quiescence, explicit pushes
-   immediately, and stragglers during a periodic sweep.
+1. **Trigger:** durable quiescent-session and immediate-push admission are
+   implemented. A scheduled worker and periodic straggler sweep are planned.
 2. **Interpret:** derive episodes, references, temporal meaning, and salience
    without mutating the raw capture.
 3. **Mine:** extract mentions and candidate claims through Bifrost under the

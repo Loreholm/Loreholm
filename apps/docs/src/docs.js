@@ -32,7 +32,7 @@ export const documents = [
     id: 'architecture', file: '01_Architecture.md', numeral: 'II', title: 'Architecture',
     short: 'See the whole machine before opening it.', region: 'threshold', status: 'mixed', depth: 1,
     time: '8 min', color: '#d9f99d', raw: architecture,
-    summary: 'How passive capture, the private network, and the planned knowledge-building pipeline fit together.',
+    summary: 'How passive capture, durable admission, the private network, and the planned knowledge-building pipeline fit together.',
   },
   {
     id: 'networking', file: '02_Networking.md', numeral: 'III', title: 'Private Network',
@@ -44,7 +44,7 @@ export const documents = [
     id: 'capture', file: '03_CaptureAPI.md', numeral: 'IV', title: 'Capture Contract',
     short: 'Learn the language spoken by every observer.', region: 'instance', status: 'implemented', depth: 2,
     time: '10 min', color: '#f4b860', raw: capture,
-    summary: 'Envelope fields, authentication, receipts, retries, timestamps, snapshots, and quarantine.',
+    summary: 'Envelope fields, policy blocking, receipts, retries, quarantine, session assembly, and admission work.',
   },
   {
     id: 'operations', file: '04_InstanceOperations.md', numeral: 'V', title: 'Instance Operations',
@@ -78,9 +78,9 @@ export const documents = [
   },
   {
     id: 'mining', file: '07_MiningAndKnowledge.md', numeral: 'X', title: 'Mining & Knowledge',
-    short: 'Descend into identity, evidence, and time.', region: 'depths', status: 'planned', depth: 5,
+    short: 'Descend into identity, evidence, and time.', region: 'depths', status: 'mixed', depth: 5,
     time: '14 min', color: '#e87951', raw: mining,
-    summary: 'Salience, mining stages, entity resolution, claims, provenance, vectors, schema, and surfacing.',
+    summary: 'Implemented session admission plus planned salience, mining, identity, provenance, schema, and surfacing.',
   },
   {
     id: 'lifecycle', file: '08_DataLifecycle.md', numeral: 'XI', title: 'Data Lifecycle',

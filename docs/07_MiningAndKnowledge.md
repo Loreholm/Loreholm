@@ -33,6 +33,9 @@ raw captures
 session/object assembly
     |
     v
+durable admission work
+    |
+    v
 mechanical trim + salience admission
     |
     v
@@ -53,18 +56,23 @@ separately re-runnable stages. No external client writes graph facts.
 
 ## Triggering work
 
-- Transcript sessions trigger after a configurable inactivity timeout.
-- Explicit pushes trigger immediately.
-- A periodic sweep catches out-of-order arrivals and interrupted work.
-- Schema maintenance runs on a slower independent cadence.
+The implemented admission boundary:
+
+- makes transcript-session work available after a configurable quiet period;
+- makes explicit-push work available immediately; and
+- lets a caller claim ready or expired work with a fixed-duration lease.
+
+There is no scheduled worker in this milestone. A periodic straggler sweep and
+slower independent schema-maintenance cadence remain planned.
 
 The durable unit for transcript processing is a session, not an individual
-message job. Messages remain immutable captures; interpretation reads a
-session range ordered by normalized time with capture identity as tie-breaker.
+message job. Messages remain immutable captures; the planned interpreter will
+read a session range ordered by normalized time with capture identity as
+tie-breaker.
 
 ## Salience gate
 
-The initial gate uses no LLM and no raw embeddings.
+The planned initial gate uses no LLM and no raw embeddings.
 
 1. Mechanical trim removes or truncates tool noise, repeated retry loops, and
    oversized prompt material at read time without deleting stored bytes.
@@ -78,7 +86,7 @@ different threshold can reconsider them.
 
 | Regime | Examples | Lifecycle |
 |---|---|---|
-| Raw | Captures, sessions, source payloads | Immutable source material retained until user deletion |
+| Raw | Captures, sessions, source payloads | Capture bytes stay immutable; session aggregates advance as immutable members arrive |
 | Derived | Episodes, mentions, candidate claims, embeddings | Miner-versioned, reusable, and supersedable |
 | Accreted | Entities and committed claims | Stable identities that accumulate evidence and reversible history |
 
@@ -164,9 +172,11 @@ The accepted direction uses ArcadeDB's models according to workload:
 | Human-readable entities and claims | Graph |
 | Runs, evidence, queues, and quarantine | Documents/time series, not graph vertices |
 
-The current `V2Capture` foundation is a simpler append-only document schema.
-Concrete production types, properties, buckets, and indexes for the expanded
-layout remain open implementation work.
+The current foundation uses an append-only `V2Capture` document for each raw
+envelope, mutable `V2Session` aggregates, idempotent `V2SessionCapture`
+membership documents, and generation-numbered `V2WorkItem` documents. The
+expanded production layout still needs concrete event time-series, snapshot,
+external-payload, derived, vector, and graph types, buckets, and indexes.
 
 ## Vector policy
 
@@ -208,8 +218,11 @@ not be inferred from retired search-tool behavior.
 
 A practical sequence is:
 
-1. production capture/session storage schema — session scope and membership implemented;
-2. durable session quiescence and work queue — implemented;
+1. production capture/session storage schema — foundation documents, session
+   scope, and membership implemented; expanded production layout planned;
+2. durable session quiescence and work queue — scheduling, leases, recovery,
+   completion, and delayed retry implemented; scheduled consumer and sweep
+   planned;
 3. mechanical trim and salience records;
 4. mining-run identity and reusable output store;
 5. mention and candidate-claim extraction through Bifrost;

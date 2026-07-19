@@ -33,9 +33,11 @@ described in [Loreholm networking](02_Networking.md); do not publish the instanc
 directly as a substitute. Bifrost is present as the sole model-egress boundary,
 but endpoint configuration remains instance-owned and is not baked into the
 repository. Mining is not enabled in this foundation milestone. Admission work
-waits durably without being consumed. Set
-`LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS` to change the transcript quiet period
-from its 300-second default.
+waits durably without being consumed. The transcript quiet period defaults to
+300 seconds. When the API process is run directly, it reads
+`LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS`; the shipped Compose service does not
+currently pass that variable into the container, so the standard Compose stack
+uses the default.
 
 For a trusted LAN, set `LOREHOLM_V2_BIND_HOST` to the host's LAN address in the
 instance environment and recreate the `instance` service. Authentication still

@@ -193,14 +193,17 @@ transcript captures also assemble into `V2Session` records through idempotent
 quiet for the configured interval. Explicit pushes receive an immediately
 available admission item.
 
-Work claims use renewable leases. An expired lease can be claimed by another
-worker, while completion and retry require the current lease owner. There is no
-inference worker in this milestone, so these records stop at the admission
-boundary.
+Work claims use fixed-duration, reclaimable leases. An expired lease can be
+claimed by another worker, while completion and retry require the recorded
+lease owner. The current store contract does not provide an active lease-renewal
+operation. There is no inference worker in this milestone, so these records
+stop at the admission boundary.
 
 The accepted Loreholm storage design later divides events, snapshots, external
 payloads, sessions, derived content, vectors, and graph knowledge into the
-appropriate ArcadeDB models. That expanded schema is not implemented yet.
+appropriate ArcadeDB models. The session and work-item document types implement
+the admission slice of that design; the production event, snapshot, derived,
+vector, and graph layout remains open implementation work.
 
 ## Errors
 
@@ -217,4 +220,5 @@ should retain unacknowledged captures and retry with the same IDs.
 
 - `api/app/v2/models.py` — request and response validation
 - `api/app/v2/router.py` — policy and capture routes
-- `api/app/v2/service.py` — idempotency, clock normalization, quarantine, and persistence
+- `api/app/v2/service.py` — policy enforcement, idempotency, clock normalization,
+  quarantine, session assembly, admission work, and persistence

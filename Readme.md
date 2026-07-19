@@ -41,7 +41,13 @@ assistant adapter
 embedded spine  ---> offline queue / local permission enforcement
       |
       v
-instance API  ---> ArcadeDB staging ---> miner (planned) ---> knowledge graph
+instance API  ---> ArcadeDB staging ---> admission queue
+      |                                      |
+      |                                      v
+      |                               miner (planned)
+      |                                      |
+      |                                      v
+      |                               knowledge graph
       |
       +-------> Bifrost ---> user-configured model endpoints
 ```

@@ -70,6 +70,11 @@ The generated environment also contains ArcadeDB and Bifrost credentials plus
 raw and hashed device, administrator, and synchronization tokens. Avoid
 editing only one side of a raw-token/digest pair.
 
+Transcript-session admission uses a 300-second quiet period in the shipped
+Compose stack. The API process recognizes
+`LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS` when run directly, but the current
+Compose service does not expose that setting as an operator override.
+
 ## Health and status
 
 ```bash

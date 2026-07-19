@@ -42,11 +42,12 @@ Each class has two current controls:
 | `capture` | Boolean | Whether an authorized adapter may upload this class |
 | `remote_processing` | See below | Which representation a non-local model endpoint may receive |
 
-The server rejects disabled classes before storage and returns a
-`policy_blocked` receipt for that item. The planned spine will enforce the same
-decision before upload so blocked content ordinarily remains on the originating
-device. The eventual mining pipeline must independently defend the policy at
-its own boundary.
+For a capture ID that is not already stored, the server rejects a disabled
+class before storage and returns a `policy_blocked` receipt for that item. An
+already-stored ID remains a truthful `duplicate` even when current policy now
+disables its class. The planned spine will enforce the current decision before
+upload so blocked content ordinarily remains on the originating device. The
+eventual mining pipeline must independently defend policy at its own boundary.
 
 ### Remote-processing modes
 
