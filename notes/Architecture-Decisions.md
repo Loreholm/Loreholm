@@ -168,6 +168,25 @@ development fallback.
   person in personal and work graphs) is by design, fused at query time by
   whatever surfaces it, not at write time.
 
+### Network boundary retained from V1 (called 2026-07-19)
+- V2 changes capture, mining, and graph authority; it retains the front-door
+  and private-tunnel topology. Remote browsers and clients authenticate to a
+  public front door, which resolves the user's instance through Headscale and
+  reaches it over Tailscale.
+- Tailscale runs in a container rather than on the user host. A narrow endpoint
+  shim shares its network namespace and forwards an explicit allow-list of V2
+  application routes to the instance over the private Compose bridge.
+- ArcadeDB, Bifrost, Docker, and the host are never exposed directly on the
+  Tailnet. The tunnel connects authorized users to locally held data through
+  the instance contract, not through raw database access.
+- Public OIDC credentials terminate at the front door. The front door replaces
+  them with a per-instance synchronization credential before dialing port
+  `8081`. Headscale/Tailscale ACLs retain implicit-deny isolation between user
+  nodes and all non-allow-listed ports.
+- The route allow-list may grow with V2 capture, policy, sharing, and surfacing
+  contracts, but doing so is a security-boundary change. It must not recreate
+  V1's client authority to write interpreted graph facts.
+
 ### Decision B: capture classes
 - Two capture kinds, two identity regimes; downstream treats them differently:
   - **Events** — immutable, point-in-time (a message sent, a command run).
@@ -588,6 +607,7 @@ development fallback.
 | # | Decision | Status |
 |---|---|---|
 | A | Instance topology | Called. Instance = ArcadeDB + miner/control service + Bifrost; spine ships to the personal instance only; sharing is an explicit, irreversible disclosure served by that instance |
+| NET | Network boundary | Called. Retain the public front door, Headscale/Tailscale tunnel, containerized Tailnet identity, `:8081` application shim, implicit-deny ACL, and local-only data; V2 routes replace V1 application contracts without exposing ArcadeDB or Bifrost |
 | B | Capture classes | Called. V2 initial scope = assistant transcripts + explicit push; documents/screens enter as pushed snapshots; no passive document, browser, or screen capture initially |
 | C1 | Capture identity | Called with B/H. Every envelope gets a spine-minted UUIDv7 transport identity; snapshot payload versions are content-hashed with best-effort object identity as a separate layer |
 | C2 | Entity identity | Called. Surrogate UUIDv7, content-free; resolution = mention NN + string similarity, thresholds with LLM middle band |

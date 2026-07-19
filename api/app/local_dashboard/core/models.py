@@ -34,8 +34,8 @@ class ProxyQueryRequest(BaseModel):
 class AuthoredSchemaTypeRequest(BaseModel):
     """Create-or-update body for entity/relationship types in the authored
     schema editor (Phase 6). `name` is normalized server-side to Title Case;
-    the LLM-facing description is required because MCP tool parameter
-    descriptions depend on it (see docs/06_ToolSchemas.md).
+    the LLM-facing description is required because generated tool parameter
+    descriptions depend on it.
     """
     name: str = Field(..., min_length=1, max_length=128)
     description: str = Field(..., min_length=1, max_length=500)

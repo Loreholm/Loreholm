@@ -8,12 +8,13 @@
 #   query, and chat features actually work.
 # - Runs uvicorn on the host with --reload pointing at the source tree, so
 #   edits to api/app/local_dashboard/ (static or Python) show up instantly.
-# - Pre-seeds a dev session via LOCAL_DASHBOARD_DEV_MODE + /dev/login, so you
-#   never have to go through the token handshake or account setup.
+# - Does NOT bypass auth: the dev loop walks the real first-run flow (bootstrap
+#   token -> create account -> log in), so it doubles as a product walk-through.
 #
 # Usage:
 #   scripts/dev-local-dashboard.sh
-# Then open http://127.0.0.1:4466/dev/login once to set the session cookie.
+# Then open http://127.0.0.1:4466/ and complete first-run setup (the bootstrap
+# token is printed when the script starts).
 
 set -euo pipefail
 
@@ -70,10 +71,19 @@ DEV_PREFS_FILE="$DEV_STATE/dashboard-preferences.json"
 DEV_BIFROST_CONFIG="$DEV_STATE/chat-bifrost-config.json"
 DEV_ARCADEDB_ROOT_PASSWORD_FILE="$DEV_STATE/arcadedb-root.password"
 
+# Secret-file contract: write the token with NO trailing newline.
+# ArcadeDB's rootPasswordPath loader hashes the file's raw bytes (it does NOT
+# strip), so a trailing "\n" becomes part of the root password — while the
+# dashboard reads the same file with .strip() and authenticates without it. A
+# trailing newline therefore silently breaks first-boot auth ("User/Password
+# not valid") on every dashboard->ArcadeDB call, including the wizard's
+# deploy_database. The prod installers already write clean (web/install.sh:368
+# uses `printf "%s"`); this keeps the dev loop to the same contract. Readers of
+# the other tokens strip, so no-newline is safe for all of them too.
 seed_random_token() {
   local path="$1"
   if [[ ! -s "$path" ]]; then
-    "$VENV_PY" -c "import secrets; print(secrets.token_urlsafe(32))" > "$path"
+    "$VENV_PY" -c "import secrets, sys; sys.stdout.write(secrets.token_urlsafe(32))" > "$path"
     chmod 600 "$path"
   fi
 }
@@ -105,29 +115,12 @@ seed_json "$DEV_BIFROST_CONFIG"  '{"providers":{}}'
 # registers it AND runs CREATE DATABASE on ArcadeDB in one coupled operation.
 # (Pre-registering a `dev` record here without also creating the ArcadeDB
 # database made the reconciler sweep a database that didn't exist -> 403.)
-# See scripts/README.md for a scripted shortcut if you want to skip the click.
 seed_json "$DEV_REGISTRY_FILE"   '{"version":1,"databases":[]}'
 
-# Pre-seed credentials so _is_account_setup() reports True and nothing nudges
-# us toward the first-run setup wizard. Matches main.py's pbkdf2 params.
-if [[ ! -s "$DEV_CREDS_FILE" ]]; then
-  "$VENV_PY" - <<'PY' > "$DEV_CREDS_FILE"
-import hashlib, json, secrets
-from datetime import datetime, timezone
-salt = secrets.token_hex(32)
-password_hash = hashlib.pbkdf2_hmac(
-    "sha256", b"devpass", salt.encode("utf-8"), 260000
-).hex()
-print(json.dumps({
-    "version": 1,
-    "username": "dev",
-    "password_hash": password_hash,
-    "salt": salt,
-    "created_at": datetime.now(timezone.utc).isoformat(),
-}, indent=2))
-PY
-  chmod 600 "$DEV_CREDS_FILE"
-fi
+# Credentials are intentionally NOT pre-seeded. The dev loop walks the real
+# first-run auth flow: enter the bootstrap token (printed below), create a
+# dashboard account, then log in. The account persists in .dev-state across
+# restarts; `clean-local-dashboard.sh` resets it.
 
 green "Dev state seeded at $DEV_STATE"
 
@@ -153,8 +146,8 @@ docker compose -f "$COMPOSE_FILE" up -d
 green "Dev containers up"
 
 # ---------- env for uvicorn ----------
-export LOCAL_DASHBOARD_DEV_MODE=1
-export LOCAL_DASHBOARD_DEV_SESSION_ID="${LOCAL_DASHBOARD_DEV_SESSION_ID:-dev-session}"
+# Note: no LOCAL_DASHBOARD_DEV_MODE — the /dev/login bypass stays off so the
+# dashboard requires the real bootstrap-token + account-setup + login flow.
 export LOCAL_DASHBOARD_SESSION_COOKIE_SECURE=false
 export LOCAL_DASHBOARD_SESSION_TTL_SECONDS=31536000
 
@@ -175,7 +168,9 @@ export LOCAL_DASHBOARD_ARCADEDB_ROOT_PASSWORD_FILE="$DEV_ARCADEDB_ROOT_PASSWORD_
 
 green "Dev stack ready"
 blue ""
-blue "  \xE2\x86\x92 Open http://127.0.0.1:4466/dev/login (once) to set the session cookie."
+blue "  \xE2\x86\x92 Open http://127.0.0.1:4466/ and complete first-run setup:"
+blue "     bootstrap token: $(cat "$DEV_TOKEN_FILE")"
+blue "     then create a dashboard account (username + password) and log in."
 blue "  \xE2\x86\x92 Edits to api/app/local_dashboard/static/ — browser refresh."
 blue "  \xE2\x86\x92 Edits to api/app/local_dashboard/*.py — uvicorn --reload handles it."
 blue "  \xE2\x86\x92 Stop dev containers: docker compose -f deploy/docker-compose.dev.yml down"

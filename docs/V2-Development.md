@@ -27,11 +27,12 @@ docker compose --env-file deploy/.env.v2 -f deploy/docker-compose.v2.yml up -d -
 curl http://127.0.0.1:8082/health
 ```
 
-The API is intentionally bound to loopback. Put an authenticated TLS reverse
-proxy or private overlay network in front of it before connecting a remote
-adapter. Bifrost is present as the sole model-egress boundary, but endpoint
-configuration remains instance-owned and is not baked into the repository.
-Mining is not enabled in this foundation milestone.
+The base development API is intentionally bound to loopback. V2's retained
+remote architecture uses the public front door and Headscale/Tailscale tunnel
+described in [V2 networking](02_Networking.md); do not publish the instance
+directly as a substitute. Bifrost is present as the sole model-egress boundary,
+but endpoint configuration remains instance-owned and is not baked into the
+repository. Mining is not enabled in this foundation milestone.
 
 For a trusted LAN, set `LOREHOLM_V2_BIND_HOST` to the host's LAN address in the
 instance environment and recreate the `instance` service. Authentication still
@@ -78,8 +79,8 @@ capture is not reliable on the current GB10 development driver stack.
 The V2 browser chat remains a separate-origin static application. It sends an
 OIDC access token to the cloud API's `/chat/stream` endpoint; the cloud resolves
 the user's Tailnet address and replaces that credential with the per-user sync
-token before dialing port `8081`. The optional
-`docker-compose.v2.remote.yml` overlay runs the Tailscale sidecar and endpoint
-shim. That shim forwards `/api/chat/*` only, while the instance streams from
-Bifrost on its private Compose bridge and records both sides as raw
-`transcript.message` captures.
+token before dialing port `8081`. In development, the retained tunnel topology
+is applied as the `docker-compose.v2.remote.yml` overlay, which runs the
+Tailscale sidecar and endpoint shim. That shim currently forwards
+`/api/chat/*` only, while the instance streams from Bifrost on its private
+Compose bridge and records both sides as raw `transcript.message` captures.

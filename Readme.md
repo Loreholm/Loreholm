@@ -42,6 +42,12 @@ instance API  ---> ArcadeDB staging ---> miner (planned) ---> knowledge graph
 The adapter is a sensor, not an authority. Interpretation happens inside the
 instance. Bifrost is the only permitted model-egress path.
 
+V2 retains Loreholm's remote trust boundary: browsers and remote clients enter
+through the public front door, which authenticates them and reaches their
+containerized instance over a Headscale-managed Tailscale tunnel. ArcadeDB,
+Bifrost, and durable context remain local and are never exposed directly on
+the Tailnet. See [V2 networking](docs/02_Networking.md).
+
 ## Requirements
 
 - Linux with Docker Engine
@@ -195,10 +201,21 @@ LOREHOLM_ERASE_DATA=1 bash "$LOREHOLM_HOME/source/web/uninstall-v2.sh"
 
 The second command is destructive and cannot be undone without a backup.
 
-## Development documentation
+## Documentation
 
+- [Documentation index](docs/README.md)
+- [V2 architecture](docs/01_Architecture.md)
+- [V2 networking](docs/02_Networking.md)
+- [Capture API](docs/03_CaptureAPI.md)
+- [Instance operations](docs/04_InstanceOperations.md)
+- [Policy and models](docs/05_PolicyAndModels.md)
+- [Clients and embedded spine](docs/06_ClientsAndSpine.md)
+- [Mining and knowledge model](docs/07_MiningAndKnowledge.md)
+- [Data lifecycle](docs/08_DataLifecycle.md)
+- [V2 browser chat](docs/09_Chat.md)
 - [Architecture decisions](notes/Architecture-Decisions.md)
 - [V2 development stack](docs/V2-Development.md)
+- [V2 trust and security model](docs/13_SecurityModel.md)
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
 

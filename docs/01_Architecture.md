@@ -1,232 +1,216 @@
-# Architecture (3 min read)
+# Loreholm V2 architecture
 
-loreholm is a memory proxy for LLM conversations built around the Model Context Protocol (MCP).
+Loreholm V2 is a self-hosted capture and knowledge-mining framework. Its
+central design change from V1 is who decides what becomes knowledge:
 
-## Architecture
+- **V1:** an external LLM called MCP write tools to submit already interpreted
+  entities, memories, and relationships.
+- **V2:** clients submit raw context as captures. The Loreholm instance owns
+  interpretation, mining, entity resolution, provenance, and graph commit.
 
-loreholm runs a single architecture: **BYODB (Bring Your Own Database)**.
-Each user runs their own database on their own machine; the cloud never
-stores user data and never connects to the database directly.
+V2 is greenfield at the application and data-model layers. It does not preserve
+the V1 MCP write contract or database schema. It **does** preserve the proven
+network boundary: a public front door reaches containerized user instances
+through a Headscale-managed Tailscale tunnel while the data itself stays local.
 
-```mermaid
-flowchart LR
-    subgraph user["User's Machine (one Docker Compose stack)"]
-        direction TB
-        ts["loreholm-tailscale<br/>Tailscale sidecar<br/>(only Tailnet node identity)"]
-        shim["loreholm-local-dashboard-endpoint<br/>:8081 — shares tailscale netns<br/>(only Tailnet-facing ingress)<br/>reverse-proxies /api/sync/* + /api/chat/*"]
-        subgraph bridge["Default Docker bridge (not on Tailnet)"]
-            direction TB
-            dash["loreholm-local-dashboard :4466<br/>Query proxy + Firewall + Embedding<br/>Service + Reconciler + Wizard + Web UI"]
-            arcade["loreholm-arcadedb :2480<br/>Single shared ArcadeDB server<br/>(Apache 2.0) — all databases<br/>Graph + HNSW Vector Index"]
-            bifrost["loreholm-bifrost-proxy :8080<br/>LLM Provider Gateway"]
-            dash --- arcade
-            dash --- bifrost
-        end
-        ts -.shares netns.- shim
-        shim -->|bridge| dash
-    end
-    subgraph cloud["Cloud Infrastructure"]
-        direction TB
-        api["FastAPI MCP API<br/>(example.com)"]
-        hs["Headscale Control Plane<br/>(Self-hosted)"]
-        api --- hs
-    end
-    api ==>|"HTTP to :8081 only — the ONLY path<br/>the Headscale ACL permits<br/>(query proxy + sync, pull-only)"| shim
-    api -. "all other ports + peers:<br/>implicit DENY" .-x bridge
-    linkStyle 6 stroke:#c0392b,stroke-width:1px,color:#c0392b
+## Status legend
+
+This document distinguishes running code from accepted design:
+
+- **Implemented** means the V2 application and deployment provide it now.
+- **Planned** means the behavior is specified in
+  [`notes/Architecture-Decisions.md`](../notes/Architecture-Decisions.md) but is
+  not executable yet.
+
+## Data flow
+
+```text
+surface adapter
+    |
+    | raw event or snapshot
+    v
+embedded spine                         [planned]
+    | identity, policy, offline queue
+    v
+POST /v2/captures                      [implemented]
+    |
+    v
+append-only V2Capture staging          [implemented]
+    |
+    v
+interpret -> mine -> resolve           [planned]
+    |
+    v
+knowledge graph + provenance           [planned]
+    |
+    v
+query and surfacing                     [planned]
 ```
 
-> **Trust boundary.** The Headscale ACL (`deploy/headscale-acl.hujson`) lets
-> `group:api` reach `*:8081` and nothing else; every other port and every
-> host-to-host path is denied by the implicit-deny rule. This is enforced in
-> depth: (1) the ACL permits only `:8081`; (2) only the shim is in the
-> Tailscale netns, so `:2480`/`:8080`/`:4466` are never bound to the Tailnet
-> interface at all; (3) the shim itself forwards only `/api/sync/*` and
-> `/api/chat/*`. Any one layer regressing still leaves the other two.
+The adapter is a sensor, not an authority. It maps native context into a
+capture envelope without deciding which facts should enter the graph. The
+instance is the sole eventual graph writer.
 
-- **One shared ArcadeDB server per machine.** A single
-  `loreholm-arcadedb` container holds every database the user creates;
-  per-database lifecycle is HTTP (`CREATE DATABASE` / `DROP DATABASE`)
-  against that one server. There are no per-database containers and no
-  Docker socket. ArcadeDB lives on the default Compose bridge — **not**
-  in the Tailscale netns — so `:2480` is unreachable from the Tailnet
-  regardless of ACL state.
-- **The `:8081` endpoint shim is the only Tailnet-facing ingress.** It
-  shares the `loreholm-tailscale` container's network namespace (the only
-  thing on the machine with a Tailnet IP), serves `/healthz` and
-  `/local-dashboard.json` locally, and reverse-proxies `/api/sync/*`
-  (cloud→local pull) and `/api/chat/*` (chat app proxy) to the dashboard
-  over the bridge. It relays the sync bearer token unmodified; the
-  dashboard verifies it.
-- **The local dashboard is the query proxy and firewall.** It is the
-  only process that talks to the ArcadeDB HTTP API (over the bridge as
-  `loreholm-arcadedb:2480`). Its `:4466` port is published to the LAN bind
-  host, not the Tailnet. Every cloud MCP request arrives via the shim as
-  Cypher to `POST /api/sync/query`; the dashboard rewrites
-  `{{embed:<param>}}` placeholders with vectors from its on-host
-  `EmbeddingService`, runs the firewall hook (read-only enforcement,
-  per-key rate limits, a Cypher language guard, user-authored policy
-  rules), executes against the target database, and returns rows plus
-  `profile_hash` in the response envelope.
-- **A staging reconciler runs inside the dashboard process.**
-  LLM-proposed writes land as `Staging` vertices; the reconciler sweeps
-  them on a timer and decides merge / promote / needs_review per
-  cosine-distance thresholds, using ArcadeDB's HNSW index for dedup
-  lookups.
-- **Cloud reaches the machine over the Headscale-managed Tailnet** to
-  the `:8081` shim; the cloud never opens a connection to ArcadeDB.
-- **An OIDC provider** (any standard issuer) handles user authentication for the cloud API.
-- **Bifrost** proxies LLM requests to configured AI providers (OpenAI, Anthropic, Google, Groq, Ollama).
+## Implemented foundation
 
-## Key Design Principles
+### Capture contract
 
-### 1. **BYODB-First**
-Users own and control their data. Databases run locally on user machines and connect via encrypted Tailscale mesh. The API never stores user data directly.
+The authenticated `POST /v2/captures` endpoint accepts batches of capture
+envelopes. Every envelope includes:
 
-### 2. **MCP-First** 
-All memory operations happen through explicit MCP tool calls:
-- `loreholm_upsert_entities` - Create/update entities
-- `loreholm_write_memory` - Store memories with embeddings
-- `loreholm_search` - Vector + text search
-- `loreholm_context` - Get entity context
-- `loreholm_link_entities` - Create relationships
-- `loreholm_delete_entities` - Delete entities (and detach edges)
-- `loreholm_recent` - Recent memories
-- `loreholm_stats` - Database statistics
+- a spine-minted UUIDv7 `capture_id`;
+- `event` or `snapshot` kind and a versioned capture class;
+- source surface, optional session reference, and device occurrence time;
+- an opaque payload plus optional references and non-authoritative hints; and
+- contract, spine, adapter, device, user, queue-age, and policy metadata.
 
-### 3. **Reference-Based Routing**
-API keys can route through reusable per-user database targets:
-- Multiple API keys can share one named target
-- New keys store a target reference claim (`db_ref`) instead of embedding full DB config
-- Legacy embedded key payloads are still supported for compatibility
+Snapshots require a SHA-256 content hash. Event identity and snapshot content
+identity remain separate so delivery retries can be idempotent without losing
+object-version semantics.
 
-### 4. **Pull-Only Local Dashboard**
-The local dashboard on a user's machine is a passive HTTP server from the
-cloud's perspective. All cloud ↔ local synchronization is initiated by the
-cloud over Tailscale, using a shared bearer token. The local dashboard
-never originates outbound HTTP to the cloud API. This preserves the trust
-boundary: a compromised BYODB node cannot reach cloud endpoints as its
-user, and end-user firewalls that block outbound traffic from local
-databases are supported by default.
+### Durable staging
 
-Staleness detection is a byproduct of serving queries rather than a
-background poll: every query response includes `profile_hash` in its
-envelope, and the cloud does a resolve-and-retry on mismatch. See
-`docs/07_BYODB.md` §7 for the full query-proxy + sync design.
+The instance stores the complete envelope in ArcadeDB's append-only
+`V2Capture` document region. A unique index on `capture_id` makes retries
+idempotent. Device timestamps are retained, while gross clock skew is
+normalized using receipt time and the adapter-reported queue age.
 
-### 5. **Graph-Backed**
-ArcadeDB stores:
-- **Entities**: People, projects, tools, concepts (committed)
-- **Memories**: Text observations with confidence and provenance (committed)
-- **Relationships**: How entities relate to each other (`RELATED_TO`, `MENTIONS`, `ABOUT`, `HAS_MESSAGE`, `DERIVED_FROM`)
-- **Staging**: LLM-proposed writes awaiting the reconciler's merge/promote/review decision
-- **Embeddings**: Semantic vectors indexed by `LSM_VECTOR` HNSW on `Entity`, `Memory`, and `Staging`
+Capture classes present in instance policy enter the `staged` state. Unknown
+classes are accepted into `quarantined_unknown_class` rather than rejected or
+silently lost. Quarantined captures cannot enter the future mining pipeline
+until the instance supports their class.
 
-### 6. **Vector-First Search**
-Search strategy:
-1. Dashboard embeds the query text via `EmbeddingService` (Harrier-270M or MiniLM-L6-v2).
-2. Cypher runs `CALL vectorNeighbors('Memory[embedding]', embedding, $limit)` against ArcadeDB's HNSW index.
-3. Post-filters (time, tags, entity types) are applied in the same query.
-4. Results are ranked by `(1.0 - distance)` similarity + timestamp.
+### Policy
 
-No traditional text matching needed — semantic search finds relevant memories based on meaning.
+Authenticated clients read instance policy from `GET /v2/policy`. Policy
+advertises the supported contract range, capture-class controls, remote
+processing mode, and mining status. Administrators can update the persisted
+policy through the local V2 dashboard API.
 
-## Technology Stack
+The future embedded spine will cache and enforce this policy before upload.
+That client-side spine and its offline queue are not implemented yet.
 
-- **API**: FastAPI (Python)
-- **Database**: ArcadeDB (Apache 2.0) — one shared server container per machine holding all of the user's databases, with built-in HNSW vector indexes
-- **Client**: `httpx` against ArcadeDB's HTTP `/api/v1/command/{database}` endpoint
-- **Embeddings**: dashboard-side `EmbeddingService` (Harrier-270M 640-dim primary, MiniLM-L6-v2 384-dim fallback)
-- **LLM Gateway**: Bifrost (OpenAI-compatible proxy for multi-provider LLM access)
-- **Supported LLM Providers**: OpenAI, Anthropic, Google (Gemini), Groq, Ollama (local)
-- **Authentication**: OIDC (JWT tokens, any standard issuer) for cloud API; password-based auth for local dashboard
-- **API Key Metadata/Revocation**: Redis
-- **Database Target Registry**: Postgres
-- **Networking**: Tailscale + Headscale (private mesh)
-- **Frontend**: Vanilla HTML/CSS/JS (no build tools)
-- **Deployment**: Docker + GitHub Actions + Watchtower
+### Browser chat capture
 
-## Repository Structure
+The V2 chat path records both the user's message and the completed assistant
+response as raw `transcript.message` captures. This is the first working
+example of passive capture: using the conversation surface creates capture
+records without a separate “remember this” tool call. See
+[V2 browser chat](09_Chat.md) for the front-door, streaming, and capture
+contract.
 
-```
-api/                    # FastAPI application
-  app/
-    main.py            # FastAPI entry point
-    mcp/               # MCP tool routes
-    onboarding/        # User onboarding & OIDC integration
-    local_dashboard/   # Local dashboard API + wizard agent
-      main.py          # Dashboard endpoints, auth, Bifrost, wizard
-      static/          # Frontend (HTML, JS, CSS)
-    llm/               # LLM routing (Bifrost proxy)
-    services/          # Graph store layer (ArcadeDBStore via /api/sync/query proxy)
-  tests/               # API tests
-web/                   # Static frontend + install scripts
-  index.html           # Landing page
-  dashboard.html       # User dashboard
-  install.sh           # BYODB install script (Linux/macOS)
-  install.ps1          # BYODB install script (Windows)
-  update.sh            # Update script (Linux/macOS)
-  update.ps1           # Update script (Windows)
-  js/                  # OIDC & dashboard logic
-deploy/                # Production docker-compose
-  docker-compose.headscale.yml  # Headscale control plane
-docs/                  # Documentation (you are here)
-.github/workflows/     # CI + public image publishing (deploys live elsewhere)
+### Instance deployment
+
+One V2 instance is one lifecycle and trust boundary:
+
+```text
+host
+  |- instance API :8082 (loopback by default)
+  |- Bifrost management proxy :8083 (loopback by default)
+  `- private Compose bridge
+       |- ArcadeDB (one database owned by this instance)
+       `- Bifrost (the only model-egress path)
 ```
 
-## Data Flow Example
+ArcadeDB and Bifrost inference are not published to the host. The instance API
+is the only process that writes captures to ArcadeDB. Hosting several separate
+knowledge worlds means deploying several instances, not creating tenants in a
+shared instance database.
 
-**Writing a memory:**
+### Retained front-door and tunnel topology
 
-```mermaid
-flowchart TD
-    A[LLM calls loreholm_write_memory via MCP]
-    B["Cloud API → local dashboard<br/>POST /api/sync/query"]
-    C["Dashboard:<br/>• Rewrites {{embed:text}} via EmbeddingService<br/>• Policy hook (read-only, rate limit, language guard)<br/>• Executes CREATE (s:Staging {...}) on ArcadeDB"]
-    D["Reconciler sweep (Phase 4):<br/>promote / merge / needs_review"]
-    E["Return staging_id to the LLM;<br/>committed Memory appears after the sweep"]
-    A --> B --> C --> D --> E
+V2 keeps the V1 network shape even though the traffic crossing it changes:
+
+```text
+browser / remote client
+          |
+          | HTTPS + OIDC
+          v
+public front door
+          |
+          | Headscale-managed Tailscale network
+          | per-user route + instance sync credential
+          v
+Tailnet endpoint shim :8081
+          |
+          | explicit application routes only
+          v
+V2 instance API ------ ArcadeDB
+          |
+          `------------ Bifrost
 ```
 
-**Searching memories:**
+The front door authenticates the user, resolves the user's Tailnet node, and
+relays an authorized request. The Tailscale client runs in its own container;
+only the endpoint shim shares its network namespace. The instance, ArcadeDB,
+and Bifrost remain on the private Compose bridge. The tunnel therefore reaches
+locally stored data through the instance's application contract, never through
+direct database or model-gateway exposure.
 
-```mermaid
-flowchart TD
-    A[LLM calls loreholm_search with query text]
-    B["Cloud API → local dashboard<br/>POST /api/sync/query"]
-    C["Dashboard:<br/>• Embeds query text (Harrier or MiniLM)<br/>• CALL vectorNeighbors on ArcadeDB HNSW index<br/>• Applies WHERE filters (time, tags, entity types)"]
-    D[Returns ranked rows + profile_hash envelope to the LLM]
-    A --> B --> C --> D
-```
+The V2 remote Compose overlay already implements the Tailscale sidecar and
+`:8081` endpoint pattern for browser chat. The current shim allow-list forwards
+`/api/chat/*` only. As capture, policy, and graph-surfacing flows are connected
+to the front door, they should extend this application-level allow-list without
+placing ArcadeDB, Bifrost, or the host on the Tailnet.
 
-## Security Model
+See [V2 networking](02_Networking.md) for the retained invariants and current
+implementation boundary.
 
-### Cloud / Tailnet boundary
-- **OIDC JWT validation** for all cloud API authenticated routes
-- **Per-user dashboard isolation** via Tailscale ACLs (Headscale enforces
-  per-user reachability of each machine's `:8081` endpoint node)
-- **Optional per-key target routing** via server-side database target references
-- **Headscale ACLs** prevent users from reaching other users' machines
-- **Only the `:8081` endpoint shim is exposed on the Tailnet.** ArcadeDB
-  (`:2480`) and Bifrost (`:8080`) live on the default Docker bridge and
-  are unreachable from the Tailnet regardless of ACL state; the dashboard
-  (`:4466`) is published to the LAN bind host, not the Tailnet
-- **Cloud-originated queries pass the local firewall hook** (read-only
-  enforcement, per-key rate limits, Cypher language guard, user policy
-  rules) before they touch ArcadeDB
+The implemented HTTP envelope and receipt semantics are documented in the
+[capture API](03_CaptureAPI.md). The planned adapter side is documented in
+[clients and spine](06_ClientsAndSpine.md).
 
-### Local Dashboard
-- **Bootstrap token** for initial access (generated at install, shown once)
-- **Username/password authentication** after account setup (PBKDF2-SHA256)
-- **Session cookies** for browser access (signed, httponly, configurable TTL)
-- **API key auth** for external agent access (`Authorization: Bearer <key>`)
-- **Sync bearer token** for cloud-to-local communication, relayed unchanged by the `:8081` shim and verified by the dashboard
+## Planned mining pipeline
 
-## What loreholm Is NOT
+The accepted V2 design calls for the instance to turn staged context into
+inspectable knowledge:
 
-- ❌ An autonomous agent brain
-- ❌ A hidden surveillance memory
-- ❌ A black-box vector store
-- ❌ A rigid ontology experiment
+1. **Trigger:** process transcript sessions after quiescence, explicit pushes
+   immediately, and stragglers during a periodic sweep.
+2. **Interpret:** derive episodes, references, temporal meaning, and salience
+   without mutating the raw capture.
+3. **Mine:** extract mentions and candidate claims through Bifrost under the
+   instance's processing, egress, and budget policy.
+4. **Resolve:** reconcile mentions with stable entities and distinguish exact
+   retries from independent supporting observations.
+5. **Commit:** write claims and first-class evidence records that link every
+   derived assertion back to its source captures and mining run.
+6. **Surface:** answer queries from the mined graph while retaining the raw
+   context and its audit trail.
 
-loreholm exists to help **humans and LLMs think together** through explicit, inspectable memory operations.
+Mining outputs will carry miner, model/config, input, and schema fingerprints.
+Re-mining must be scoped and idempotent: a new successful generation can
+supersede prior derived output without replacing stable accreted identities or
+destroying independent evidence.
+
+None of the interpreter, miner, entity-resolution, graph-commit, or query
+stages above are implemented in the current foundation milestone.
+
+See [mining and knowledge](07_MiningAndKnowledge.md) for the accepted identity,
+provenance, schema, vector, and surfacing decisions, and
+[data lifecycle](08_DataLifecycle.md) for deletion, backup, and sharing.
+
+## Current component map
+
+| Component | Status | Responsibility |
+|---|---|---|
+| V2 instance API | Implemented | Authentication, policy, capture ingestion, dashboard, chat proxy |
+| ArcadeDB capture store | Implemented | Append-only raw captures and instance configuration |
+| Bifrost gateway | Implemented | Sole model-egress boundary and provider management |
+| Browser-chat capture | Implemented | Automatically records both sides of a chat transcript |
+| Headscale/Tailscale tunnel | Implemented for chat | Front-door route to the user's containerized instance |
+| Tailnet endpoint shim | Implemented for chat | Allow-listed application ingress on port 8081 |
+| Surface adapters | Planned | Convert IDE, browser, mobile, and other native context into captures |
+| Embedded spine | Planned | Identity, policy enforcement, redaction, ordering, and offline delivery |
+| Interpreter/miner | Planned | Turn raw captures into episodes, mentions, entities, claims, and evidence |
+| Graph query/surfacing | Planned | Retrieve mined knowledge for users and assistants |
+
+## Source map
+
+- `api/app/v2/models.py` — capture, policy, model, and chat contracts
+- `api/app/v2/service.py` — capture ingestion and ArcadeDB persistence
+- `api/app/v2/app.py` — V2 application, administration, and chat capture
+- `deploy/docker-compose.v2.yml` — private instance deployment
+- `deploy/docker-compose.v2.remote.yml` — retained tunnel topology, currently wired for chat
+- `deploy/v2-endpoint-shim.py` — Tailnet application-route allow-list
+- `notes/Architecture-Decisions.md` — accepted design beyond the executable slice

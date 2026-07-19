@@ -11,12 +11,13 @@
 #   query, and chat features actually work.
 # - Runs uvicorn with --reload pointing at the source tree, so edits to
 #   api/app/local_dashboard/ (static or Python) show up instantly.
-# - Pre-seeds a dev session via LOCAL_DASHBOARD_DEV_MODE + /dev/login, so you
-#   never have to go through the token handshake or account setup.
+# - Does NOT bypass auth: the dev loop walks the real first-run flow (bootstrap
+#   token -> create account -> log in), so it doubles as a product walk-through.
 #
 # Usage:
 #   scripts\dev-local-dashboard.ps1
-# Then open http://127.0.0.1:4466/dev/login once to set the session cookie.
+# Then open http://127.0.0.1:4466/ and complete first-run setup (the bootstrap
+# token is printed when the script starts).
 
 $ErrorActionPreference = 'Stop'
 
@@ -113,28 +114,12 @@ Seed-Json $DevBifrostConfig '{"providers":{}}'
 # registers it AND runs CREATE DATABASE on ArcadeDB in one coupled operation.
 # (Pre-registering a `dev` record here without also creating the ArcadeDB
 # database made the reconciler sweep a database that didn't exist -> 403.)
-# See scripts/README.md for a scripted shortcut if you want to skip the click.
 Seed-Json $DevRegistryFile  '{"version":1,"databases":[]}'
 
-# Pre-seed credentials so _is_account_setup() reports True and nothing nudges
-# us toward the first-run setup wizard. Matches main.py's pbkdf2 params.
-if (-not (Test-Path $DevCredsFile) -or (Get-Item $DevCredsFile).Length -eq 0) {
-    & $VenvPy -c @'
-import hashlib, json, secrets
-from datetime import datetime, timezone
-salt = secrets.token_hex(32)
-password_hash = hashlib.pbkdf2_hmac(
-    "sha256", b"devpass", salt.encode("utf-8"), 260000
-).hex()
-print(json.dumps({
-    "version": 1,
-    "username": "dev",
-    "password_hash": password_hash,
-    "salt": salt,
-    "created_at": datetime.now(timezone.utc).isoformat(),
-}, indent=2))
-'@ | Set-Content $DevCredsFile
-}
+# Credentials are intentionally NOT pre-seeded. The dev loop walks the real
+# first-run auth flow: enter the bootstrap token (printed below), create a
+# dashboard account, then log in. The account persists in .dev-state across
+# restarts; clean-local-dashboard.ps1 resets it.
 
 Green "Dev state seeded at $DevState"
 
@@ -164,8 +149,8 @@ if ($LASTEXITCODE -ne 0) { Red 'docker compose up failed.'; exit 1 }
 Green 'Dev containers up'
 
 # ---------- env for uvicorn ----------
-$env:LOCAL_DASHBOARD_DEV_MODE = '1'
-if (-not $env:LOCAL_DASHBOARD_DEV_SESSION_ID) { $env:LOCAL_DASHBOARD_DEV_SESSION_ID = 'dev-session' }
+# Note: no LOCAL_DASHBOARD_DEV_MODE — the /dev/login bypass stays off so the
+# dashboard requires the real bootstrap-token + account-setup + login flow.
 $env:LOCAL_DASHBOARD_SESSION_COOKIE_SECURE = 'false'
 $env:LOCAL_DASHBOARD_SESSION_TTL_SECONDS = '31536000'
 
@@ -186,7 +171,9 @@ $env:LOCAL_DASHBOARD_ARCADEDB_ROOT_PASSWORD_FILE = $DevArcadedbRootPasswdFile
 
 Green 'Dev stack ready'
 Blue ''
-Blue '  -> Open http://127.0.0.1:4466/dev/login (once) to set the session cookie.'
+Blue '  -> Open http://127.0.0.1:4466/ and complete first-run setup:'
+Blue "     bootstrap token: $(Get-Content -Raw $DevTokenFile)"
+Blue '     then create a dashboard account (username + password) and log in.'
 Blue '  -> Edits to api/app/local_dashboard/static/ — browser refresh.'
 Blue '  -> Edits to api/app/local_dashboard/*.py — uvicorn --reload handles it.'
 Blue '  -> Stop dev containers: docker compose -f deploy/docker-compose.dev.yml down'

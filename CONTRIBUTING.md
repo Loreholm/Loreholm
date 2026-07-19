@@ -26,8 +26,10 @@ pip install -r api/requirements.txt -r api/requirements-dev.txt
 PYTHONPATH=api pytest api/tests   # the same command CI runs
 ```
 
-The full local stack is Docker Compose — see `docs/01_Architecture.md` for
-the topology and `docs/07_BYODB.md` for how the pieces talk to each other.
+The V2 stack is Docker Compose — see `docs/01_Architecture.md` for the
+implemented and planned topology and `docs/V2-Development.md` for the local
+development workflow. V1 operational documentation lives in Git history, not
+on this branch.
 
 ## Pull requests
 
@@ -42,8 +44,9 @@ the topology and `docs/07_BYODB.md` for how the pieces talk to each other.
 - CI must pass and the repository owner must approve before merge.
 - Match the style of the code you're touching; there is no linter on
   purpose — read the room instead.
-- Changes to the trust boundary (the Headscale ACL, the `:8081` shim, the
-  compose netns layout, anything in `docs/13_SecurityModel.md`) get extra
+- Changes to the trust boundary (the V2 front-door/tunnel path, the `:8081`
+  shim, Headscale/Tailscale ACL, token exchange, Compose network layout, or
+  anything in `docs/13_SecurityModel.md`) get extra
   scrutiny and may take longer. That's the most load-bearing part of the
   project.
 - Update `CHANGES.md` with a short entry describing what actually changed.
@@ -51,7 +54,8 @@ the topology and `docs/07_BYODB.md` for how the pieces talk to each other.
 ## What's most useful
 
 - Bug reports with the loreholm version, OS/arch, and `docker logs` output.
-- Reproductions for anything in the sync, reconciler, or install path.
+- Reproductions for anything in capture ingestion, policy sync, staging, or
+  the V2 install path.
 - Docs corrections — drift is the enemy.
 - Hardening reviews of the security model (see SECURITY.md for how to
   report anything sensitive).

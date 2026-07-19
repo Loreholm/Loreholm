@@ -51,7 +51,8 @@ Usage: .\uninstall.ps1 [options]
 Options:
   -InstallDir <path>  Install directory (default: $InstallDir)
   -KeepData           Remove containers only; keep the memory database, chat
-                      history, and $InstallDir so a reinstall re-adopts them
+                      history, dashboard account, and $InstallDir so a
+                      reinstall re-adopts them
   -Yes                Skip confirmation prompt
   -Help               Show this help message
 "@
@@ -66,7 +67,7 @@ function Confirm-Uninstall {
     Write-Host ""
     if ($KeepData) {
         Write-Warn-Custom "This removes the loreholm containers but KEEPS your data:"
-        Write-Warn-Custom "  memory database, chat history, and $InstallDir."
+        Write-Warn-Custom "  memory database, chat history, dashboard account, and $InstallDir."
     } else {
         Write-Warn-Custom "This PERMANENTLY DELETES your loreholm data and cannot be undone:"
         Write-Warn-Custom "  the memory database and chat history (loreholm-* Docker volumes),"
