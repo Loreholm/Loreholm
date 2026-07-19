@@ -1,72 +1,96 @@
 import React from 'react';
 import {AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig} from 'remotion';
 
-const stations = [
-  {x: 92, y: 170, label: 'SURFACE', detail: 'raw context', color: '#d9f99d', start: 10},
-  {x: 270, y: 94, label: 'FRONT DOOR', detail: 'OIDC', color: '#f4b860', start: 58},
-  {x: 470, y: 170, label: 'TUNNEL', detail: 'Tailnet :8081', color: '#66d6cf', start: 106},
-  {x: 660, y: 94, label: 'INSTANCE', detail: 'local authority', color: '#b8b5ff', start: 154},
-  {x: 850, y: 170, label: 'STAGING', detail: 'V2Capture', color: '#efad67', start: 202},
-  {x: 660, y: 300, label: 'MINER', detail: 'planned', color: '#e87951', start: 250},
-  {x: 850, y: 300, label: 'GRAPH', detail: 'evidence', color: '#d9f99d', start: 298},
-];
-
-const links = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6]];
-
-const line = (a, b) => {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const length = Math.sqrt(dx * dx + dy * dy);
-  const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-  return {length, angle};
+const stories = {
+  recall: {
+    label: 'A DECISION, REMEMBERED', color: '#d9f99d',
+    beats: [
+      {who: 'YOU / TODAY', title: '“Keep embeddings local.”', detail: 'Privacy matters more than the small accuracy gain.', kind: 'speech'},
+      {who: 'LOREHOLM / QUIETLY', title: 'Conversation captured', detail: 'Complete source context reaches your private instance.', kind: 'capture'},
+      {who: 'MINER / LATER', title: 'Decision + reason + evidence', detail: 'A claim is linked back to the exact source span.', kind: 'mine'},
+      {who: 'YOU / THREE WEEKS', title: '“Why did we keep it local?”', detail: 'The answer arrives with inspectable evidence.', kind: 'answer'},
+    ],
+  },
+  privacy: {
+    label: 'A PRIVATE REQUEST', color: '#66d6cf',
+    beats: [
+      {who: 'YOU / BROWSER', title: 'Ask from anywhere', detail: 'The public edge confirms who you are.', kind: 'speech'},
+      {who: 'FRONT DOOR', title: 'Relay, do not retain', detail: 'Only permitted application traffic enters the Tailnet.', kind: 'capture'},
+      {who: 'YOUR INSTANCE', title: 'Process beside the data', detail: 'ArcadeDB and Bifrost stay on the private bridge.', kind: 'mine'},
+      {who: 'BOUNDARY', title: 'Raw context stays home', detail: 'The public edge never becomes the knowledge authority.', kind: 'answer'},
+    ],
+  },
+  offline: {
+    label: 'A BROKEN CONNECTION', color: '#f4b860',
+    beats: [
+      {who: 'OBSERVER', title: 'Work continues', detail: 'A useful moment occurs while the tunnel is down.', kind: 'speech'},
+      {who: 'EMBEDDED SPINE', title: 'Queue the envelope', detail: 'Its stable capture ID and source time are preserved.', kind: 'capture'},
+      {who: 'RECONNECTED', title: 'Retry the same capture', detail: 'Delivery resumes without inventing a new event.', kind: 'mine'},
+      {who: 'INSTANCE', title: 'One durable receipt', detail: 'Idempotency turns replay into exactly one memory.', kind: 'answer'},
+    ],
+  },
+  evidence: {
+    label: 'AN ANSWER YOU CAN CHALLENGE', color: '#e87951',
+    beats: [
+      {who: 'RAW SOURCE', title: '“Maya approved the change.”', detail: 'A sentence exists inside a larger conversation.', kind: 'speech'},
+      {who: 'MINER', title: 'Resolve Maya Chen', detail: 'A mention is joined conservatively, with lineage.', kind: 'capture'},
+      {who: 'KNOWLEDGE', title: 'Claim ↔ Evidence', detail: 'Time, source span, and mining version remain attached.', kind: 'mine'},
+      {who: 'FUTURE ANSWER', title: 'Show your work', detail: 'Open the evidence instead of trusting fluent prose.', kind: 'answer'},
+    ],
+  },
+  builder: {
+    label: 'A NEW OBSERVER', color: '#b8b5ff',
+    beats: [
+      {who: 'YOUR ADAPTER', title: 'Notice source context', detail: 'Observe facts the host application already knows.', kind: 'speech'},
+      {who: 'EMBEDDED SPINE', title: 'Normalize + apply policy', detail: 'Create one canonical, retryable capture envelope.', kind: 'capture'},
+      {who: 'INSTANCE', title: 'Authenticate + stage', detail: 'Return a receipt only after durable local storage.', kind: 'mine'},
+      {who: 'MINER / NOT CLIENT', title: 'Decide what becomes lore', detail: 'Integrations never write graph truth directly.', kind: 'answer'},
+    ],
+  },
 };
 
-export const SystemMap = () => {
+const icons = {
+  speech: '“ ”', capture: '◎', mine: '◇', answer: '↗',
+};
+
+export const SystemMap = ({scenario = 'recall'}) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
-  const cycle = frame % 360;
-  const titleIn = spring({frame, fps, config: {damping: 18, stiffness: 80}});
+  const story = stories[scenario] || stories.recall;
+  const progress = interpolate(frame, [0, 340], [0, 1], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
 
   return (
-    <AbsoluteFill style={{background: '#0b0e0d', color: '#eee7d3', overflow: 'hidden', fontFamily: 'IBM Plex Mono, monospace'}}>
-      <div style={{position: 'absolute', inset: 0, opacity: 0.14, backgroundImage: 'linear-gradient(rgba(217,249,157,.22) 1px, transparent 1px),linear-gradient(90deg,rgba(217,249,157,.22) 1px,transparent 1px)', backgroundSize: '42px 42px'}} />
-      <div style={{position: 'absolute', inset: '-30%', background: `radial-gradient(circle at ${25 + cycle / 7}% 40%, rgba(102,214,207,.13), transparent 27%), radial-gradient(circle at 72% 70%, rgba(232,121,81,.12), transparent 30%)`}} />
+    <AbsoluteFill style={{background: '#080b09', color: '#eee7d3', overflow: 'hidden', fontFamily: 'IBM Plex Mono, monospace'}}>
+      <div style={{position: 'absolute', inset: 0, opacity: .12, backgroundImage: `linear-gradient(${story.color}25 1px,transparent 1px),linear-gradient(90deg,${story.color}25 1px,transparent 1px)`, backgroundSize: '36px 36px'}} />
+      <div style={{position: 'absolute', width: 520, height: 520, borderRadius: '50%', left: `${-20 + progress * 90}%`, top: -210, background: `radial-gradient(circle, ${story.color}20, transparent 67%)`}} />
 
-      <div style={{position: 'absolute', left: 48, top: 34, opacity: titleIn, transform: `translateY(${interpolate(titleIn, [0, 1], [18, 0])}px)`}}>
-        <div style={{fontSize: 13, letterSpacing: 3.8, color: '#d9f99d'}}>SIGNAL PATH / V2</div>
-        <div style={{fontFamily: 'Unbounded, sans-serif', fontWeight: 600, fontSize: 25, marginTop: 8}}>Context becomes knowledge here.</div>
+      <header style={{position: 'absolute', left: 44, right: 44, top: 31, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+        <span style={{color: story.color, fontSize: 11, letterSpacing: 3}}>{story.label}</span>
+        <span style={{color: '#59615b', fontSize: 9, letterSpacing: 2}}>USE CASE / {String(Math.min(4, Math.floor(frame / 85) + 1)).padStart(2, '0')}</span>
+      </header>
+
+      <div style={{position: 'absolute', left: 62, right: 62, top: 118, height: 2, background: '#252b27'}}>
+        <div style={{height: '100%', width: `${progress * 100}%`, background: story.color, boxShadow: `0 0 18px ${story.color}`}} />
       </div>
 
-      {links.map(([from, to], index) => {
-        const a = stations[from];
-        const b = stations[to];
-        const {length, angle} = line(a, b);
-        const reveal = interpolate(frame, [a.start + 20, b.start], [0, 1], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
-        return (
-          <div key={`${from}-${to}`} style={{position: 'absolute', left: a.x, top: a.y, width: length * reveal, height: 2, transformOrigin: 'left center', transform: `rotate(${angle}deg)`, background: `linear-gradient(90deg, ${a.color}, ${b.color})`, opacity: .55}}>
-            <div style={{position: 'absolute', right: -3, top: -2, width: 6, height: 6, borderRadius: '50%', background: b.color, boxShadow: `0 0 14px ${b.color}`}} />
-          </div>
-        );
-      })}
-
-      {stations.map((station, index) => {
-        const enter = spring({frame: frame - station.start, fps, config: {damping: 14, stiffness: 110}});
-        const active = cycle >= station.start % 360 && cycle < (station.start + 52) % 360;
-        return (
-          <div key={station.label} style={{position: 'absolute', left: station.x, top: station.y, opacity: enter, transform: `translate(-50%, -50%) scale(${interpolate(enter, [0, 1], [.65, 1])})`}}>
-            <div style={{width: 18, height: 18, transform: 'rotate(45deg)', background: active ? station.color : '#101412', border: `2px solid ${station.color}`, boxShadow: active ? `0 0 0 8px ${station.color}18, 0 0 24px ${station.color}` : `0 0 0 5px ${station.color}0b`, transition: 'box-shadow .2s'}} />
-            <div style={{position: 'absolute', width: 150, left: -66, top: 27, textAlign: 'center'}}>
-              <div style={{fontSize: 12, letterSpacing: 2.2, color: station.color}}>{station.label}</div>
-              <div style={{fontFamily: 'Newsreader, serif', fontStyle: 'italic', marginTop: 3, fontSize: 15, color: '#a9a79d'}}>{station.detail}</div>
+      <div style={{position: 'absolute', inset: '91px 38px 48px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 13, alignItems: 'center'}}>
+        {story.beats.map((beat, index) => {
+          const start = index * 78;
+          const enter = spring({frame: frame - start, fps, config: {damping: 18, stiffness: 95}});
+          const focus = interpolate(frame, [start - 15, start + 8, start + 72, start + 96], [.38, 1, 1, .46], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
+          return (
+            <div key={beat.title} style={{position: 'relative', minHeight: 225, padding: '27px 21px 21px', border: `1px solid ${index === 3 ? story.color + '80' : '#303731'}`, background: index === 3 ? `${story.color}0b` : '#0d110f', opacity: enter * focus, transform: `translateY(${interpolate(enter, [0, 1], [24, 0])}px)`}}>
+              <div style={{position: 'absolute', width: 15, height: 15, left: '50%', top: -28, transform: 'translateX(-50%) rotate(45deg)', border: `1px solid ${story.color}`, background: frame >= start ? story.color : '#0d110f', boxShadow: frame >= start ? `0 0 15px ${story.color}` : 'none'}} />
+              <div style={{color: story.color, fontSize: 9, letterSpacing: 1.8}}>{String(index + 1).padStart(2, '0')} / {beat.who}</div>
+              <div style={{color: story.color, fontFamily: 'Newsreader, serif', fontSize: 30, lineHeight: 1, margin: '27px 0 20px'}}>{icons[beat.kind]}</div>
+              <div style={{fontFamily: 'Unbounded, sans-serif', fontSize: 14, lineHeight: 1.3, letterSpacing: '-.4px'}}>{beat.title}</div>
+              <div style={{fontFamily: 'Newsreader, serif', color: '#92988f', fontSize: 17, lineHeight: 1.28, marginTop: 12}}>{beat.detail}</div>
             </div>
-            <div style={{position: 'absolute', left: -78, top: -82, fontSize: 10, color: '#555d57'}}>0{index + 1}</div>
-          </div>
-        );
-      })}
-
-      <div style={{position: 'absolute', left: 48, right: 48, bottom: 28, display: 'flex', justifyContent: 'space-between', fontSize: 10, letterSpacing: 2, color: '#68716a'}}>
-        <span>PUBLIC EDGE</span><span>ENCRYPTED PASSAGE</span><span>LOCAL WORLD</span>
+          );
+        })}
       </div>
+
+      <div style={{position: 'absolute', left: 44, bottom: 21, color: '#59615b', fontSize: 8, letterSpacing: 1.8}}>NOT A TOPOLOGY DIAGRAM — A MOMENT IN USE</div>
     </AbsoluteFill>
   );
 };
