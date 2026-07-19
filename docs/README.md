@@ -9,6 +9,7 @@ remain inside the user's instance.
 | Document | Purpose |
 |---|---|
 | [Project README](../Readme.md) | Current milestone, installation, and smoke test |
+| [Why Loreholm exists](00_Principles.md) | User custody, visible model context, bounded capture, and the limits of self-hosting |
 | [Loreholm architecture](01_Architecture.md) | Implemented capture foundation and planned mining pipeline |
 | [Loreholm networking](02_Networking.md) | Retained front-door, Headscale/Tailscale, and container topology |
 | [Capture API](03_CaptureAPI.md) | Implemented envelope, policy, receipt, idempotency, and quarantine contract |

@@ -5,6 +5,12 @@ private instance that holds your memory, or you can operate the public-facing
 server plane as well. Using Loreholm does not require making Loreholm's
 maintainers the permanent custodian of your data or your network.
 
+That is the point of self-hosting here: the storage and policy layer sits under
+your authority before a model provider is selected. It does not make a remote
+model private or erase data after you send it; it keeps the lasting memory,
+egress decisions, and provider choice from belonging exclusively to someone
+else. See [why Loreholm exists](00_Principles.md).
+
 ## Two things you can host
 
 Loreholm separates the place where memory lives from the front door used to

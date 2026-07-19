@@ -72,15 +72,15 @@ kbd { color: var(--brass); border: 1px solid rgba(200,155,80,.3); padding: 2px 6
 .fjord-window::before { content: ''; position: absolute; inset: 13px; z-index: 3; pointer-events: none; border: 1px solid rgba(200,155,80,.17); clip-path: inherit; }
 .fjord-window svg { position: absolute; inset: 2% 0 12%; width: 100%; height: 88%; overflow: visible; }
 .moon-ring { fill: none; stroke: rgba(232,223,197,.35); stroke-width: 2; stroke-dasharray: 2 9; }
-.dragon-stars { fill: var(--parchment); stroke: rgba(232,223,197,.29); stroke-width: 1; stroke-dasharray: 2 7; opacity: .65; animation: stars 4s ease-in-out infinite alternate; }
+.dragon-stars { fill: var(--parchment); stroke: rgba(232,223,197,.29); stroke-width: 1; stroke-dasharray: 2 7; opacity: .65; animation: stars 4s ease-in-out 1 alternate forwards; }
 .far-mountain { fill: #17272a; stroke: #2b3e3a; stroke-width: 1; }
 .near-mountain { fill: #0e1a1b; stroke: #263530; stroke-width: 1; }
 .fjord-water { fill: #0b2025; stroke: rgba(119,201,198,.24); }
-.longship { fill: none; stroke: #cfb36f; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 5px 12px rgba(0,0,0,.6)); animation: sail 5s ease-in-out infinite; transform-origin: center; }
+.longship { fill: none; stroke: #cfb36f; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 5px 12px rgba(0,0,0,.6)); animation: sail 5s ease-in-out 1; transform-origin: center; }
 .longship .dragon-prow { fill: rgba(200,155,80,.08); }
 .longship circle { fill: #15201d; }
-.water-rune { fill: none; stroke: rgba(119,201,198,.32); stroke-width: 1; stroke-dasharray: 7 12; animation: water 8s linear infinite; }
-.aurora { position: absolute; width: 80%; height: 200px; top: 3%; filter: blur(22px); opacity: .16; border-radius: 50%; transform: rotate(-17deg); background: linear-gradient(90deg, transparent, var(--aurora), var(--ice), transparent); animation: aurora 9s ease-in-out infinite alternate; }
+.water-rune { fill: none; stroke: rgba(119,201,198,.32); stroke-width: 1; stroke-dasharray: 7 12; animation: water 8s linear 1 forwards; }
+.aurora { position: absolute; width: 80%; height: 200px; top: 3%; filter: blur(22px); opacity: .16; border-radius: 50%; transform: rotate(-17deg); background: linear-gradient(90deg, transparent, var(--aurora), var(--ice), transparent); animation: aurora 9s ease-in-out 1 alternate forwards; }
 .aurora-one { left: -12%; }.aurora-two { right: -28%; top: 18%; opacity: .1; animation-delay: -4s; }
 .fjord-caption { position: absolute; left: 35px; right: 35px; bottom: 28px; z-index: 4; display: flex; align-items: end; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 18px; }
 .fjord-caption span { color: var(--brass); font: 400 11px var(--display); letter-spacing: .45em; }

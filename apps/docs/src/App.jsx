@@ -85,7 +85,7 @@ const Hero = ({choose}) => (
     <div className="hero-copy">
       <p className="eyebrow"><span /> A DEEP WORLD, ONE QUESTION AT A TIME</p>
       <h1>There is a lot<br />to <em>learn.</em></h1>
-      <p className="hero-lede">Loreholm has deep systems beneath a simple promise: private memory that helps you understand your work. You do not need to learn it all at once. Choose what matters now, then follow the trail as far as your curiosity takes you.</p>
+      <p className="hero-lede">Loreholm has deep systems beneath a simple promise: see what your tools share with LLMs, and keep the durable memory on storage you control. You do not need to learn it all at once. Choose what matters now, then follow the trail as far as your curiosity takes you.</p>
       <div className="entry-runes">
         {entryQuestions.map((entry) => (
           <button key={entry.next} onClick={() => choose(entry.next)}>
@@ -150,7 +150,6 @@ const Adventure = ({trail, choose, back, reset, setRoute}) => {
             compositionWidth={1000}
             compositionHeight={480}
             fps={30}
-            loop
             autoPlay={!reducedMotion}
             controls
             acknowledgeRemotionLicense
@@ -172,9 +171,10 @@ const Adventure = ({trail, choose, back, reset, setRoute}) => {
           <em>↖</em>
         </button>
         {node.options.map((option, index) => {
-          const targetDepth = getAdventureNode(option.next).depth;
+          const targetNode = getAdventureNode(option.next);
+          const targetDepth = targetNode.depth;
           const direction = targetDepth > node.depth ? `Descend to ${depthLabels[targetDepth]}` : targetDepth < node.depth ? `Return to ${depthLabels[targetDepth]}` : `Explore ${depthLabels[targetDepth]}`;
-          return <button key={option.next} onClick={() => choose(option.next)}><i>0{index + 1}</i><span><b>{option.label}</b><small>{direction}</small></span><em>→</em></button>;
+          return <button key={option.next} onClick={() => choose(option.next)}><i>0{index + 1}</i><span><b>{targetNode.question}</b><small>{direction}</small></span><em>→</em></button>;
         })}
       </div>
     </section>

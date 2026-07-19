@@ -5,6 +5,12 @@ tools submit the context around a person's work; the user's Loreholm instance
 alone decides how that context becomes entities, claims, relationships, and
 other durable knowledge.
 
+The architecture follows a moral boundary: model providers may supply
+intelligence, but they should not become the default owners of a person's
+durable working memory. Loreholm aims to make application-added model context
+visible and keep capture, policy, storage, mining, and evidence in the user's
+instance. See [why Loreholm exists](00_Principles.md).
+
 This boundary keeps individual integrations simple and keeps interpretation,
 identity, evidence, and graph changes under one instance-owned policy. A public
 front door can reach the containerized instance through a Headscale-managed

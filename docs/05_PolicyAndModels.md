@@ -3,6 +3,20 @@
 This page separates the controls implemented in the foundation from the mining
 controls accepted for later milestones.
 
+## Egress visibility requirement
+
+Loreholm is intended to show more than the prompt a person typed. A complete
+model-egress view should identify application-added context, retrieved history,
+source capture classes, transformations or redactions, the selected endpoint,
+the policy decision, and the effective payload or a clearly documented safer
+audit representation.
+
+This universal egress view is not implemented. Browser chat captures the user
+message and completed assistant response, and Bifrost is the only permitted
+model route, but the foundation does not yet present an exact-request preflight
+or durable egress ledger across connected tools. See
+[why Loreholm exists](00_Principles.md).
+
 ## Instance policy
 
 **Status:** Persistence, API access, and dashboard editing are implemented.

@@ -6,6 +6,12 @@ across conversations and tools, and is unwilling to place its durable working
 memory in a third-party black box. The current release is suitable for a
 bounded technical pilot, not yet for mission-critical organizational memory.
 
+An organizational evaluation should begin by asking what the existing LLM
+tools send beyond the visible prompt and who is allowed to retain it. Loreholm
+is meant to make that boundary inspectable and place the durable storage layer
+under organizational control. The complete egress inventory is still planned;
+see [why Loreholm exists](00_Principles.md).
+
 ## What an organization gets
 
 Loreholm separates four concerns that are often collapsed into one hosted AI

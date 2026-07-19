@@ -1,3 +1,4 @@
+import principles from '../../../docs/00_Principles.md?raw';
 import architecture from '../../../docs/01_Architecture.md?raw';
 import networking from '../../../docs/02_Networking.md?raw';
 import capture from '../../../docs/03_CaptureAPI.md?raw';
@@ -22,79 +23,85 @@ export const regions = [
 
 export const documents = [
   {
-    id: 'architecture', file: '01_Architecture.md', numeral: 'I', title: 'Architecture',
+    id: 'principles', file: '00_Principles.md', numeral: 'I', title: 'Why Loreholm Exists',
+    short: 'Read the oath before studying the machine.', region: 'threshold', status: 'mixed', depth: 1,
+    time: '8 min', color: '#e6edaa', raw: principles,
+    summary: 'Why model context should be visible, durable memory should be user-owned, and capture must remain bounded.',
+  },
+  {
+    id: 'architecture', file: '01_Architecture.md', numeral: 'II', title: 'Architecture',
     short: 'See the whole machine before opening it.', region: 'threshold', status: 'mixed', depth: 1,
     time: '8 min', color: '#d9f99d', raw: architecture,
     summary: 'How passive capture, the private network, and the planned knowledge-building pipeline fit together.',
   },
   {
-    id: 'networking', file: '02_Networking.md', numeral: 'II', title: 'Private Network',
+    id: 'networking', file: '02_Networking.md', numeral: 'III', title: 'Private Network',
     short: 'Walk the path from the front door to local data.', region: 'boundary', status: 'implemented', depth: 2,
     time: '6 min', color: '#66d6cf', raw: networking,
     summary: 'The front door, Headscale/Tailscale tunnel, endpoint shim, and container isolation invariants.',
   },
   {
-    id: 'capture', file: '03_CaptureAPI.md', numeral: 'III', title: 'Capture Contract',
+    id: 'capture', file: '03_CaptureAPI.md', numeral: 'IV', title: 'Capture Contract',
     short: 'Learn the language spoken by every observer.', region: 'instance', status: 'implemented', depth: 2,
     time: '10 min', color: '#f4b860', raw: capture,
     summary: 'Envelope fields, authentication, receipts, retries, timestamps, snapshots, and quarantine.',
   },
   {
-    id: 'operations', file: '04_InstanceOperations.md', numeral: 'IV', title: 'Instance Operations',
+    id: 'operations', file: '04_InstanceOperations.md', numeral: 'V', title: 'Instance Operations',
     short: 'Raise, inspect, update, and stop an instance.', region: 'instance', status: 'implemented', depth: 2,
     time: '9 min', color: '#ffd38a', raw: operations,
     summary: 'Installation, containers, credentials, configuration, health, updates, and destructive removal.',
   },
   {
-    id: 'self-hosting', file: '11_SelfHosting.md', numeral: 'V', title: 'Self-Hosting',
+    id: 'self-hosting', file: '11_SelfHosting.md', numeral: 'VI', title: 'Self-Hosting',
     short: 'Keep the hearth—or the whole harbor—under your flag.', region: 'instance', status: 'implemented', depth: 2,
     time: '6 min', color: '#e9bd72', raw: selfHosting,
     summary: 'Run your private instance, host the complete public server plane, or keep Loreholm local-only.',
   },
   {
-    id: 'organizations', file: '12_Organizations.md', numeral: 'VI', title: 'For Organizations',
+    id: 'organizations', file: '12_Organizations.md', numeral: 'VII', title: 'For Organizations',
     short: 'Decide whether this expedition belongs inside your walls.', region: 'threshold', status: 'mixed', depth: 2,
     time: '7 min', color: '#cfe99c', raw: organizations,
     summary: 'Organizational fit, pilot scope, deployment choices, licensing, security duties, and adoption gates.',
   },
   {
-    id: 'policy', file: '05_PolicyAndModels.md', numeral: 'VII', title: 'Policy & Models',
+    id: 'policy', file: '05_PolicyAndModels.md', numeral: 'VIII', title: 'Policy & Models',
     short: 'Set the laws that govern capture and egress.', region: 'instance', status: 'mixed', depth: 3,
     time: '9 min', color: '#efad67', raw: policy,
     summary: 'Capture classes, remote processing modes, Bifrost routing, model roles, and planned budgets.',
   },
   {
-    id: 'clients', file: '06_ClientsAndSpine.md', numeral: 'VIII', title: 'Clients & Spine',
+    id: 'clients', file: '06_ClientsAndSpine.md', numeral: 'IX', title: 'Clients & Spine',
     short: 'Design a sensor that never becomes the judge.', region: 'workshop', status: 'planned', depth: 3,
     time: '7 min', color: '#a9a6ff', raw: clients,
     summary: 'Adapter responsibilities, embedded spine, offline queues, policy refresh, and revocation.',
   },
   {
-    id: 'mining', file: '07_MiningAndKnowledge.md', numeral: 'IX', title: 'Mining & Knowledge',
+    id: 'mining', file: '07_MiningAndKnowledge.md', numeral: 'X', title: 'Mining & Knowledge',
     short: 'Descend into identity, evidence, and time.', region: 'depths', status: 'planned', depth: 5,
     time: '14 min', color: '#e87951', raw: mining,
     summary: 'Salience, mining stages, entity resolution, claims, provenance, vectors, schema, and surfacing.',
   },
   {
-    id: 'lifecycle', file: '08_DataLifecycle.md', numeral: 'X', title: 'Data Lifecycle',
+    id: 'lifecycle', file: '08_DataLifecycle.md', numeral: 'XI', title: 'Data Lifecycle',
     short: 'Understand what can be kept, erased, restored, or shared.', region: 'depths', status: 'planned', depth: 4,
     time: '9 min', color: '#df8b6c', raw: lifecycle,
     summary: 'Retention, grace-period deletion, inference preservation, backups, restore, and disclosure.',
   },
   {
-    id: 'chat', file: '09_Chat.md', numeral: 'XI', title: 'Browser Chat',
+    id: 'chat', file: '09_Chat.md', numeral: 'XII', title: 'Browser Chat',
     short: 'Follow the first complete Loreholm expedition.', region: 'threshold', status: 'implemented', depth: 1,
     time: '6 min', color: '#bfe886', raw: chat,
     summary: 'OIDC, front-door relay, private streaming, Bifrost inference, and passive transcript capture.',
   },
   {
-    id: 'security', file: '13_SecurityModel.md', numeral: 'XII', title: 'Security Model',
+    id: 'security', file: '13_SecurityModel.md', numeral: 'XIII', title: 'Security Model',
     short: 'Inspect every gate and every promise.', region: 'boundary', status: 'mixed', depth: 4,
     time: '9 min', color: '#7dded7', raw: security,
     summary: 'Local and tunnel boundaries, credential separation, model egress, deletion limits, and verification.',
   },
   {
-    id: 'development', file: '10_Development.md', numeral: 'XIII', title: 'Development Stack',
+    id: 'development', file: '10_Development.md', numeral: 'XIV', title: 'Development Stack',
     short: 'Enter the workshop with the right instruments.', region: 'workshop', status: 'implemented', depth: 3,
     time: '6 min', color: '#b8b5ff', raw: development,
     summary: 'Local Compose development, vLLM GPU overlay, model constraints, and browser-chat networking.',
@@ -115,11 +122,102 @@ export const adventureNodes = {
       'Loreholm is a new way to surface the useful data you are already sharing with large language models. Think retrieval-augmented generation—RAG—but with a major upgrade to how the database is constructed.',
       'Conventional RAG often cuts documents into chunks, embeds them, and hopes similarity search retrieves enough context. Loreholm keeps the original context, uses dedicated mining stages to turn it into structured, provenance-rich material, and only then builds retrieval and graph layers. The goal is memory that can recover not only matching words, but people, decisions, relationships, changes, and the evidence behind them.',
     ],
-    status: 'mixed', docs: ['architecture', 'mining'], scene: 'evidence',
+    status: 'mixed', docs: ['principles', 'architecture', 'mining'], scene: 'evidence',
     options: [
-      {label: 'How did the database get an upgrade?', next: 'upgrade'},
-      {label: 'What could that help me recover later?', next: 'examples'},
-      {label: 'Where would all of this data live?', next: 'private'},
+      {next: 'morals'},
+      {next: 'upgrade'},
+      {next: 'private'},
+    ],
+  },
+  morals: {
+    depth: 2, eyebrow: 'The oath beneath the architecture', question: 'Why does Loreholm need to exist?',
+    answer: [
+      'Because an LLM application may receive much more than the sentence visible in its text box: conversation history, system instructions, attachments, retrieved memory, tool results, IDE context, or page content can travel with it. That accumulated context becomes a remarkably detailed record of how a person or organization thinks and works.',
+      'Loreholm’s moral claim is that the durable memory built from that record should belong to the person creating it. A user-owned layer should show what is being captured, decide what a model may receive, and keep the long-lived copy on infrastructure the user controls. Model providers can still supply intelligence, but they should be replaceable compute endpoints rather than the default custodians of someone’s working history.',
+    ],
+    status: 'mixed', docs: ['principles', 'architecture', 'security'], scene: 'privacy',
+    options: [
+      {next: 'sharingamount'},
+      {next: 'providerboundary'},
+      {next: 'captureethics'},
+    ],
+  },
+  sharingamount: {
+    depth: 3, eyebrow: 'The request behind the text box', question: 'How much information am I actually sharing with an LLM?',
+    answer: [
+      'The honest answer depends on the application, model provider, account settings, and contract. In addition to what you type, a request may contain earlier turns, system instructions, attached documents, retrieved memories, tool outputs, source code, selected files, browser content, or metadata added by the application.',
+      'Most people see the prompt they authored, not one complete accounting of the effective request. Loreholm is intended to make that boundary inspectable by recording which sources contributed, what transformations occurred, which endpoint was selected, and what representation crossed the model boundary. Browser chat capture and the single Bifrost egress seam exist today; a universal exact-request ledger across connected tools does not.',
+    ],
+    status: 'mixed', docs: ['principles', 'chat', 'clients'], scene: 'privacy',
+    options: [
+      {next: 'visibility'},
+      {next: 'providerretention'},
+      {next: 'recording'},
+    ],
+  },
+  visibility: {
+    depth: 4, eyebrow: 'An inventory before the crossing', question: 'Will Loreholm show me exactly what an LLM receives?',
+    answer: [
+      'That is a core product requirement. Before or alongside a model call, Loreholm should make the effective payload inspectable: user-authored text, application-added context, retrieved history, source classes, transformations or redactions, destination model, policy decision, and useful size or token measures.',
+      'Afterward, a local egress record should make the event auditable without forcing sensitive payloads into another hosted log. The current system captures browser-chat messages and routes model calls through Bifrost, but it does not yet expose a universal preflight view or exact egress ledger, so this promise is explicitly planned rather than claimed as complete.',
+    ],
+    status: 'planned', docs: ['principles', 'policy', 'security'], scene: 'privacy',
+    options: [
+      {next: 'policysurface'},
+      {next: 'localonly'},
+      {next: 'today'},
+    ],
+  },
+  providerboundary: {
+    depth: 3, eyebrow: 'Put your own gate before theirs', question: 'What does stepping in front of model providers actually change?',
+    answer: [
+      'Without a user-owned layer, the application and provider often become the only places capable of remembering the work. Loreholm moves capture, durable storage, policy, mining, and future knowledge into the user’s instance before an external model is chosen.',
+      'That means the full working history does not have to become provider-owned memory just to make future answers useful. The instance can select a local model or send an explicitly permitted representation through Bifrost to a remote one, while the durable source and evidence remain under user control. It changes custody and leverage; it does not make data already sent to a remote endpoint disappear from that provider’s trust boundary.',
+    ],
+    status: 'mixed', docs: ['principles', 'self-hosting', 'architecture'], scene: 'privacy',
+    options: [
+      {next: 'selfhost'},
+      {next: 'remoteprivacy'},
+      {next: 'ownership'},
+    ],
+  },
+  remoteprivacy: {
+    depth: 4, eyebrow: 'Custody is not invisibility', question: 'Does self-hosting make remote model use private?',
+    answer: [
+      'No. Self-hosting gives you custody of Loreholm’s storage, policy, graph, and model-routing configuration, but a remote model provider can still receive whatever payload you explicitly send to it.',
+      'Loreholm can minimize that payload, apply policy, show the destination, and preserve a local audit trail; it cannot reach into another company’s systems and enforce deletion after delivery. The strongest privacy boundary is to use a local model or keep that capture class in local-only mode. Provider settings, contracts, jurisdiction, and retention promises still matter whenever remote processing is chosen.',
+    ],
+    status: 'mixed', docs: ['principles', 'policy', 'security'], scene: 'privacy',
+    options: [
+      {next: 'providerretention'},
+      {next: 'localonly'},
+      {next: 'models'},
+    ],
+  },
+  providerretention: {
+    depth: 5, eyebrow: 'Beyond the boundary you control', question: 'Can Loreholm stop a remote provider from retaining my request?',
+    answer: [
+      'Not by technical force after the provider receives it. Loreholm can prevent disallowed egress, reduce what is sent, route to a chosen endpoint, and record the local decision, but the recipient’s infrastructure and contractual behavior remain outside the instance.',
+      'If retention is unacceptable, use a local model or a provider arrangement whose controls and contract meet that requirement, then verify the configuration independently. Loreholm should make the trade visible instead of laundering a remote call through the comforting word “self-hosted.”',
+    ],
+    status: 'mixed', docs: ['principles', 'policy', 'security'], scene: 'privacy',
+    options: [
+      {next: 'localonly'},
+      {next: 'visibility'},
+      {next: 'models'},
+    ],
+  },
+  captureethics: {
+    depth: 3, eyebrow: 'A private watcher is still a watcher', question: 'Does capturing context create a new surveillance problem?',
+    answer: [
+      'It can. Owning the recorder does not make unlimited recording ethical, and passive capture must not mean hidden, compulsory, or impossible to inspect.',
+      'Loreholm is designed around intentionally connected sources, visible capture classes, local policy, minimal processing, evidence, and eventual deletion and revocation controls. Connected tools report observations rather than declaring people or claims to be true. Several consent and lifecycle controls remain unfinished, so today’s operators should use narrow sources and non-critical data rather than treating self-hosting as permission to collect everything.',
+    ],
+    status: 'mixed', docs: ['principles', 'clients', 'lifecycle'], scene: 'privacy',
+    options: [
+      {next: 'recording'},
+      {next: 'policysurface'},
+      {next: 'securitygaps'},
     ],
   },
   upgrade: {
@@ -130,9 +228,9 @@ export const adventureNodes = {
     ],
     status: 'planned', docs: ['mining', 'architecture'], scene: 'evidence',
     options: [
-      {label: 'Why not just embed document chunks?', next: 'chunks'},
-      {label: 'How does this avoid duplicate pollution?', next: 'dedup'},
-      {label: 'Why give graph building its own specialist?', next: 'graphagent'},
+      {next: 'chunks'},
+      {next: 'dedup'},
+      {next: 'graphagent'},
     ],
   },
   chunks: {
@@ -143,9 +241,22 @@ export const adventureNodes = {
     ],
     status: 'planned', docs: ['mining', 'architecture'], scene: 'evidence',
     options: [
-      {label: 'What selects the useful material?', next: 'mining'},
-      {label: 'How does it connect two mentions?', next: 'identity'},
-      {label: 'Can I still inspect the original source?', next: 'evidence'},
+      {next: 'salience'},
+      {next: 'identity'},
+      {next: 'evidence'},
+    ],
+  },
+  salience: {
+    depth: 4, eyebrow: 'Useful signal before expensive work', question: 'What selects the useful material?',
+    answer: [
+      'The planned pipeline begins with a mechanical trim and salience gate before it calls a model or creates an embedding. It removes or truncates obvious tool noise and retry loops at read time, then considers signals such as user-authored volume, turn count, source surface, and an explicit “remember this” push.',
+      'Material below the threshold is marked skipped rather than deleted, so a later miner or policy can reconsider it. This admission stage is designed but not yet implemented; today the instance durably stages the raw capture and stops there.',
+    ],
+    status: 'planned', docs: ['mining', 'policy'], scene: 'evidence',
+    options: [
+      {next: 'mining'},
+      {next: 'deletion'},
+      {next: 'minerrole'},
     ],
   },
   dedup: {
@@ -156,9 +267,35 @@ export const adventureNodes = {
     ],
     status: 'mixed', docs: ['capture', 'mining'], scene: 'evidence',
     options: [
-      {label: 'How are exact retries recognized today?', next: 'contract'},
-      {label: 'How are similar people or things resolved?', next: 'identity'},
-      {label: 'How can repeated evidence strengthen one claim?', next: 'evidence'},
+      {next: 'retries'},
+      {next: 'identity'},
+      {next: 'repeatedevidence'},
+    ],
+  },
+  retries: {
+    depth: 4, eyebrow: 'The same delivery, only once', question: 'How are exact retries recognized today?',
+    answer: [
+      'Every capture receives a stable UUIDv7 `capture_id` before delivery. The instance stores that identifier under a unique index, so retrying the same envelope returns `duplicate` and creates no second record.',
+      'A client must reuse the original ID after a timeout rather than minting a new one. This transport-level idempotency works today; the planned mining pipeline adds stage, input, model, and configuration fingerprints so identical inference work can reuse a prior successful result too.',
+    ],
+    status: 'mixed', docs: ['capture', 'mining'], scene: 'offline',
+    options: [
+      {next: 'unknownclasses'},
+      {next: 'offline'},
+      {next: 'repeatedevidence'},
+    ],
+  },
+  repeatedevidence: {
+    depth: 4, eyebrow: 'Many witnesses, one claim', question: 'How can repeated evidence strengthen one claim?',
+    answer: [
+      'The accepted graph model separates a claim from the evidence supporting it. If two independent captures support the same subject, relation, object, and time meaning, Loreholm should attach two Evidence records to one stable claim rather than create two facts.',
+      'An inference retry is different: matching run and input fingerprints reuse the earlier mining result and add nothing. This distinction lets independent corroboration increase confidence without allowing replayed work to inflate it; the behavior belongs to the planned mining and graph layers.',
+    ],
+    status: 'planned', docs: ['mining', 'lifecycle'], scene: 'evidence',
+    options: [
+      {next: 'evidence'},
+      {next: 'identity'},
+      {next: 'deletion'},
     ],
   },
   graphagent: {
@@ -169,9 +306,9 @@ export const adventureNodes = {
     ],
     status: 'planned', docs: ['mining', 'architecture', 'clients'], scene: 'evidence',
     options: [
-      {label: 'Walk me through the mining stages.', next: 'mining'},
-      {label: 'How does it decide two names are one entity?', next: 'identity'},
-      {label: 'What makes a committed connection trustworthy?', next: 'evidence'},
+      {next: 'mining'},
+      {next: 'identity'},
+      {next: 'evidence'},
     ],
   },
   audience: {
@@ -182,9 +319,9 @@ export const adventureNodes = {
     ],
     status: 'mixed', docs: ['architecture', 'organizations', 'chat'], scene: 'recall',
     options: [
-      {label: 'What would this do for one person?', next: 'individual'},
-      {label: 'How would an organization approach it?', next: 'organization'},
-      {label: 'Do I need to be technical right now?', next: 'technicalfit'},
+      {next: 'individual'},
+      {next: 'organization'},
+      {next: 'technicalfit'},
     ],
   },
   individual: {
@@ -195,9 +332,9 @@ export const adventureNodes = {
     ],
     status: 'mixed', docs: ['chat', 'architecture', 'self-hosting'], scene: 'recall',
     options: [
-      {label: 'Show me an everyday example.', next: 'recall'},
-      {label: 'Would I need to tell it what to save?', next: 'habit'},
-      {label: 'Can I keep all of this on my own machine?', next: 'selfhost'},
+      {next: 'recall'},
+      {next: 'habit'},
+      {next: 'selfhost'},
     ],
   },
   technicalfit: {
@@ -208,9 +345,9 @@ export const adventureNodes = {
     ],
     status: 'mixed', docs: ['operations', 'organizations', 'development'], scene: 'builder',
     options: [
-      {label: 'What can I run today?', next: 'today'},
-      {label: 'What does installation involve?', next: 'operations'},
-      {label: 'Could my organization operate it for me?', next: 'organization'},
+      {next: 'today'},
+      {next: 'operations'},
+      {next: 'organization'},
     ],
   },
   organization: {
@@ -221,9 +358,9 @@ export const adventureNodes = {
     ],
     status: 'mixed', docs: ['organizations', 'self-hosting', 'security'], scene: 'privacy',
     options: [
-      {label: 'What would a sensible pilot look like?', next: 'pilot'},
-      {label: 'Can we host the complete service?', next: 'selfhost'},
-      {label: 'What licenses apply inside an organization?', next: 'licensing'},
+      {next: 'pilot'},
+      {next: 'selfhost'},
+      {next: 'licensing'},
     ],
   },
   pilot: {
@@ -234,9 +371,9 @@ export const adventureNodes = {
     ],
     status: 'mixed', docs: ['organizations', 'operations', 'security'], scene: 'builder',
     options: [
-      {label: 'What works in that pilot today?', next: 'today'},
-      {label: 'How should we control model access?', next: 'models'},
-      {label: 'Which security boundary do we own?', next: 'privacy'},
+      {next: 'today'},
+      {next: 'models'},
+      {next: 'privacy'},
     ],
   },
   licensing: {
@@ -247,9 +384,9 @@ export const adventureNodes = {
     ],
     status: 'implemented', docs: ['organizations', 'self-hosting', 'development'], scene: 'builder',
     options: [
-      {label: 'What would we need to operate ourselves?', next: 'serverplane'},
-      {label: 'What data remains under our control?', next: 'ownership'},
-      {label: 'Where is the project incomplete?', next: 'today'},
+      {next: 'serverplane'},
+      {next: 'ownership'},
+      {next: 'today'},
     ],
   },
   remember: {
@@ -260,9 +397,9 @@ export const adventureNodes = {
     ],
     status: 'mixed', docs: ['architecture'], scene: 'recall',
     options: [
-      {label: 'Show me a few everyday examples.', next: 'examples'},
-      {label: 'Would I have to stop and write everything down?', next: 'habit'},
-      {label: 'How much of that works today?', next: 'today'},
+      {next: 'examples'},
+      {next: 'habit'},
+      {next: 'today'},
     ],
   },
   examples: {
@@ -273,9 +410,9 @@ export const adventureNodes = {
     ],
     status: 'mixed', docs: ['architecture', 'chat'], scene: 'recall',
     options: [
-      {label: 'Walk me through one remembered decision.', next: 'recall'},
-      {label: 'Can it understand that facts change over time?', next: 'time'},
-      {label: 'How is that different from searching my history?', next: 'different'},
+      {next: 'recall'},
+      {next: 'time'},
+      {next: 'different'},
     ],
   },
   habit: {
@@ -286,9 +423,9 @@ export const adventureNodes = {
     ],
     status: 'mixed', docs: ['architecture', 'clients'], scene: 'recall',
     options: [
-      {label: 'How does background remembering work?', next: 'passive'},
-      {label: 'Does that mean it records absolutely everything?', next: 'recording'},
-      {label: 'What happens if I am offline?', next: 'offline'},
+      {next: 'passive'},
+      {next: 'recording'},
+      {next: 'offline'},
     ],
   },
   recording: {
@@ -299,22 +436,22 @@ export const adventureNodes = {
     ],
     status: 'mixed', docs: ['policy', 'clients', 'capture'], scene: 'privacy',
     options: [
-      {label: 'Where does the remembered context live?', next: 'ownership'},
-      {label: 'What happens after a tool notices something?', next: 'passive'},
-      {label: 'Show me the exact information it sends.', next: 'envelope'},
+      {next: 'ownership'},
+      {next: 'passive'},
+      {next: 'envelope'},
     ],
   },
   private: {
     depth: 1, eyebrow: 'A hearth of your own', question: 'Who owns and holds my Loreholm memory?',
     answer: [
       'Your lasting context is designed to live in your own Loreholm instance, on infrastructure you control. The public Loreholm service helps you reach it; it is not meant to become the permanent home of your private history.',
-      'Think of the cloud service as a guarded harbor and your instance as the longhouse where the records actually stay.',
+      'That is a moral boundary as much as a network boundary: needing an LLM should not automatically make its provider the custodian of your working memory. Think of the cloud service as a guarded harbor and your instance as the longhouse where the records actually stay.',
     ],
-    status: 'implemented', docs: ['networking', 'security'], scene: 'privacy',
+    status: 'implemented', docs: ['principles', 'networking', 'security'], scene: 'privacy',
     options: [
-      {label: 'Can I host Loreholm on my own server?', next: 'selfhost'},
-      {label: 'Can I reach it when I am away from home?', next: 'access'},
-      {label: 'Could I choose to share something later?', next: 'sharing'},
+      {next: 'selfhost'},
+      {next: 'access'},
+      {next: 'sharing'},
     ],
   },
   selfhost: {
@@ -325,9 +462,9 @@ export const adventureNodes = {
     ],
     status: 'implemented', docs: ['self-hosting', 'operations', 'networking'], scene: 'privacy',
     options: [
-      {label: 'What does running the whole server involve?', next: 'serverplane'},
-      {label: 'What stays under my control?', next: 'ownership'},
-      {label: 'How would I reach it away from home?', next: 'access'},
+      {next: 'serverplane'},
+      {next: 'ownership'},
+      {next: 'access'},
     ],
   },
   serverplane: {
@@ -338,22 +475,22 @@ export const adventureNodes = {
     ],
     status: 'implemented', docs: ['self-hosting', 'networking', 'security', 'development'], scene: 'builder',
     options: [
-      {label: 'Show me the network boundary.', next: 'privacy'},
-      {label: 'What operations already exist?', next: 'operations'},
-      {label: 'Could content still reach a remote model?', next: 'egress'},
+      {next: 'privacy'},
+      {next: 'operations'},
+      {next: 'egress'},
     ],
   },
   ownership: {
     depth: 2, eyebrow: 'Your data, your ground', question: 'What stays under my control?',
     answer: [
       'The saved source material, the knowledge built from it, and the models that can process it locally belong inside your instance. The database and model service are not opened directly to the internet.',
-      'Ownership also means responsibility: backups, device security, and deletion need clear tools. Some of those lifecycle tools are designed but not yet built.',
+      'The point is not merely possession of a Docker volume; it is the ability to inspect capture, govern model egress, change providers without losing memory, and eventually export or delete what was learned. Ownership also means responsibility: backups, device security, and deletion need clear tools, and some of those lifecycle tools are designed but not yet built.',
     ],
-    status: 'mixed', docs: ['security', 'lifecycle', 'operations', 'self-hosting'], scene: 'privacy',
+    status: 'mixed', docs: ['principles', 'security', 'lifecycle', 'operations', 'self-hosting'], scene: 'privacy',
     options: [
-      {label: 'How is it protected from the public internet?', next: 'privacy'},
-      {label: 'What would a proper backup include?', next: 'backup'},
-      {label: 'Can I make it forget something?', next: 'deletion'},
+      {next: 'privacy'},
+      {next: 'backup'},
+      {next: 'deletion'},
     ],
   },
   access: {
@@ -364,9 +501,9 @@ export const adventureNodes = {
     ],
     status: 'implemented', docs: ['networking', 'chat'], scene: 'privacy',
     options: [
-      {label: 'Show me how that private route is built.', next: 'privacy'},
-      {label: 'What can the public service see?', next: 'cloud'},
-      {label: 'What happens when that route is unavailable?', next: 'offline'},
+      {next: 'privacy'},
+      {next: 'cloud'},
+      {next: 'offline'},
     ],
   },
   sharing: {
@@ -377,9 +514,9 @@ export const adventureNodes = {
     ],
     status: 'planned', docs: ['lifecycle', 'security', 'architecture'], scene: 'privacy',
     options: [
-      {label: 'What never needs to leave my instance?', next: 'privacy'},
-      {label: 'Could remote AI still see some content?', next: 'egress'},
-      {label: 'What if I later delete the source?', next: 'deletion'},
+      {next: 'privacy'},
+      {next: 'egress'},
+      {next: 'deletion'},
     ],
   },
   different: {
@@ -390,9 +527,9 @@ export const adventureNodes = {
     ],
     status: 'planned', docs: ['mining', 'architecture'], scene: 'evidence',
     options: [
-      {label: 'When would search still be enough?', next: 'search'},
-      {label: 'How can it understand change over time?', next: 'time'},
-      {label: 'What if the librarian gets something wrong?', next: 'mistakes'},
+      {next: 'search'},
+      {next: 'time'},
+      {next: 'mistakes'},
     ],
   },
   search: {
@@ -403,9 +540,9 @@ export const adventureNodes = {
     ],
     status: 'planned', docs: ['mining'], scene: 'evidence',
     options: [
-      {label: 'How is meaning built from raw history?', next: 'knowledge'},
-      {label: 'Show me a decision recalled later.', next: 'recall'},
-      {label: 'How would an answer show its sources?', next: 'evidence'},
+      {next: 'knowledge'},
+      {next: 'recall'},
+      {next: 'evidence'},
     ],
   },
   time: {
@@ -416,9 +553,9 @@ export const adventureNodes = {
     ],
     status: 'planned', docs: ['mining', 'architecture'], scene: 'evidence',
     options: [
-      {label: 'How does raw history become that kind of knowledge?', next: 'knowledge'},
-      {label: 'How does it know which Maya I mean?', next: 'identity'},
-      {label: 'What proves when the change happened?', next: 'evidence'},
+      {next: 'knowledge'},
+      {next: 'identity'},
+      {next: 'evidence'},
     ],
   },
   mistakes: {
@@ -429,9 +566,9 @@ export const adventureNodes = {
     ],
     status: 'planned', docs: ['mining', 'lifecycle'], scene: 'evidence',
     options: [
-      {label: 'How are sources attached to an answer?', next: 'evidence'},
-      {label: 'How does it avoid mixing up people?', next: 'identity'},
-      {label: 'Can I delete the misunderstood source?', next: 'deletion'},
+      {next: 'evidence'},
+      {next: 'identity'},
+      {next: 'deletion'},
     ],
   },
   today: {
@@ -442,9 +579,9 @@ export const adventureNodes = {
     ],
     status: 'mixed', docs: ['operations', 'architecture', 'chat'], scene: 'builder',
     options: [
-      {label: 'What can I run and test today?', next: 'operations'},
-      {label: 'What is the biggest unfinished piece?', next: 'mining'},
-      {label: 'How do the docs separate reality from roadmap?', next: 'promise'},
+      {next: 'operations'},
+      {next: 'mining'},
+      {next: 'promise'},
     ],
   },
   promise: {
@@ -455,9 +592,9 @@ export const adventureNodes = {
     ],
     status: 'implemented', docs: ['architecture', 'security'], scene: 'builder',
     options: [
-      {label: 'What is running in the current foundation?', next: 'operations'},
-      {label: 'What is the largest unbuilt piece?', next: 'mining'},
-      {label: 'Take me toward the technical details.', next: 'technical'},
+      {next: 'operations'},
+      {next: 'mining'},
+      {next: 'technical'},
     ],
   },
   models: {
@@ -468,9 +605,9 @@ export const adventureNodes = {
     ],
     status: 'mixed', docs: ['policy', 'development'], scene: 'privacy',
     options: [
-      {label: 'How is permission to use remote AI expressed?', next: 'egress'},
-      {label: 'What would AI do during knowledge building?', next: 'mining'},
-      {label: 'What can I run locally today?', next: 'operations'},
+      {next: 'egress'},
+      {next: 'mining'},
+      {next: 'operations'},
     ],
   },
   backup: {
@@ -481,9 +618,9 @@ export const adventureNodes = {
     ],
     status: 'planned', docs: ['lifecycle', 'operations'], scene: 'privacy',
     options: [
-      {label: 'Why is this part of data ownership?', next: 'ownership'},
-      {label: 'How is deletion different from backup?', next: 'deletion'},
-      {label: 'What operational tools exist now?', next: 'operations'},
+      {next: 'ownership'},
+      {next: 'deletion'},
+      {next: 'operations'},
     ],
   },
   technical: {
@@ -494,9 +631,9 @@ export const adventureNodes = {
     ],
     status: 'mixed', docs: ['architecture', 'clients'], scene: 'builder',
     options: [
-      {label: 'How would I connect a new tool?', next: 'builder'},
-      {label: 'What is the exact delivery contract?', next: 'contract'},
-      {label: 'How does knowledge building work internally?', next: 'mining'},
+      {next: 'builder'},
+      {next: 'contract'},
+      {next: 'mining'},
     ],
   },
   passive: {
@@ -507,9 +644,9 @@ export const adventureNodes = {
     ],
     status: 'mixed', docs: ['architecture', 'capture', 'chat'], scene: 'recall',
     options: [
-      {label: 'What is inside one captured moment?', next: 'envelope'},
-      {label: 'What if I work while disconnected?', next: 'offline'},
-      {label: 'Show me how this helps future me.', next: 'recall'},
+      {next: 'envelope'},
+      {next: 'offline'},
+      {next: 'recall'},
     ],
   },
   envelope: {
@@ -520,9 +657,9 @@ export const adventureNodes = {
     ],
     status: 'implemented', docs: ['capture'], scene: 'builder',
     options: [
-      {label: 'Who decides what becomes graph knowledge?', next: 'mining'},
-      {label: 'Can an observer write directly to my graph?', next: 'adapter'},
-      {label: 'Can I control what leaves the instance?', next: 'egress'},
+      {next: 'mining'},
+      {next: 'adapter'},
+      {next: 'egress'},
     ],
   },
   offline: {
@@ -533,9 +670,9 @@ export const adventureNodes = {
     ],
     status: 'mixed', docs: ['clients', 'capture'], scene: 'offline',
     options: [
-      {label: 'How does the private tunnel work?', next: 'privacy'},
-      {label: 'How would I build an observer?', next: 'builder'},
-      {label: 'What is implemented right now?', next: 'operations'},
+      {next: 'privacy'},
+      {next: 'builder'},
+      {next: 'operations'},
     ],
   },
   recall: {
@@ -546,9 +683,9 @@ export const adventureNodes = {
     ],
     status: 'mixed', docs: ['chat', 'mining', 'architecture'], scene: 'recall',
     options: [
-      {label: 'How can I trust the answer?', next: 'evidence'},
-      {label: 'How does it recognize the same person twice?', next: 'identity'},
-      {label: 'Can I remove the original conversation?', next: 'deletion'},
+      {next: 'evidence'},
+      {next: 'identity'},
+      {next: 'deletion'},
     ],
   },
   privacy: {
@@ -559,9 +696,9 @@ export const adventureNodes = {
     ],
     status: 'implemented', docs: ['networking', 'security'], scene: 'privacy',
     options: [
-      {label: 'What can the front door actually see?', next: 'cloud'},
-      {label: 'Can model processing leave my instance?', next: 'egress'},
-      {label: 'What happens when I delete something?', next: 'deletion'},
+      {next: 'cloud'},
+      {next: 'egress'},
+      {next: 'deletion'},
     ],
   },
   cloud: {
@@ -572,9 +709,35 @@ export const adventureNodes = {
     ],
     status: 'implemented', docs: ['networking', 'security', 'chat'], scene: 'privacy',
     options: [
-      {label: 'Walk me through browser chat.', next: 'recall'},
-      {label: 'How are credentials separated?', next: 'operations'},
-      {label: 'What is still only a security promise?', next: 'deletion'},
+      {next: 'recall'},
+      {next: 'credentials'},
+      {next: 'securitygaps'},
+    ],
+  },
+  credentials: {
+    depth: 5, eyebrow: 'Different keys for different gates', question: 'How are Loreholm credentials separated?',
+    answer: [
+      'The browser presents its OIDC identity only to the public front door. When the front door reaches a private instance, it substitutes a per-instance synchronization credential rather than forwarding that public token through the tunnel.',
+      'Inside the instance, device capture, dashboard administration, chat synchronization, ArcadeDB administration, and Bifrost administration use separate secrets. The installer stores raw values in a mode-`0600` environment file and gives the application digests for bearer-token comparison, so possession of one application credential does not automatically grant every other role.',
+    ],
+    status: 'implemented', docs: ['security', 'networking', 'operations'], scene: 'privacy',
+    options: [
+      {next: 'privacy'},
+      {next: 'securitygaps'},
+      {next: 'contract'},
+    ],
+  },
+  securitygaps: {
+    depth: 5, eyebrow: 'Promises not yet backed by controls', question: 'Which security and lifecycle guarantees are not implemented yet?',
+    answer: [
+      'The current boundary protects local services and authenticates capture, administration, and tunnel traffic, but several future guarantees are still only design. End-to-end capture-policy enforcement, reusable device enrollment and revocation, mining egress enforcement, retention, deletion, coordinated backup and restore, and sharing controls remain incomplete.',
+      'Host compromise is also outside the isolation the application can provide: an account able to read the instance environment file can obtain its keys. The documentation marks these gaps so a pilot does not mistake the container and tunnel foundation for a complete production security program.',
+    ],
+    status: 'mixed', docs: ['security', 'policy', 'lifecycle'], scene: 'privacy',
+    options: [
+      {next: 'deletion'},
+      {next: 'localonly'},
+      {next: 'pilot'},
     ],
   },
   egress: {
@@ -585,9 +748,48 @@ export const adventureNodes = {
     ],
     status: 'mixed', docs: ['policy', 'security'], scene: 'privacy',
     options: [
-      {label: 'How is local-only enforced?', next: 'privacy'},
-      {label: 'What does the miner need a model for?', next: 'mining'},
-      {label: 'Show me the exact policy surface.', next: 'contract'},
+      {next: 'localonly'},
+      {next: 'minerrole'},
+      {next: 'policysurface'},
+    ],
+  },
+  localonly: {
+    depth: 5, eyebrow: 'No silent road to the cloud', question: 'How is local-only model processing enforced?',
+    answer: [
+      'Instance policy records a remote-processing mode for each capture class, including `local_only`. The accepted design requires the embedded spine to enforce that choice before upload and the miner to enforce it again before any representation reaches a model endpoint.',
+      'All permitted model calls must travel through Bifrost, and there is no direct-provider fallback. The policy value and Bifrost boundary exist today, but mining enforcement and the reusable spine do not, so local-only is not yet an end-to-end implemented guarantee for future mining.',
+    ],
+    status: 'mixed', docs: ['policy', 'security', 'clients'], scene: 'privacy',
+    options: [
+      {next: 'policysurface'},
+      {next: 'spine'},
+      {next: 'models'},
+    ],
+  },
+  minerrole: {
+    depth: 5, eyebrow: 'Models with bounded assignments', question: 'What does the miner need a model for?',
+    answer: [
+      'Planned model-assisted work includes extracting mentions and candidate claims, interpreting episodes, judging ambiguous entity matches, summarizing admitted context, and proposing or reviewing schema changes. Those jobs are separate roles with capability tiers, even when an operator maps several roles to the same model.',
+      'Mechanical trimming, salience admission, schema validation, idempotency checks, and final graph commit do not become optional just because a model is involved. Every call must pass through Bifrost under instance-owned egress and budget policy, and the mining roles themselves are not implemented yet.',
+    ],
+    status: 'planned', docs: ['policy', 'mining'], scene: 'evidence',
+    options: [
+      {next: 'salience'},
+      {next: 'models'},
+      {next: 'graphagent'},
+    ],
+  },
+  policysurface: {
+    depth: 5, eyebrow: 'The laws written on the instance', question: 'What is on the exact policy surface?',
+    answer: [
+      'The implemented instance policy advertises its revision, supported capture-contract range, known capture classes, whether each class may be captured, each class’s remote-processing mode, and the mining status. Authenticated clients read it from `GET /v2/policy`, while administrators update persisted policy through `PUT /v2/admin/policy` or the local dashboard.',
+      'The current service stores and advertises these decisions, but the future embedded spine and miner must still enforce them at their respective boundaries. A policy toggle is therefore visible state today, not proof that every planned processing path already obeys it.',
+    ],
+    status: 'mixed', docs: ['policy', 'capture'], scene: 'builder',
+    options: [
+      {next: 'localonly'},
+      {next: 'unknownclasses'},
+      {next: 'envelope'},
     ],
   },
   deletion: {
@@ -598,9 +800,9 @@ export const adventureNodes = {
     ],
     status: 'planned', docs: ['lifecycle', 'security', 'mining'], scene: 'evidence',
     options: [
-      {label: 'How is surviving knowledge justified?', next: 'evidence'},
-      {label: 'What belongs in a real backup?', next: 'operations'},
-      {label: 'Return to passive capture.', next: 'passive'},
+      {next: 'evidence'},
+      {next: 'backup'},
+      {next: 'passive'},
     ],
   },
   knowledge: {
@@ -611,9 +813,9 @@ export const adventureNodes = {
     ],
     status: 'planned', docs: ['mining', 'architecture'], scene: 'evidence',
     options: [
-      {label: 'What are the mining stages?', next: 'mining'},
-      {label: 'How does identity resolution work?', next: 'identity'},
-      {label: 'What makes an answer trustworthy?', next: 'evidence'},
+      {next: 'mining'},
+      {next: 'identity'},
+      {next: 'evidence'},
     ],
   },
   mining: {
@@ -624,9 +826,9 @@ export const adventureNodes = {
     ],
     status: 'planned', docs: ['mining', 'architecture'], scene: 'evidence',
     options: [
-      {label: 'How are two mentions joined?', next: 'identity'},
-      {label: 'How does evidence survive re-mining?', next: 'evidence'},
-      {label: 'Which model is allowed to do this?', next: 'egress'},
+      {next: 'identity'},
+      {next: 'evidence'},
+      {next: 'egress'},
     ],
   },
   identity: {
@@ -637,9 +839,9 @@ export const adventureNodes = {
     ],
     status: 'planned', docs: ['mining', 'architecture'], scene: 'evidence',
     options: [
-      {label: 'What records the reason for a merge?', next: 'evidence'},
-      {label: 'How are facts represented across time?', next: 'knowledge'},
-      {label: 'Show me the underlying decisions.', next: 'contract'},
+      {next: 'evidence'},
+      {next: 'knowledge'},
+      {next: 'contract'},
     ],
   },
   evidence: {
@@ -650,9 +852,9 @@ export const adventureNodes = {
     ],
     status: 'planned', docs: ['mining', 'lifecycle', 'architecture'], scene: 'evidence',
     options: [
-      {label: 'What if the source is deleted?', next: 'deletion'},
-      {label: 'How does this become a future answer?', next: 'recall'},
-      {label: 'Where is all of this stored?', next: 'privacy'},
+      {next: 'deletion'},
+      {next: 'recall'},
+      {next: 'privacy'},
     ],
   },
   builder: {
@@ -663,9 +865,9 @@ export const adventureNodes = {
     ],
     status: 'mixed', docs: ['clients', 'capture', 'development'], scene: 'builder',
     options: [
-      {label: 'Where does adapter responsibility end?', next: 'adapter'},
-      {label: 'Show me the capture contract.', next: 'contract'},
-      {label: 'How do I run the stack?', next: 'operations'},
+      {next: 'adapter'},
+      {next: 'contract'},
+      {next: 'operations'},
     ],
   },
   adapter: {
@@ -676,9 +878,22 @@ export const adventureNodes = {
     ],
     status: 'planned', docs: ['clients', 'architecture'], scene: 'builder',
     options: [
-      {label: 'What does the embedded spine add?', next: 'offline'},
-      {label: 'What must every envelope contain?', next: 'envelope'},
-      {label: 'Who is allowed to write the graph?', next: 'mining'},
+      {next: 'spine'},
+      {next: 'envelope'},
+      {next: 'mining'},
+    ],
+  },
+  spine: {
+    depth: 5, eyebrow: 'One shared discipline in every tool', question: 'What does the embedded spine add?',
+    answer: [
+      'The spine is a shared library embedded inside each connected application, not an invisible background recorder. It mints capture IDs, stamps device and adapter metadata, applies local permission and redaction rules, queues permitted context while offline, preserves ordering and queue age, refreshes instance policy, authenticates batches, and handles revocation.',
+      'That keeps every adapter small and gives every connected tool the same delivery and privacy behavior. The general-purpose spine is accepted design and not implemented yet; browser chat currently demonstrates passive capture through its own integrated path.',
+    ],
+    status: 'planned', docs: ['clients', 'capture', 'chat'], scene: 'builder',
+    options: [
+      {next: 'offline'},
+      {next: 'envelope'},
+      {next: 'localonly'},
     ],
   },
   contract: {
@@ -689,9 +904,22 @@ export const adventureNodes = {
     ],
     status: 'implemented', docs: ['capture', 'clients'], scene: 'builder',
     options: [
-      {label: 'How do retries avoid duplicates?', next: 'offline'},
-      {label: 'Where do unknown capture classes go?', next: 'operations'},
-      {label: 'How does captured context become useful?', next: 'knowledge'},
+      {next: 'retries'},
+      {next: 'unknownclasses'},
+      {next: 'knowledge'},
+    ],
+  },
+  unknownclasses: {
+    depth: 5, eyebrow: 'Stored safely beyond the known map', question: 'Where do unknown capture classes go?',
+    answer: [
+      'The instance accepts an otherwise valid capture even when its class is not present in current policy. It stores the complete envelope durably in ArcadeDB with the state `quarantined_unknown_class` and returns a `quarantined` receipt to the client.',
+      'The capture is not discarded, interpreted, mined, shared, or sent to a model. It remains isolated until the instance gains explicit support for that class; the current foundation implements durable quarantine, while a release workflow that re-admits older quarantined records still needs to be built.',
+    ],
+    status: 'implemented', docs: ['capture', 'architecture'], scene: 'offline',
+    options: [
+      {next: 'promise'},
+      {next: 'envelope'},
+      {next: 'policysurface'},
     ],
   },
   operations: {
@@ -702,15 +930,15 @@ export const adventureNodes = {
     ],
     status: 'implemented', docs: ['operations', 'development', 'architecture'], scene: 'builder',
     options: [
-      {label: 'What can I host myself?', next: 'selfhost'},
-      {label: 'Try the browser-chat journey.', next: 'recall'},
-      {label: 'What should be built next?', next: 'mining'},
+      {next: 'selfhost'},
+      {next: 'recall'},
+      {next: 'mining'},
     ],
   },
 };
 
 export const looseThreads = [
-  'upgrade', 'individual', 'pilot', 'selfhost', 'dedup', 'graphagent', 'privacy', 'mistakes',
+  'morals', 'sharingamount', 'providerboundary', 'captureethics', 'selfhost', 'dedup', 'graphagent', 'privacy',
 ];
 
 export const fileToId = Object.fromEntries(documents.map((doc) => [doc.file.toLowerCase(), doc.id]));

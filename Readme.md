@@ -5,6 +5,15 @@ conversations. Loreholm owns the client contract, raw capture store, policy, mod
 gateway, and knowledge graph so third-party clients never write interpreted
 facts directly into the database.
 
+Its purpose is larger than better retrieval. LLM applications can send far
+more context than the words visible in a chat box, while the durable memory
+built from that context is usually controlled by the application or provider.
+Loreholm puts a user-owned storage and policy layer in front of model providers
+so people can inspect what is captured, choose what may leave, and keep their
+working history on infrastructure they control. Read
+[why Loreholm exists](docs/00_Principles.md) for the moral commitments and the
+limits that self-hosting cannot erase.
+
 ## Current milestone
 
 The executable Loreholm foundation currently provides:

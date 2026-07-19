@@ -1,10 +1,24 @@
 # Loreholm trust and security model
 
-Loreholm's front-door, Headscale/Tailscale tunnel, container
-isolation, and local-data boundary. It changes how knowledge is produced behind
-that boundary. This page distinguishes the base local stack from the retained
-remote topology; future mining and sharing features will require their own
-threat-model review as they are implemented.
+Loreholm's front door, Headscale/Tailscale tunnel, container isolation, and
+local-data boundary define how requests reach user-owned memory. The knowledge
+pipeline changes how information is produced behind that boundary. This page
+distinguishes the base local stack from the retained remote topology; future
+mining and sharing features will require their own threat-model review as they
+are implemented.
+
+## Custody is not invisibility
+
+Self-hosting changes who owns Loreholm's durable context and policy. It does not
+make an external model endpoint unable to read or retain a payload it receives.
+The strongest confidentiality boundary is to keep content local; whenever
+remote processing is allowed, provider settings, contract, jurisdiction, and
+retention behavior remain part of the threat model.
+
+Loreholm should expose the complete effective model request and the policy
+decision behind it. That universal egress inspection is a planned security
+control, not an implemented guarantee in the current foundation. See
+[why Loreholm exists](00_Principles.md).
 
 ## Default local boundary
 
