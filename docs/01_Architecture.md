@@ -78,6 +78,9 @@ policy gate + capture staging          [implemented]
 session assembly + admission work      [implemented]
     |
     v
+mechanical trim + salience record      [implemented]
+    |
+    v
 interpret -> mine -> resolve           [planned]
     |
     v
@@ -132,9 +135,10 @@ explicit pushes receive immediately available admission work.
 
 Admission items have generation-numbered identities and fixed-duration leases.
 Workers can reclaim expired leases, complete work they currently own, or return
-owned work to the pending state with a delayed retry. No worker consumes the
-queue in this milestone, so no admitted material reaches salience, inference,
-or the graph.
+owned work to the pending state with a delayed retry. The instance worker now
+consumes ready items, builds a bounded derived view without changing raw
+captures, and stores an idempotent admitted-or-skipped salience record. Nothing
+yet sends admitted material to inference or the graph.
 
 ### Policy
 
@@ -224,10 +228,11 @@ The implemented HTTP envelope and receipt semantics are documented in the
 The accepted Loreholm design calls for the instance to turn staged context into
 inspectable knowledge:
 
-1. **Trigger:** durable quiescent-session and immediate-push admission are
-   implemented. A scheduled worker and periodic straggler sweep are planned.
-2. **Interpret:** derive episodes, references, temporal meaning, and salience
-   without mutating the raw capture.
+1. **Trigger and gate:** durable quiescent-session and immediate-push admission,
+   scheduled consumption, mechanical trimming, and salience decisions are
+   implemented. A periodic straggler sweep is planned.
+2. **Interpret:** derive episodes, references, and temporal meaning without
+   mutating the raw capture.
 3. **Mine:** extract mentions and candidate claims through Bifrost under the
    instance's processing, egress, and budget policy.
 4. **Resolve:** reconcile mentions with stable entities and distinguish exact
@@ -237,13 +242,17 @@ inspectable knowledge:
 6. **Surface:** answer queries from the mined graph while retaining the raw
    context and its audit trail.
 
-Mining outputs will carry miner, model/config, input, and schema fingerprints.
-Re-mining must be scoped and idempotent: a new successful generation can
-supersede prior derived output without replacing stable accreted identities or
-destroying independent evidence.
+The implemented `V2MiningRun` foundation carries stage, miner,
+model/configuration, and input fingerprints plus parent-run lineage. For a new
+session generation, the input coordinator reuses the latest compatible
+successful output and supplies only new captures plus a bounded context tail.
+Context-only captures are excluded from the new-evidence set. Re-mining and
+graph commit must later use that lineage so a new successful generation can
+supersede covered derived output without replacing stable accreted identities
+or destroying independent evidence.
 
-None of the interpreter, miner, entity-resolution, graph-commit, or query
-stages above are implemented in the current foundation milestone.
+No model-backed interpreter, extractor, entity-resolution worker, graph-commit
+worker, or query stage is implemented in the current foundation milestone.
 
 See [mining and knowledge](07_MiningAndKnowledge.md) for the accepted identity,
 provenance, schema, vector, and surfacing decisions, and

@@ -10,13 +10,13 @@ remain inside the user's instance.
 |---|---|
 | [Project README](../Readme.md) | Current milestone, installation, and smoke test |
 | [Why Loreholm exists](00_Principles.md) | User custody, visible model context, bounded capture, and the limits of self-hosting |
-| [Loreholm architecture](01_Architecture.md) | Implemented capture and admission foundation with the planned mining pipeline |
+| [Loreholm architecture](01_Architecture.md) | Implemented capture, admission, and salience foundation with the planned mining pipeline |
 | [Loreholm networking](02_Networking.md) | Retained front-door, Headscale/Tailscale, and container topology |
 | [Capture API](03_CaptureAPI.md) | Implemented envelope, policy, receipt, quarantine, session, and admission contract |
 | [Instance operations](04_InstanceOperations.md) | Installation, configuration, health, updates, and removal |
 | [Policy and models](05_PolicyAndModels.md) | Capture policy, model-egress modes, Bifrost, and planned budgets |
 | [Clients and spine](06_ClientsAndSpine.md) | Planned adapter boundary, offline queue, policy enforcement, and revocation |
-| [Mining and knowledge](07_MiningAndKnowledge.md) | Implemented admission boundary and planned mining, identity, provenance, and surfacing |
+| [Mining and knowledge](07_MiningAndKnowledge.md) | Implemented admission, salience, and incremental run lineage with planned inference, identity, provenance, and surfacing |
 | [Data lifecycle](08_DataLifecycle.md) | Planned retention, deletion, backup, restore, and sharing |
 | [Browser chat](09_Chat.md) | Implemented OIDC, tunnel, streaming, and transcript-capture path |
 | [Loreholm development stack](10_Development.md) | Local stack, model development, and tunnel overlay |
@@ -26,9 +26,10 @@ remain inside the user's instance.
 
 The architecture page uses explicit **Implemented** and **Planned** labels.
 That distinction is important in the current foundation milestone: capture
-ingestion, policy blocking, durable staging, session assembly, and admission
-work exist today. Salience, inference, graph commit, and graph query/surfacing
-remain design work.
+ingestion, policy blocking, durable staging, session assembly, admission work,
+mechanical trimming, salience decisions, and reusable incremental mining-run
+lineage exist today. Model-backed inference, graph commit, and graph
+query/surfacing remain design work.
 
 Pages covering mixed milestones begin with a status statement and label
 unimplemented controls directly. The numbered guides are the operational and

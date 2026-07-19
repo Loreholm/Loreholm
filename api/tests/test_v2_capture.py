@@ -3,7 +3,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from pydantic import ValidationError
 
+from app.v2.mining import MiningRunCoordinator
 from app.v2.models import CaptureEnvelope, InstancePolicy
+from app.v2.salience import SalienceConfig, SalienceWorker, mechanically_trim
 from app.v2.service import ArcadeCaptureStore, CaptureService, MemoryCaptureStore, _epoch_millis
 
 
@@ -234,3 +236,258 @@ def test_late_session_capture_creates_a_new_generation() -> None:
     assert store.sessions[0].generation == 2
     assert store.sessions[0].capture_count == 2
     assert sorted(item.generation for item in store.work_items) == [1, 2]
+    assert [item.envelope.capture_id for item in store.captures_for_work(first)] == [CAPTURE_ID]
+
+
+def test_mechanical_trim_removes_tool_repeats_and_bounds_derived_text() -> None:
+    store = MemoryCaptureStore()
+    service = CaptureService(store, InstancePolicy())
+    now = datetime(2026, 7, 10, 12, tzinfo=timezone.utc)
+    original = "A" * 20
+    captures = [
+        envelope(payload={"role": "user", "content": original}),
+        envelope(
+            capture_id="018f5e2a-1234-7abc-8def-1234567890b0",
+            payload={"role": "tool", "content": "large tool result"},
+        ),
+        envelope(
+            capture_id="018f5e2a-1234-7abc-8def-1234567890b1",
+            payload={"role": "assistant", "content": original.lower()},
+        ),
+    ]
+    for offset, capture in enumerate(captures):
+        service.ingest(capture, now + timedelta(seconds=offset))
+
+    trimmed, signals = mechanically_trim(
+        list(store.captures),
+        SalienceConfig(max_capture_chars=10, max_scope_chars=50),
+    )
+
+    assert [item["content"] for item in trimmed] == ["A" * 10]
+    assert signals["removed_tool_items"] == 1
+    assert signals["removed_repeats"] == 1
+    assert signals["truncated_items"] == 1
+    assert store.captures[0].envelope.payload["content"] == original
+
+
+def test_salience_worker_persists_skip_and_completes_work_idempotently() -> None:
+    store = MemoryCaptureStore()
+    service = CaptureService(store, InstancePolicy(), session_quiescence=timedelta(seconds=1))
+    now = datetime(2026, 7, 10, 12, tzinfo=timezone.utc)
+    service.ingest(envelope(payload={"role": "user", "content": "short"}), now)
+    worker = SalienceWorker(store, "worker-a")
+
+    records = worker.process_once(now + timedelta(seconds=1))
+
+    assert len(records) == 1
+    assert records[0].status == "skipped"
+    assert records[0].reason == "below_salience_threshold"
+    assert store.work_items[0].state == "completed"
+    assert worker.process_once(now + timedelta(seconds=2)) == []
+    assert len(store.salience_records) == 1
+
+
+def test_salience_worker_admits_user_volume_and_orders_session_captures() -> None:
+    store = MemoryCaptureStore()
+    service = CaptureService(store, InstancePolicy(), session_quiescence=timedelta(seconds=1))
+    now = datetime(2026, 7, 10, 12, tzinfo=timezone.utc)
+    later = envelope(
+        capture_id="018f5e2a-1234-7abc-8def-1234567890b2",
+        occurred_at="2026-07-10T12:00:02Z",
+        payload={"role": "assistant", "content": "Acknowledged"},
+    )
+    earlier = envelope(
+        capture_id="018f5e2a-1234-7abc-8def-1234567890b3",
+        occurred_at="2026-07-10T12:00:01Z",
+        payload={"role": "user", "content": "Please remember this detailed decision for later retrieval."},
+    )
+    service.ingest(later, now)
+    service.ingest(earlier, now + timedelta(seconds=1))
+
+    record = SalienceWorker(store, "worker-a").process_once(now + timedelta(seconds=2))[0]
+
+    assert record.status == "admitted"
+    assert record.reason == "user_authored_volume"
+    assert [item["capture_id"] for item in record.trimmed] == [
+        earlier.capture_id,
+        later.capture_id,
+    ]
+
+
+def test_explicit_push_bypasses_salience_threshold() -> None:
+    store = MemoryCaptureStore()
+    service = CaptureService(store, InstancePolicy())
+    now = datetime(2026, 7, 10, 12, tzinfo=timezone.utc)
+    pushed = envelope(
+        capture_id="018f5e2a-1234-7abc-8def-1234567890b4",
+        kind="snapshot",
+        **{
+            "class": "push.document",
+            "payload": {"content_hash": f"sha256:{'b' * 64}", "content": "x"},
+        },
+    )
+    service.ingest(pushed, now)
+
+    record = SalienceWorker(store, "worker-a").process_once(now)[0]
+
+    assert record.status == "admitted"
+    assert record.reason == "explicit_push"
+
+
+def test_next_generation_reuses_prior_mining_output_with_delta_and_context() -> None:
+    store = MemoryCaptureStore()
+    service = CaptureService(store, InstancePolicy(), session_quiescence=timedelta(seconds=1))
+    salience_worker = SalienceWorker(store, "salience-a")
+    coordinator = MiningRunCoordinator(store, context_turns=2)
+    now = datetime(2026, 7, 10, 12, tzinfo=timezone.utc)
+    decision = envelope(
+        capture_id="018f5e2a-1234-7abc-8def-1234567890b5",
+        payload={
+            "role": "user",
+            "content": "We should keep the deployment local because privacy matters most.",
+        },
+    )
+    question = envelope(
+        capture_id="018f5e2a-1234-7abc-8def-1234567890b6",
+        occurred_at="2026-07-10T12:00:01Z",
+        payload={"role": "assistant", "content": "Should I record that as the final decision?"},
+    )
+    service.ingest(decision, now)
+    service.ingest(question, now + timedelta(seconds=1))
+    first_salience = salience_worker.process_once(now + timedelta(seconds=2))[0]
+    first_preparation = coordinator.prepare(
+        first_salience,
+        stage="interpret",
+        miner_version="miner-v1",
+        config={"temperature": 0},
+    )
+    first_run = coordinator.record_success(
+        first_preparation,
+        output={"episodes": [{"decision": "keep deployment local"}]},
+        evidence_capture_ids=[decision.capture_id],
+        now=now + timedelta(seconds=3),
+    )
+
+    answer = envelope(
+        capture_id="018f5e2a-1234-7abc-8def-1234567890b7",
+        occurred_at="2026-07-10T12:30:00Z",
+        payload={"role": "user", "content": "yes"},
+    )
+    service.ingest(answer, now + timedelta(minutes=30))
+    second_salience = salience_worker.process_once(now + timedelta(minutes=30, seconds=1))[0]
+    second_preparation = coordinator.prepare(
+        second_salience,
+        stage="interpret",
+        miner_version="miner-v1",
+        config={"temperature": 0},
+    )
+
+    assert second_preparation.parent_run_id == first_run.run_id
+    assert second_preparation.prior_output == first_run.output
+    assert [item["capture_id"] for item in second_preparation.delta] == [answer.capture_id]
+    assert [item["capture_id"] for item in second_preparation.context] == [
+        decision.capture_id,
+        question.capture_id,
+    ]
+    assert second_preparation.evidence_eligible_capture_ids == [answer.capture_id]
+    with pytest.raises(ValueError, match="context-only"):
+        coordinator.record_success(
+            second_preparation,
+            output={"confirmed": True},
+            evidence_capture_ids=[question.capture_id],
+        )
+
+    second_run = coordinator.record_success(
+        second_preparation,
+        output={"confirmed": True},
+        evidence_capture_ids=[answer.capture_id],
+        now=now + timedelta(minutes=30, seconds=2),
+    )
+    repeated = coordinator.prepare(
+        second_salience,
+        stage="interpret",
+        miner_version="miner-v1",
+        config={"temperature": 0},
+    )
+    assert repeated.reusable_run == second_run
+    assert second_run.parent_run_id == first_run.run_id
+
+
+def test_incompatible_miner_configuration_falls_back_to_full_generation() -> None:
+    store = MemoryCaptureStore()
+    service = CaptureService(store, InstancePolicy(), session_quiescence=timedelta(seconds=1))
+    now = datetime(2026, 7, 10, 12, tzinfo=timezone.utc)
+    service.ingest(
+        envelope(payload={"role": "user", "content": "Remember this sufficiently long decision."}),
+        now,
+    )
+    salience = SalienceWorker(store, "salience-a").process_once(now + timedelta(seconds=1))[0]
+    coordinator = MiningRunCoordinator(store)
+    first = coordinator.prepare(
+        salience,
+        stage="interpret",
+        miner_version="miner-v1",
+        config={"schema": 1},
+    )
+    coordinator.record_success(first, output={"ok": True}, evidence_capture_ids=[CAPTURE_ID])
+
+    later = envelope(
+        capture_id="018f5e2a-1234-7abc-8def-1234567890b8",
+        occurred_at="2026-07-10T12:01:00Z",
+        payload={"role": "user", "content": "A later addition"},
+    )
+    service.ingest(later, now + timedelta(minutes=1))
+    next_salience = SalienceWorker(store, "salience-b").process_once(
+        now + timedelta(minutes=1, seconds=1)
+    )[0]
+    changed = coordinator.prepare(
+        next_salience,
+        stage="interpret",
+        miner_version="miner-v1",
+        config={"schema": 2},
+    )
+
+    assert changed.parent_run_id is None
+    assert changed.context == []
+    assert [item["capture_id"] for item in changed.delta] == [CAPTURE_ID, later.capture_id]
+
+
+def test_failed_mining_run_can_retry_without_hiding_successful_output() -> None:
+    store = MemoryCaptureStore()
+    service = CaptureService(store, InstancePolicy(), session_quiescence=timedelta(seconds=1))
+    now = datetime(2026, 7, 10, 12, tzinfo=timezone.utc)
+    service.ingest(
+        envelope(payload={"role": "user", "content": "Remember this sufficiently long decision."}),
+        now,
+    )
+    salience = SalienceWorker(store, "salience-a").process_once(now + timedelta(seconds=1))[0]
+    coordinator = MiningRunCoordinator(store)
+    preparation = coordinator.prepare(
+        salience,
+        stage="interpret",
+        miner_version="miner-v1",
+        config={"schema": 1},
+    )
+
+    failed = coordinator.record_failure(preparation, error="temporary model outage", now=now)
+    assert coordinator.prepare(
+        salience,
+        stage="interpret",
+        miner_version="miner-v1",
+        config={"schema": 1},
+    ).reusable_run is None
+
+    succeeded = coordinator.record_success(
+        preparation,
+        output={"decision": "remembered"},
+        evidence_capture_ids=[CAPTURE_ID],
+        now=now + timedelta(seconds=1),
+    )
+    assert succeeded.run_id == failed.run_id
+    assert succeeded.status == "succeeded"
+    assert coordinator.prepare(
+        salience,
+        stage="interpret",
+        miner_version="miner-v1",
+        config={"schema": 1},
+    ).reusable_run == succeeded

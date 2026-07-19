@@ -156,8 +156,10 @@ Budget ownership stays with the instance, not the provider or front door.
   models.
 - Manual, calendar, and rolling replenishment policies are accepted design.
 
-Other cost controls are the salience admission threshold, tier-to-model map,
-and width of the entity-resolution LLM judge band.
+The deterministic salience admission threshold is implemented as a versioned
+code configuration. Future cost controls include an operator policy surface
+for that threshold, the tier-to-model map, and the width of the
+entity-resolution LLM judge band.
 
 None of the budget ledger, reservation, replenishment, model tiers, role map,
 or quality self-test is implemented in the foundation milestone.

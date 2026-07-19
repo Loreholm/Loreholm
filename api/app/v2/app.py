@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
-import os
 import json
+import logging
+import os
 import secrets
 import time
 from contextlib import asynccontextmanager
@@ -17,7 +19,11 @@ import httpx
 
 from .models import AdminStatus, CaptureEnvelope, ChatStreamRequest, InstancePolicy, ModelEndpointConfig
 from .router import get_capture_service, require_device_token, router
+from .salience import SalienceWorker
 from .service import ArcadeCaptureStore, CaptureService
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
@@ -39,6 +45,11 @@ def create_app() -> FastAPI:
         store,
         InstancePolicy(),
         session_quiescence=timedelta(seconds=session_quiescence_seconds),
+    ) if store else None
+    salience_poll_seconds = max(1, int(os.getenv("LOREHOLM_V2_SALIENCE_POLL_SECONDS", "5")))
+    salience_worker = SalienceWorker(
+        store,
+        worker_id=f"salience-{os.getpid()}-{secrets.token_hex(4)}",
     ) if store else None
     configured_digest = os.getenv("LOREHOLM_V2_DEVICE_TOKEN_SHA256", "").strip().lower()
     admin_digest = os.getenv("LOREHOLM_V2_ADMIN_TOKEN_SHA256", "").strip().lower()
@@ -94,10 +105,29 @@ def create_app() -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
+        stop_salience = asyncio.Event()
+        salience_task: asyncio.Task | None = None
         if store is not None:
             store.bootstrap()
             service.load_policy()
-        yield
+            async def run_salience() -> None:
+                while not stop_salience.is_set():
+                    try:
+                        await asyncio.to_thread(salience_worker.process_once)
+                    except Exception:
+                        logger.exception("salience worker sweep failed")
+                    try:
+                        await asyncio.wait_for(stop_salience.wait(), timeout=salience_poll_seconds)
+                    except TimeoutError:
+                        pass
+
+            salience_task = asyncio.create_task(run_salience(), name="loreholm-v2-salience")
+        try:
+            yield
+        finally:
+            stop_salience.set()
+            if salience_task is not None:
+                await salience_task
 
     app = FastAPI(title="Loreholm Instance", version="1.0.0", lifespan=lifespan)
 

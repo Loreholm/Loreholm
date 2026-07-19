@@ -61,6 +61,7 @@ Set installer overrides before the first run:
 | `LOREHOLM_SOURCE_URL` | Loreholm branch archive | Release source archive |
 | `LOREHOLM_V2_BIND_HOST` | `127.0.0.1` | Instance API bind address |
 | `LOREHOLM_V2_PORT` | `8082` | Instance API host port |
+| `LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS` | `300` | Quiet time before a transcript session is evaluated |
 | `BIFROST_BIND_HOST` | `127.0.0.1` | Bifrost dashboard bind address |
 | `BIFROST_PORT` | `8083` | Bifrost dashboard host port |
 | `BIFROST_PUBLIC_URL` | Derived from bind host/port | Link shown by the instance dashboard |
@@ -70,10 +71,10 @@ The generated environment also contains ArcadeDB and Bifrost credentials plus
 raw and hashed device, administrator, and synchronization tokens. Avoid
 editing only one side of a raw-token/digest pair.
 
-Transcript-session admission uses a 300-second quiet period in the shipped
-Compose stack. The API process recognizes
-`LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS` when run directly, but the current
-Compose service does not expose that setting as an operator override.
+The installer persists `LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS` in
+`instance.env`, and Compose passes it to the API container. Set the variable
+before the first install, or edit the persisted value and recreate the
+`instance` service. Values must be whole seconds greater than zero.
 
 ## Health and status
 

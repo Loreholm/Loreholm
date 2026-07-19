@@ -8,6 +8,7 @@ STATE_DIR="$INSTALL_ROOT/state"
 ENV_FILE="$STATE_DIR/instance.env"
 PORT="${LOREHOLM_V2_PORT:-8082}"
 BIND_HOST="${LOREHOLM_V2_BIND_HOST:-127.0.0.1}"
+SESSION_QUIESCENCE_SECONDS="${LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS:-300}"
 HEALTH_HOST="$BIND_HOST"
 [[ "$HEALTH_HOST" == "0.0.0.0" ]] && HEALTH_HOST="127.0.0.1"
 BIFROST_BIND_HOST="${BIFROST_BIND_HOST:-127.0.0.1}"
@@ -51,12 +52,21 @@ else
     printf 'LOREHOLM_V2_SYNC_TOKEN=%s\n' "$sync_token"
     printf 'LOREHOLM_V2_PORT=%s\n' "$PORT"
     printf 'LOREHOLM_V2_BIND_HOST=%s\n' "$BIND_HOST"
+    printf 'LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS=%s\n' "$SESSION_QUIESCENCE_SECONDS"
     printf 'BIFROST_BIND_HOST=%s\n' "$BIFROST_BIND_HOST"
     printf 'BIFROST_PORT=%s\n' "$BIFROST_PORT"
     printf 'BIFROST_PUBLIC_URL=%s\n' "$BIFROST_PUBLIC_URL"
     printf 'BIFROST_ADMIN_USERNAME=%s\n' "loreholm"
     printf 'BIFROST_ADMIN_PASSWORD=%s\n' "$bifrost_admin_password"
   } > "$ENV_FILE"
+  umask "$previous_umask"
+fi
+
+if ! grep -q '^LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS=' "$ENV_FILE"; then
+  previous_umask="$(umask)"
+  umask 077
+  printf 'LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS=%s\n' \
+    "$SESSION_QUIESCENCE_SECONDS" >> "$ENV_FILE"
   umask "$previous_umask"
 fi
 

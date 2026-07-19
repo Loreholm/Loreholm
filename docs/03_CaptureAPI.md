@@ -196,14 +196,19 @@ available admission item.
 Work claims use fixed-duration, reclaimable leases. An expired lease can be
 claimed by another worker, while completion and retry require the recorded
 lease owner. The current store contract does not provide an active lease-renewal
-operation. There is no inference worker in this milestone, so these records
-stop at the admission boundary.
+operation. A scheduled instance worker consumes ready items into durable
+`V2SalienceRecord` documents, then completes the work lease. There is no
+inference worker in this milestone, so admitted records stop before model
+processing.
 
 The accepted Loreholm storage design later divides events, snapshots, external
 payloads, sessions, derived content, vectors, and graph knowledge into the
-appropriate ArcadeDB models. The session and work-item document types implement
-the admission slice of that design; the production event, snapshot, derived,
-vector, and graph layout remains open implementation work.
+appropriate ArcadeDB models. The session, work-item, and salience-record
+document types implement the admission and deterministic-gating slice of that
+design. `V2MiningRun` stores reusable stage output, compatible predecessor
+lineage, covered captures, and the captures eligible to become new evidence.
+The production event, snapshot, broader derived, vector, and graph layout
+remains open implementation work.
 
 ## Errors
 
@@ -222,3 +227,5 @@ should retain unacknowledged captures and retry with the same IDs.
 - `api/app/v2/router.py` — policy and capture routes
 - `api/app/v2/service.py` — policy enforcement, idempotency, clock normalization,
   quarantine, session assembly, admission work, and persistence
+- `api/app/v2/salience.py` — mechanical trimming, salience evaluation, and work consumption
+- `api/app/v2/mining.py` — incremental mining input, predecessor reuse, and evidence boundaries

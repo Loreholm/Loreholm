@@ -37,7 +37,7 @@
           <p class="index">01 / CAPTURE BOUNDARY</p>
           <div class="section-head"><div><h2>What enters the archive?</h2><p>Capture and model-egress are separate decisions. Tighten them independently.</p></div><button id="savePolicy" class="save">Commit policy</button></div>
           <div id="classes" class="class-list"></div>
-          <div class="mining-row"><div><span class="glyph glyph-sealed">M</span><div><h3>Mining state <button class="tip" data-tip="Session assembly and the durable admission queue are installed. The inference miner is not commissioned yet, so no queued material can reach a model or graph." aria-label="About mining state">?</button></h3><p>Captures wait durably at the admission boundary.</p></div></div><input id="miningStatus" type="hidden" value="unavailable_not_implemented"><div class="sealed-state" role="status"><span>SEALED</span><strong>MINER NOT COMMISSIONED</strong></div></div>
+          <div class="mining-row"><div><span class="glyph glyph-sealed">M</span><div><h3>Mining state <button class="tip" data-tip="Session assembly, durable admission, and deterministic salience are installed. The inference miner is not commissioned yet, so no admitted material can reach a model or graph." aria-label="About mining state">?</button></h3><p>Captures are trimmed and classified without model egress.</p></div></div><input id="miningStatus" type="hidden" value="unavailable_not_implemented"><div class="sealed-state" role="status"><span>SEALED</span><strong>INFERENCE NOT COMMISSIONED</strong></div></div>
         </section>
 
         <aside>

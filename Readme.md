@@ -25,11 +25,14 @@ The executable Loreholm foundation currently provides:
 - durable ArcadeDB staging and quarantine of unknown capture classes;
 - server-side rejection of capture classes disabled by instance policy;
 - durable transcript-session assembly and leased admission work;
+- deterministic mechanical trimming and durable salience decisions;
+- reusable mining-run identity and incremental-input lineage;
 - authenticated client policy sync; and
 - a self-contained ArcadeDB, instance API, and Bifrost deployment.
 
-Mining, graph commit, query/surfacing, retention UI, sharing, backup, and client
-adapters are designed but are not implemented in this milestone.
+Model-assisted interpretation and extraction, graph commit, query/surfacing,
+retention UI, sharing, backup, and client adapters are designed but are not
+implemented in this milestone.
 
 ## Architecture
 
@@ -41,10 +44,10 @@ assistant adapter
 embedded spine  ---> offline queue / local permission enforcement
       |
       v
-instance API  ---> ArcadeDB staging ---> admission queue
+instance API  ---> ArcadeDB staging ---> admission queue ---> salience gate
       |                                      |
       |                                      v
-      |                               miner (planned)
+      |                               interpreter (planned)
       |                                      |
       |                                      v
       |                               knowledge graph

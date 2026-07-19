@@ -4,7 +4,7 @@ import hashlib
 import json
 import secrets
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Literal
@@ -52,6 +52,44 @@ class WorkItem:
     lease_owner: str | None = None
     leased_until: datetime | None = None
     last_error: str | None = None
+
+
+@dataclass(frozen=True)
+class SalienceRecord:
+    salience_id: str
+    work_id: str
+    work_key: str
+    work_type: Literal["session_admission", "push_admission"]
+    scope_id: str
+    generation: int
+    status: Literal["admitted", "skipped"]
+    reason: str
+    algorithm_version: str
+    input_fingerprint: str
+    signals: dict
+    trimmed: list[dict]
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class MiningRun:
+    run_id: str
+    run_key: str
+    salience_id: str
+    scope_id: str
+    generation: int
+    stage: str
+    miner_version: str
+    config_fingerprint: str
+    input_fingerprint: str
+    parent_run_id: str | None
+    status: Literal["succeeded", "failed"]
+    output: dict
+    covered_capture_ids: list[str]
+    evidence_capture_ids: list[str]
+    error: str | None
+    created_at: datetime
+    completed_at: datetime
 
 
 def _new_uuid7() -> str:
@@ -122,6 +160,32 @@ class CaptureStore:
     ) -> bool:
         raise NotImplementedError
 
+    def captures_for_work(self, work: WorkItem) -> list[StoredCapture]:
+        raise NotImplementedError
+
+    def get_salience_record(self, work_id: str) -> SalienceRecord | None:
+        raise NotImplementedError
+
+    def put_salience_record(self, record: SalienceRecord) -> SalienceRecord:
+        raise NotImplementedError
+
+    def get_mining_run(self, run_key: str) -> MiningRun | None:
+        raise NotImplementedError
+
+    def latest_successful_mining_run(
+        self,
+        scope_id: str,
+        *,
+        before_generation: int,
+        stage: str,
+        miner_version: str,
+        config_fingerprint: str,
+    ) -> MiningRun | None:
+        raise NotImplementedError
+
+    def put_mining_run(self, run: MiningRun) -> MiningRun:
+        raise NotImplementedError
+
 
 class MemoryCaptureStore(CaptureStore):
     """Deterministic development/test store, never selected in production."""
@@ -132,6 +196,9 @@ class MemoryCaptureStore(CaptureStore):
         self._sessions: dict[str, StoredSession] = {}
         self._session_by_scope: dict[str, str] = {}
         self._work: dict[str, WorkItem] = {}
+        self._session_members: dict[str, tuple[str, int]] = {}
+        self._salience: dict[str, SalienceRecord] = {}
+        self._mining_runs: dict[str, MiningRun] = {}
         self._scheduled_captures: set[str] = set()
         self._lock = Lock()
 
@@ -162,6 +229,14 @@ class MemoryCaptureStore(CaptureStore):
     @property
     def work_items(self) -> tuple[WorkItem, ...]:
         return tuple(self._work.values())
+
+    @property
+    def salience_records(self) -> tuple[SalienceRecord, ...]:
+        return tuple(self._salience.values())
+
+    @property
+    def mining_runs(self) -> tuple[MiningRun, ...]:
+        return tuple(self._mining_runs.values())
 
     def _new_work(
         self,
@@ -239,6 +314,7 @@ class MemoryCaptureStore(CaptureStore):
                     current_work_id=work.work_id,
                 )
                 self._session_by_scope[scope_key] = session_id
+                self._session_members[envelope.capture_id] = (session_id, 1)
                 self._scheduled_captures.add(envelope.capture_id)
                 return
 
@@ -251,6 +327,7 @@ class MemoryCaptureStore(CaptureStore):
                 current.available_at = capture.received_at + quiescence
                 current.input_through = max(current.input_through, capture.normalized_at)
                 current.updated_at = capture.received_at
+                self._session_members[envelope.capture_id] = (session_id, session.generation)
                 self._scheduled_captures.add(envelope.capture_id)
                 return
 
@@ -265,6 +342,7 @@ class MemoryCaptureStore(CaptureStore):
                 now=capture.received_at,
             )
             session.current_work_id = work.work_id
+            self._session_members[envelope.capture_id] = (session_id, session.generation)
             self._scheduled_captures.add(envelope.capture_id)
 
     def claim_ready_work(
@@ -325,6 +403,65 @@ class MemoryCaptureStore(CaptureStore):
             item.last_error = error[:1000]
             item.updated_at = now
             return True
+
+    def captures_for_work(self, work: WorkItem) -> list[StoredCapture]:
+        if work.work_type == "push_admission":
+            capture = self._captures.get(work.scope_id)
+            return [capture] if capture is not None else []
+        captures = [
+            capture
+            for capture_id, capture in self._captures.items()
+            if (
+                (member := self._session_members.get(capture_id)) is not None
+                and member[0] == work.scope_id
+                and member[1] <= work.generation
+            )
+        ]
+        return sorted(captures, key=lambda item: (item.normalized_at, item.envelope.capture_id))
+
+    def get_salience_record(self, work_id: str) -> SalienceRecord | None:
+        return self._salience.get(work_id)
+
+    def put_salience_record(self, record: SalienceRecord) -> SalienceRecord:
+        with self._lock:
+            existing = self._salience.get(record.work_id)
+            if existing is not None:
+                return existing
+            self._salience[record.work_id] = record
+            return record
+
+    def get_mining_run(self, run_key: str) -> MiningRun | None:
+        return self._mining_runs.get(run_key)
+
+    def latest_successful_mining_run(
+        self,
+        scope_id: str,
+        *,
+        before_generation: int,
+        stage: str,
+        miner_version: str,
+        config_fingerprint: str,
+    ) -> MiningRun | None:
+        compatible = [
+            run for run in self._mining_runs.values()
+            if run.scope_id == scope_id
+            and run.generation < before_generation
+            and run.stage == stage
+            and run.miner_version == miner_version
+            and run.config_fingerprint == config_fingerprint
+            and run.status == "succeeded"
+        ]
+        return max(compatible, key=lambda run: (run.generation, run.completed_at), default=None)
+
+    def put_mining_run(self, run: MiningRun) -> MiningRun:
+        with self._lock:
+            existing = self._mining_runs.get(run.run_key)
+            if existing is not None:
+                if existing.status == "succeeded" or run.status != "succeeded":
+                    return existing
+                run = replace(run, run_id=existing.run_id, created_at=existing.created_at)
+            self._mining_runs[run.run_key] = run
+            return run
 
 
 class ArcadeCaptureStore(CaptureStore):
@@ -424,6 +561,45 @@ class ArcadeCaptureStore(CaptureStore):
             "CREATE INDEX IF NOT EXISTS ON V2WorkItem (work_key) UNIQUE",
             "CREATE INDEX IF NOT EXISTS ON V2WorkItem (state, available_at) NOTUNIQUE",
             "CREATE INDEX IF NOT EXISTS ON V2WorkItem (state, leased_until) NOTUNIQUE",
+            "CREATE DOCUMENT TYPE V2SalienceRecord IF NOT EXISTS",
+            "CREATE PROPERTY V2SalienceRecord.salience_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2SalienceRecord.work_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2SalienceRecord.work_key IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2SalienceRecord.work_type IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2SalienceRecord.scope_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2SalienceRecord.generation IF NOT EXISTS INTEGER",
+            "CREATE PROPERTY V2SalienceRecord.status IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2SalienceRecord.reason IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2SalienceRecord.algorithm_version IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2SalienceRecord.input_fingerprint IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2SalienceRecord.signals_json IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2SalienceRecord.trimmed_json IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2SalienceRecord.created_at IF NOT EXISTS DATETIME",
+            "CREATE INDEX IF NOT EXISTS ON V2SalienceRecord (salience_id) UNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2SalienceRecord (work_id) UNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2SalienceRecord (status, created_at) NOTUNIQUE",
+            "CREATE DOCUMENT TYPE V2MiningRun IF NOT EXISTS",
+            "CREATE PROPERTY V2MiningRun.run_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MiningRun.run_key IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MiningRun.salience_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MiningRun.scope_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MiningRun.generation IF NOT EXISTS INTEGER",
+            "CREATE PROPERTY V2MiningRun.stage IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MiningRun.miner_version IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MiningRun.config_fingerprint IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MiningRun.input_fingerprint IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MiningRun.parent_run_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MiningRun.status IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MiningRun.output_json IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MiningRun.covered_capture_ids IF NOT EXISTS LIST OF STRING",
+            "CREATE PROPERTY V2MiningRun.evidence_capture_ids IF NOT EXISTS LIST OF STRING",
+            "CREATE PROPERTY V2MiningRun.error IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MiningRun.created_at IF NOT EXISTS DATETIME",
+            "CREATE PROPERTY V2MiningRun.completed_at IF NOT EXISTS DATETIME",
+            "CREATE INDEX IF NOT EXISTS ON V2MiningRun (run_id) UNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2MiningRun (run_key) UNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2MiningRun (scope_id, generation) NOTUNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2MiningRun (status, stage) NOTUNIQUE",
         )
         for statement in statements:
             self._command(statement)
@@ -839,6 +1015,190 @@ class ArcadeCaptureStore(CaptureStore):
             and updated[0].get("state") == "pending"
             and self._datetime(updated[0].get("available_at")) == available_at
         )
+
+    def captures_for_work(self, work: WorkItem) -> list[StoredCapture]:
+        if work.work_type == "push_admission":
+            capture = self.get_capture(work.scope_id)
+            return [capture] if capture is not None else []
+        sessions = self._command(
+            "SELECT scope_key FROM V2Session WHERE session_id = :session_id LIMIT 1",
+            {"session_id": work.scope_id},
+        ).get("result", [])
+        if not sessions:
+            return []
+        members = self._command(
+            "SELECT capture_id FROM V2SessionCapture WHERE scope_key = :scope_key "
+            "AND generation <= :generation ORDER BY normalized_at, capture_id",
+            {"scope_key": sessions[0]["scope_key"], "generation": work.generation},
+        ).get("result", [])
+        captures = [self.get_capture(row["capture_id"]) for row in members]
+        return [capture for capture in captures if capture is not None]
+
+    @classmethod
+    def _salience_from_row(cls, row: dict) -> SalienceRecord:
+        return SalienceRecord(
+            salience_id=row["salience_id"],
+            work_id=row["work_id"],
+            work_key=row["work_key"],
+            work_type=row["work_type"],
+            scope_id=row["scope_id"],
+            generation=int(row["generation"]),
+            status=row["status"],
+            reason=row["reason"],
+            algorithm_version=row["algorithm_version"],
+            input_fingerprint=row["input_fingerprint"],
+            signals=json.loads(row["signals_json"]),
+            trimmed=json.loads(row["trimmed_json"]),
+            created_at=cls._datetime(row["created_at"]),
+        )
+
+    def get_salience_record(self, work_id: str) -> SalienceRecord | None:
+        rows = self._command(
+            "SELECT FROM V2SalienceRecord WHERE work_id = :work_id LIMIT 1",
+            {"work_id": work_id},
+        ).get("result", [])
+        return self._salience_from_row(rows[0]) if rows else None
+
+    def put_salience_record(self, record: SalienceRecord) -> SalienceRecord:
+        existing = self.get_salience_record(record.work_id)
+        if existing is not None:
+            return existing
+        params = {
+            "salience_id": record.salience_id,
+            "work_id": record.work_id,
+            "work_key": record.work_key,
+            "work_type": record.work_type,
+            "scope_id": record.scope_id,
+            "generation": record.generation,
+            "status": record.status,
+            "reason": record.reason,
+            "algorithm_version": record.algorithm_version,
+            "input_fingerprint": record.input_fingerprint,
+            "signals_json": json.dumps(record.signals, separators=(",", ":"), sort_keys=True),
+            "trimmed_json": json.dumps(record.trimmed, separators=(",", ":"), sort_keys=True),
+            "created_at": _epoch_millis(record.created_at),
+        }
+        try:
+            self._command(
+                "INSERT INTO V2SalienceRecord SET salience_id = :salience_id, work_id = :work_id, "
+                "work_key = :work_key, work_type = :work_type, scope_id = :scope_id, "
+                "generation = :generation, status = :status, reason = :reason, "
+                "algorithm_version = :algorithm_version, input_fingerprint = :input_fingerprint, "
+                "signals_json = :signals_json, trimmed_json = :trimmed_json, created_at = :created_at",
+                params,
+            )
+        except RuntimeError:
+            existing = self.get_salience_record(record.work_id)
+            if existing is None:
+                raise
+            return existing
+        return record
+
+    @classmethod
+    def _mining_run_from_row(cls, row: dict) -> MiningRun:
+        return MiningRun(
+            run_id=row["run_id"],
+            run_key=row["run_key"],
+            salience_id=row["salience_id"],
+            scope_id=row["scope_id"],
+            generation=int(row["generation"]),
+            stage=row["stage"],
+            miner_version=row["miner_version"],
+            config_fingerprint=row["config_fingerprint"],
+            input_fingerprint=row["input_fingerprint"],
+            parent_run_id=row.get("parent_run_id"),
+            status=row["status"],
+            output=json.loads(row.get("output_json") or "{}"),
+            covered_capture_ids=list(row.get("covered_capture_ids") or []),
+            evidence_capture_ids=list(row.get("evidence_capture_ids") or []),
+            error=row.get("error"),
+            created_at=cls._datetime(row["created_at"]),
+            completed_at=cls._datetime(row["completed_at"]),
+        )
+
+    def get_mining_run(self, run_key: str) -> MiningRun | None:
+        rows = self._command(
+            "SELECT FROM V2MiningRun WHERE run_key = :run_key LIMIT 1",
+            {"run_key": run_key},
+        ).get("result", [])
+        return self._mining_run_from_row(rows[0]) if rows else None
+
+    def latest_successful_mining_run(
+        self,
+        scope_id: str,
+        *,
+        before_generation: int,
+        stage: str,
+        miner_version: str,
+        config_fingerprint: str,
+    ) -> MiningRun | None:
+        rows = self._command(
+            "SELECT FROM V2MiningRun WHERE scope_id = :scope_id AND generation < :generation "
+            "AND stage = :stage AND miner_version = :miner_version "
+            "AND config_fingerprint = :config_fingerprint AND status = 'succeeded' "
+            "ORDER BY generation DESC, completed_at DESC LIMIT 1",
+            {
+                "scope_id": scope_id,
+                "generation": before_generation,
+                "stage": stage,
+                "miner_version": miner_version,
+                "config_fingerprint": config_fingerprint,
+            },
+        ).get("result", [])
+        return self._mining_run_from_row(rows[0]) if rows else None
+
+    def put_mining_run(self, run: MiningRun) -> MiningRun:
+        existing = self.get_mining_run(run.run_key)
+        if existing is not None:
+            if existing.status == "succeeded" or run.status != "succeeded":
+                return existing
+            run = replace(run, run_id=existing.run_id, created_at=existing.created_at)
+        params = {
+            "run_id": run.run_id,
+            "run_key": run.run_key,
+            "salience_id": run.salience_id,
+            "scope_id": run.scope_id,
+            "generation": run.generation,
+            "stage": run.stage,
+            "miner_version": run.miner_version,
+            "config_fingerprint": run.config_fingerprint,
+            "input_fingerprint": run.input_fingerprint,
+            "parent_run_id": run.parent_run_id,
+            "status": run.status,
+            "output_json": json.dumps(run.output, separators=(",", ":"), sort_keys=True),
+            "covered_capture_ids": run.covered_capture_ids,
+            "evidence_capture_ids": run.evidence_capture_ids,
+            "error": run.error,
+            "created_at": _epoch_millis(run.created_at),
+            "completed_at": _epoch_millis(run.completed_at),
+        }
+        if existing is not None:
+            self._command(
+                "UPDATE V2MiningRun SET status = :status, output_json = :output_json, "
+                "covered_capture_ids = :covered_capture_ids, "
+                "evidence_capture_ids = :evidence_capture_ids, error = :error, "
+                "completed_at = :completed_at WHERE run_key = :run_key",
+                params,
+            )
+            return run
+        try:
+            self._command(
+                "INSERT INTO V2MiningRun SET run_id = :run_id, run_key = :run_key, "
+                "salience_id = :salience_id, scope_id = :scope_id, generation = :generation, "
+                "stage = :stage, miner_version = :miner_version, "
+                "config_fingerprint = :config_fingerprint, input_fingerprint = :input_fingerprint, "
+                "parent_run_id = :parent_run_id, status = :status, output_json = :output_json, "
+                "covered_capture_ids = :covered_capture_ids, "
+                "evidence_capture_ids = :evidence_capture_ids, error = :error, "
+                "created_at = :created_at, completed_at = :completed_at",
+                params,
+            )
+        except RuntimeError:
+            existing = self.get_mining_run(run.run_key)
+            if existing is None:
+                raise
+            return existing
+        return run
 
 
 class CaptureService:

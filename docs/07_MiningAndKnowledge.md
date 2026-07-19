@@ -2,8 +2,9 @@
 
 **Status:** Accepted design, partially implemented. Raw capture staging,
 quarantine, durable session assembly, quiescence, immediate push admission, and
-the leased work queue exist. Salience, inference, graph commit, and surfacing do
-not.
+the leased work queue exist. Mechanical trimming, scheduled work consumption,
+and durable salience decisions also exist. Inference, graph commit, and
+surfacing do not.
 
 ## The idea in plain language
 
@@ -56,31 +57,40 @@ separately re-runnable stages. No external client writes graph facts.
 
 ## Triggering work
 
-The implemented admission boundary:
+The implemented admission and salience boundary:
 
 - makes transcript-session work available after a configurable quiet period;
-- makes explicit-push work available immediately; and
-- lets a caller claim ready or expired work with a fixed-duration lease.
+- makes explicit-push work available immediately;
+- lets the scheduled instance worker claim ready or expired work with a
+  fixed-duration lease; and
+- persists one idempotent salience record before completing each work item.
 
-There is no scheduled worker in this milestone. A periodic straggler sweep and
-slower independent schema-maintenance cadence remain planned.
+A periodic straggler sweep and slower independent schema-maintenance cadence
+remain planned.
 
 The durable unit for transcript processing is a session, not an individual
-message job. Messages remain immutable captures; the planned interpreter will
-read a session range ordered by normalized time with capture identity as
-tie-breaker.
+message job. Messages remain immutable captures; the salience worker reads each
+generation in normalized-time order with capture identity as tie-breaker. The
+planned interpreter will consume admitted derived records.
 
 ## Salience gate
 
-The planned initial gate uses no LLM and no raw embeddings.
+The implemented initial gate uses no LLM and no raw embeddings.
 
 1. Mechanical trim removes or truncates tool noise, repeated retry loops, and
    oversized prompt material at read time without deleting stored bytes.
-2. Heuristic episode admission considers signals such as user-authored volume,
-   turn count, and surface. Explicit pushes bypass the threshold.
+2. Heuristic episode admission uses user-authored volume and turn count, records
+   the source surface with those signals, and lets explicit pushes bypass the
+   threshold.
 
-Below-threshold sessions are marked skipped, not discarded. A later run with a
-different threshold can reconsider them.
+Below-threshold sessions are marked skipped, not discarded. Future reprocessing
+with a different algorithm version or threshold can reconsider them. The current
+`mechanical-salience-v1` gate removes `tool` and `function` roles, exact
+whitespace-normalized repeats, and text beyond its per-capture and per-scope
+bounds. It admits transcript work with at least 40 retained user-authored
+characters or at least three retained turns including a user turn. The record
+stores signals, thresholds, bounded derived text, and an input fingerprint;
+the original `V2Capture` bytes are unchanged.
 
 ## Raw, derived, and accreted regions
 
@@ -146,18 +156,27 @@ inference retry.
 
 ## Idempotency and re-mining
 
-Before paid inference, a stage searches for a successful result matching:
+The mining-run foundation is implemented even though no model-backed stage
+executes yet. Before future paid inference, a stage searches for a successful
+result matching:
 
 - source scope;
 - stage and miner version;
 - model/configuration fingerprint; and
 - input fingerprint.
 
-Exact retries reuse output and stable operation identity. A new miner or
-configuration creates a new generation. Earlier successful output remains
-active until the replacement succeeds, after which only covered output is
-marked superseded. Failed or partial backfills never hide prior successful
-knowledge.
+Exact retries reuse the `V2MiningRun` output and stable run key. For a later
+session generation, `MiningRunCoordinator` selects the latest earlier
+successful run only when its stage, miner version, and configuration fingerprint
+are compatible. It passes the prior structured output, new captures after the
+predecessor's coverage boundary, and a bounded tail of preceding turns needed
+to understand replies such as “yes.” Those preceding turns are context-only;
+the coordinator permits only delta capture IDs to be recorded as new evidence.
+
+A changed miner or configuration deliberately falls back to the full admitted
+generation. Earlier successful output remains available; future graph stages
+must mark only covered output superseded after its replacement succeeds. Failed
+or partial backfills must never hide prior successful knowledge.
 
 ## ArcadeDB model
 
@@ -174,9 +193,11 @@ The accepted direction uses ArcadeDB's models according to workload:
 
 The current foundation uses an append-only `V2Capture` document for each raw
 envelope, mutable `V2Session` aggregates, idempotent `V2SessionCapture`
-membership documents, and generation-numbered `V2WorkItem` documents. The
-expanded production layout still needs concrete event time-series, snapshot,
-external-payload, derived, vector, and graph types, buckets, and indexes.
+membership documents, generation-numbered `V2WorkItem` documents,
+`V2SalienceRecord` derived gates, and reusable `V2MiningRun` output documents.
+The expanded production layout still needs concrete event time-series,
+snapshot, external-payload, derived, vector, and graph types, buckets, and
+indexes.
 
 ## Vector policy
 
@@ -221,10 +242,11 @@ A practical sequence is:
 1. production capture/session storage schema — foundation documents, session
    scope, and membership implemented; expanded production layout planned;
 2. durable session quiescence and work queue — scheduling, leases, recovery,
-   completion, and delayed retry implemented; scheduled consumer and sweep
-   planned;
-3. mechanical trim and salience records;
-4. mining-run identity and reusable output store;
+   completion, delayed retry, and the scheduled consumer implemented; periodic
+   sweep planned;
+3. mechanical trim and salience records — implemented;
+4. mining-run identity, compatible predecessor selection, reusable output
+   store, incremental delta, and context-only evidence boundary — implemented;
 5. mention and candidate-claim extraction through Bifrost;
 6. vector regions and entity resolution;
 7. schema-backed deterministic claim commit and Evidence records;

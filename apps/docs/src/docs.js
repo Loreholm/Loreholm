@@ -80,7 +80,7 @@ export const documents = [
     id: 'mining', file: '07_MiningAndKnowledge.md', numeral: 'X', title: 'Mining & Knowledge',
     short: 'Descend into identity, evidence, and time.', region: 'depths', status: 'mixed', depth: 5,
     time: '14 min', color: '#e87951', raw: mining,
-    summary: 'Implemented session admission plus planned salience, mining, identity, provenance, schema, and surfacing.',
+    summary: 'Implemented session admission, salience, and incremental run lineage plus planned inference, identity, provenance, schema, and surfacing.',
   },
   {
     id: 'lifecycle', file: '08_DataLifecycle.md', numeral: 'XI', title: 'Data Lifecycle',
@@ -249,10 +249,10 @@ export const adventureNodes = {
   salience: {
     depth: 4, eyebrow: 'Useful signal before expensive work', question: 'What selects the useful material?',
     answer: [
-      'The planned pipeline begins with a mechanical trim and salience gate before it calls a model or creates an embedding. It removes or truncates obvious tool noise and retry loops at read time, then considers signals such as user-authored volume, turn count, source surface, and an explicit “remember this” push.',
-      'Material below the threshold is marked skipped rather than deleted, so a later miner or policy can reconsider it. The instance now assembles transcript sessions and places quiet sessions or explicit pushes into a durable admission queue, but the trim and salience decision that consumes those items is not yet implemented.',
+      'The implemented pipeline begins with a mechanical trim and salience gate before any model call or embedding. A scheduled worker removes tool and function payloads, normalized exact repeats, and over-limit text from a bounded derived view, then uses user-authored volume and turn count while recording the source surface. An explicit push bypasses the threshold.',
+      'Material below the threshold receives a durable skipped record rather than being deleted, so a later algorithm version or policy can reconsider it. Explicit pushes always pass; transcript work passes on sufficient retained user text or a multi-turn exchange. The original capture bytes remain unchanged.',
     ],
-    status: 'planned', docs: ['mining', 'policy'], scene: 'evidence',
+    status: 'implemented', docs: ['mining', 'policy'], scene: 'evidence',
     options: [
       {next: 'mining'},
       {next: 'deletion'},
@@ -262,7 +262,7 @@ export const adventureNodes = {
   dedup: {
     depth: 3, eyebrow: 'One truth, many witnesses', question: 'How does Loreholm avoid polluting memory with duplicates?',
     answer: [
-      'Duplicate control happens at several layers instead of being left to a nearest-neighbor search. Capture IDs make delivery retries idempotent, and mining fingerprints let an identical processing run reuse its successful output.',
+      'Duplicate control happens at several layers instead of being left to a nearest-neighbor search. Capture IDs make delivery retries idempotent. The implemented mining-run store and fingerprints let an identical stage input reuse successful output, while a later compatible generation receives prior structured output plus only its new capture delta and a bounded context tail.',
       'At the knowledge layer, the same claim seen again should add independent evidence rather than mint another fact. Similar mentions are resolved conservatively against stable entities, and uncertain matches remain separate instead of being forced together. This does not promise magical semantic perfection, but it makes duplicate pollution a first-class pipeline responsibility with inspectable decisions.',
     ],
     status: 'mixed', docs: ['capture', 'mining'], scene: 'evidence',
@@ -276,7 +276,7 @@ export const adventureNodes = {
     depth: 4, eyebrow: 'The same delivery, only once', question: 'How are exact retries recognized today?',
     answer: [
       'Every capture receives a stable UUIDv7 `capture_id` before delivery. The instance stores that identifier under a unique index, so retrying the same envelope returns `duplicate` and creates no second record.',
-      'A client must reuse the original ID after a timeout rather than minting a new one. This transport-level idempotency works today; the planned mining pipeline adds stage, input, model, and configuration fingerprints so identical inference work can reuse a prior successful result too.',
+      'A client must reuse the original ID after a timeout rather than minting a new one. This transport-level idempotency works today. Mining-run identity and stage, input, miner, and configuration fingerprints are also implemented, so a future inference worker can reuse an identical successful result without making the model call again.',
     ],
     status: 'mixed', docs: ['capture', 'mining'], scene: 'offline',
     options: [
@@ -289,9 +289,9 @@ export const adventureNodes = {
     depth: 4, eyebrow: 'Many witnesses, one claim', question: 'How can repeated evidence strengthen one claim?',
     answer: [
       'The accepted graph model separates a claim from the evidence supporting it. If two independent captures support the same subject, relation, object, and time meaning, Loreholm should attach two Evidence records to one stable claim rather than create two facts.',
-      'An inference retry is different: matching run and input fingerprints reuse the earlier mining result and add nothing. This distinction lets independent corroboration increase confidence without allowing replayed work to inflate it; the behavior belongs to the planned mining and graph layers.',
+      'An inference retry is different: matching run and input fingerprints reuse the earlier mining result and add nothing. Incremental input preparation now also marks repeated prior turns as context-only and rejects them as new evidence. Resolving genuinely independent observations onto one graph claim remains part of the planned graph layer.',
     ],
-    status: 'planned', docs: ['mining', 'lifecycle'], scene: 'evidence',
+    status: 'mixed', docs: ['mining', 'lifecycle'], scene: 'evidence',
     options: [
       {next: 'evidence'},
       {next: 'identity'},
@@ -783,7 +783,7 @@ export const adventureNodes = {
     depth: 5, eyebrow: 'The laws written on the instance', question: 'What is on the exact policy surface?',
     answer: [
       'The implemented instance policy advertises its revision, supported capture-contract range, known capture classes, whether each class may be captured, each class’s remote-processing mode, and the mining status. Authenticated clients read it from `GET /v2/policy`, while administrators update persisted policy through `PUT /v2/admin/policy` or the local dashboard.',
-      'The current service stores and advertises these decisions and rejects a disabled capture class before storage. The future embedded spine must enforce that rule before upload, while the miner must enforce remote-processing policy before egress. The mining status is sealed as unavailable until such a worker exists.',
+      'The current service stores and advertises these decisions and rejects a disabled capture class before storage. The future embedded spine must enforce that rule before upload, while the future inference worker must enforce remote-processing policy before egress. Mining status remains sealed until model-assisted processing and graph commit exist.',
     ],
     status: 'mixed', docs: ['policy', 'capture'], scene: 'builder',
     options: [
@@ -925,8 +925,8 @@ export const adventureNodes = {
   operations: {
     depth: 3, eyebrow: 'Raise the world', question: 'What services and operations exist in the current foundation?',
     answer: [
-      'The current foundation installs a containerized Loreholm instance, generates separated credentials, exposes the authenticated instance boundary through the tunnel shim, persists captures in ArcadeDB, assembles transcript sessions, queues quiet sessions and explicit pushes durably, and supports browser-chat capture.',
-      'The miner, reusable client spine, retention coordinator, and evidence-backed recall experience remain clearly marked planned work.',
+      'The current foundation installs a containerized Loreholm instance, generates separated credentials, exposes the authenticated instance boundary through the tunnel shim, persists captures in ArcadeDB, assembles transcript sessions, queues quiet sessions and explicit pushes durably, records deterministic salience decisions, and supports browser-chat capture.',
+      'Model-assisted interpretation, the reusable client spine, retention coordinator, graph commit, and evidence-backed recall experience remain clearly marked planned work.',
     ],
     status: 'implemented', docs: ['operations', 'development', 'architecture'], scene: 'builder',
     options: [
