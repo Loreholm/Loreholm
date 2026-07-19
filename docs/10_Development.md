@@ -3,7 +3,8 @@
 The current executable slice implements contract-v2 capture ingestion, policy sync,
 server-side capture blocking, idempotent staging, clock normalization,
 unknown-class quarantine, session assembly, durable admission and mining work,
-salience, and policy-gated structured extraction.
+salience, policy-gated structured extraction, mention vectors, and entity
+resolution.
 
 The installation path uses the installer; it checks prerequisites, generates instance
 and device credentials, installs under `~/.local/share/loreholm-v2`, starts the
@@ -36,10 +37,12 @@ but endpoint configuration remains instance-owned and is not baked into the
 repository. Mining defaults to paused. When activated through the dashboard or
 policy API, the background extractor claims durable mining work, enforces the
 declared local or remote processing boundary, calls the configured model only
-through Bifrost, and stores strict candidate output in `V2MiningRun`. It does
-not resolve entities or write the graph. The transcript quiet period defaults to 300 seconds;
+through Bifrost, stores strict candidate output in `V2MiningRun`, embeds
+extracted mentions, and resolves them to stable `V2Entity` vertices. It does
+not commit claims or Evidence records. The transcript quiet period defaults to 300 seconds;
 `LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS` in the Compose environment overrides
-it and is passed into the API container.
+it and is passed into the API container. `LOREHOLM_V2_EMBEDDING_DIMENSIONS`
+defaults to 384 and fixes the width of the persistent `V2Mention` HNSW region.
 
 For a trusted LAN, set `LOREHOLM_V2_BIND_HOST` to the host's LAN address in the
 instance environment and recreate the `instance` service. Authentication still
@@ -61,6 +64,11 @@ Development inference uses vLLM only. Do not configure Ollama or paid/cloud
 providers in the development Bifrost instance. The sole development model name
 is `loreholm-local`; Bifrost must route it to the local vLLM service and must
 have no fallback provider.
+
+Entity-resolution embeddings are a separate named Bifrost route. Developers
+choose and configure that provider in Bifrost; Loreholm does not install or
+assume an embedding runtime. The route's output width must equal
+`LOREHOLM_V2_EMBEDDING_DIMENSIONS`.
 
 The GPU development overlay is separate from the adopter stack so a normal Loreholm
 installation does not require an NVIDIA GPU. It defaults to the cached

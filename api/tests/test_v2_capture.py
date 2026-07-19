@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -6,6 +7,12 @@ from pydantic import ValidationError
 
 from app.v2.mining import BifrostExtractionGateway, MiningRunCoordinator, MiningWorker
 from app.v2.models import CaptureEnvelope, InstancePolicy, ModelEndpointConfig
+from app.v2.resolution import (
+    BifrostResolutionGateway,
+    EntityResolver,
+    ResolutionConfig,
+    normalize_surface,
+)
 from app.v2.salience import SalienceConfig, SalienceWorker, mechanically_trim
 from app.v2.service import ArcadeCaptureStore, CaptureService, MemoryCaptureStore, _epoch_millis
 
@@ -732,3 +739,227 @@ def test_bifrost_gateway_requests_strict_json_schema(monkeypatch) -> None:
     assert seen["url"] == "http://bifrost:8080/v1/chat/completions"
     assert seen["payload"]["response_format"]["type"] == "json_schema"
     assert seen["payload"]["response_format"]["json_schema"]["strict"] is True
+
+
+class StubResolutionGateway:
+    def __init__(self, vectors: list[list[float]], judgments: list[dict] | None = None) -> None:
+        self.vectors = vectors
+        self.judgments = judgments or []
+        self.embed_calls = []
+        self.judge_calls = []
+
+    def embed(self, texts, endpoint):
+        self.embed_calls.append((texts, endpoint))
+        return self.vectors[:len(texts)]
+
+    def judge(self, mention, candidates, endpoint):
+        self.judge_calls.append((mention, candidates, endpoint))
+        return self.judgments[min(len(self.judge_calls) - 1, len(self.judgments) - 1)]
+
+
+def successful_extraction_run():
+    policy = InstancePolicy(mining_status="active")
+    store, policy, capture, now = admitted_mining_fixture(policy)
+    worker = MiningWorker(
+        store,
+        StubExtractionGateway([extraction_for(capture.capture_id)]),
+        worker_id="mining-a",
+        policy=lambda: policy,
+        endpoint=lambda: ModelEndpointConfig(embedding_dimensions=3),
+    )
+    run = worker.process_once(now)[0]
+    return store, policy, capture, run
+
+
+def test_entity_resolution_mints_durable_entity_and_is_idempotent() -> None:
+    store, policy, _, run = successful_extraction_run()
+    gateway = StubResolutionGateway([[3.0, 4.0, 0.0]])
+    resolver = EntityResolver(store, gateway)
+    endpoint = ModelEndpointConfig(embedding_dimensions=3)
+
+    first = resolver.resolve_run(run, endpoint, policy)
+    repeated = resolver.resolve_run(run, endpoint, policy)
+
+    assert len(first) == 1
+    assert first == repeated
+    assert first[0].resolution_method == "automatic_mint"
+    assert first[0].embedding == pytest.approx([0.6, 0.8, 0.0])
+    assert first[0].entity_id == store.entities[0].entity_id
+    assert first[0].resolver_version == "entity-resolver-v1"
+    assert first[0].decision_details["thresholds"]["high"] == 0.90
+    assert len(store.entities) == 1
+    assert len(store.resolved_mentions) == 1
+    assert len(gateway.embed_calls) == 1
+    assert store.list_resolved_mentions(limit=1) == first
+    assert store.list_entities(limit=1) == list(store.entities)
+
+
+def test_embedding_region_rejects_model_or_dimension_changes() -> None:
+    store, policy, _, run = successful_extraction_run()
+    resolver = EntityResolver(store, StubResolutionGateway([[1.0, 0.0, 0.0]]))
+    resolver.resolve_run(run, ModelEndpointConfig(embedding_dimensions=3), policy)
+
+    with pytest.raises(ValueError, match="requires a new vector region"):
+        resolver.resolve_run(
+            replace(run, run_id="changed-region-run", run_key="changed-region-key"),
+            ModelEndpointConfig(embedding_model_name="different", embedding_dimensions=3),
+            policy,
+        )
+
+
+def test_startup_reopens_successful_extraction_missing_resolution_marker() -> None:
+    store, _, _, _ = successful_extraction_run()
+
+    assert store.mining_work_items[0].state == "completed"
+    assert store.backfill_mining_work() == 1
+    assert store.mining_work_items[0].state == "pending"
+
+
+def test_resolution_marker_prevents_completed_work_from_reopening() -> None:
+    store, policy, _, run = successful_extraction_run()
+    EntityResolver(store, StubResolutionGateway([[1.0, 0.0, 0.0]])).resolve_run(
+        run, ModelEndpointConfig(embedding_dimensions=3), policy
+    )
+
+    assert store.is_resolution_complete(run.run_id) is True
+    assert store.backfill_mining_work() == 0
+    assert store.mining_work_items[0].state == "completed"
+
+
+def test_exact_normalized_surface_reuses_the_stable_entity() -> None:
+    store, policy, _, run = successful_extraction_run()
+    gateway = StubResolutionGateway([[1.0, 0.0, 0.0], [0.9, 0.1, 0.0]])
+    resolver = EntityResolver(store, gateway)
+    endpoint = ModelEndpointConfig(embedding_dimensions=3)
+    first = resolver.resolve_run(run, endpoint, policy)[0]
+    output = json.loads(json.dumps(run.output))
+    output["mentions"][0]["surface"] = "  Deployment DATA! "
+    later = replace(run, run_id="later-run", run_key="later-key", output=output)
+
+    second = resolver.resolve_run(later, endpoint, policy)[0]
+
+    assert normalize_surface(output["mentions"][0]["surface"]) == "deployment data"
+    assert second.entity_id == first.entity_id
+    assert second.resolution_method == "exact"
+    assert len(store.entities) == 1
+
+
+def test_high_confidence_vector_candidate_matches_automatically() -> None:
+    store, policy, _, run = successful_extraction_run()
+    gateway = StubResolutionGateway([[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+    resolver = EntityResolver(
+        store,
+        gateway,
+        ResolutionConfig(low_threshold=0.50, high_threshold=0.70),
+    )
+    endpoint = ModelEndpointConfig(embedding_dimensions=3)
+    first = resolver.resolve_run(run, endpoint, policy)[0]
+    output = json.loads(json.dumps(run.output))
+    output["mentions"][0]["surface"] = "private records"
+    later = replace(run, run_id="vector-run", run_key="vector-key", output=output)
+
+    second = resolver.resolve_run(later, endpoint, policy)[0]
+
+    assert second.entity_id == first.entity_id
+    assert second.resolution_method == "automatic_match"
+    assert second.vector_score == pytest.approx(1.0)
+    assert gateway.judge_calls == []
+
+
+def test_middle_band_judge_is_limited_to_retrieved_candidates() -> None:
+    store, policy, _, run = successful_extraction_run()
+    gateway = StubResolutionGateway([[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+    resolver = EntityResolver(store, gateway)
+    endpoint = ModelEndpointConfig(embedding_dimensions=3)
+    first = resolver.resolve_run(run, endpoint, policy)[0]
+    gateway.judgments = [{"action": "match", "entity_id": first.entity_id}]
+    output = json.loads(json.dumps(run.output))
+    output["mentions"][0]["surface"] = "records archive"
+    later = replace(run, run_id="judge-run", run_key="judge-key", output=output)
+
+    second = resolver.resolve_run(later, endpoint, policy)[0]
+
+    assert second.entity_id == first.entity_id
+    assert second.resolution_method == "judged_match"
+    assert gateway.judge_calls[0][1][0]["entity_id"] == first.entity_id
+
+
+def test_identity_judge_cannot_select_outside_candidate_set() -> None:
+    store, policy, _, run = successful_extraction_run()
+    gateway = StubResolutionGateway([[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+    resolver = EntityResolver(store, gateway)
+    endpoint = ModelEndpointConfig(embedding_dimensions=3)
+    resolver.resolve_run(run, endpoint, policy)
+    gateway.judgments = [{"action": "match", "entity_id": "invented"}]
+    output = json.loads(json.dumps(run.output))
+    output["mentions"][0]["surface"] = "records archive"
+    later = replace(run, run_id="invalid-judge-run", run_key="invalid-judge-key", output=output)
+
+    with pytest.raises(ValueError, match="outside the candidate set"):
+        resolver.resolve_run(later, endpoint, policy)
+
+
+def test_remote_resolution_fails_closed_for_unsanitized_policy() -> None:
+    store, policy, _, run = successful_extraction_run()
+    gateway = StubResolutionGateway([[1.0, 0.0, 0.0]])
+    resolver = EntityResolver(store, gateway)
+
+    with pytest.raises(PermissionError, match="derived_only or unrestricted"):
+        resolver.resolve_run(
+            run,
+            ModelEndpointConfig(
+                embedding_processing_location="remote", embedding_dimensions=3
+            ),
+            policy,
+        )
+    assert gateway.embed_calls == []
+
+
+def test_mining_work_completes_only_after_entity_resolution() -> None:
+    policy = InstancePolicy(mining_status="active")
+    store, policy, capture, now = admitted_mining_fixture(policy)
+    resolution_gateway = StubResolutionGateway([[1.0, 0.0, 0.0]])
+    resolver = EntityResolver(store, resolution_gateway)
+    worker = MiningWorker(
+        store,
+        StubExtractionGateway([extraction_for(capture.capture_id)]),
+        worker_id="mining-a",
+        policy=lambda: policy,
+        endpoint=lambda: ModelEndpointConfig(embedding_dimensions=3),
+        resolver=resolver,
+    )
+
+    runs = worker.process_once(now)
+
+    assert len(runs) == 1
+    assert store.mining_work_items[0].state == "completed"
+    assert len(store.resolved_mentions) == 1
+    assert len(store.entities) == 1
+
+
+def test_bifrost_resolution_gateway_uses_embedding_route(monkeypatch) -> None:
+    seen = {}
+
+    class Response:
+        is_error = False
+        text = ""
+
+        def json(self):
+            return {"data": [{"index": 0, "embedding": [1, 2, 3]}]}
+
+    def fake_post(url, **kwargs):
+        seen["url"] = url
+        seen["payload"] = kwargs["json"]
+        return Response()
+
+    monkeypatch.setattr("app.v2.resolution.httpx.post", fake_post)
+
+    vectors = BifrostResolutionGateway("http://bifrost:8080", ("user", "pass")).embed(
+        ["mention context"],
+        ModelEndpointConfig(embedding_model_name="embed-v1", embedding_dimensions=3),
+    )
+
+    assert vectors == [[1.0, 2.0, 3.0]]
+    assert seen["url"] == "http://bifrost:8080/v1/embeddings"
+    assert seen["payload"]["model"] == "embeddings-local/embed-v1"
+    assert seen["payload"]["dimensions"] == 3

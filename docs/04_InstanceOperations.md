@@ -62,6 +62,7 @@ Set installer overrides before the first run:
 | `LOREHOLM_V2_BIND_HOST` | `127.0.0.1` | Instance API bind address |
 | `LOREHOLM_V2_PORT` | `8082` | Instance API host port |
 | `LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS` | `300` | Quiet time before a transcript session is evaluated |
+| `LOREHOLM_V2_EMBEDDING_DIMENSIONS` | `384` | Fixed width of the entity-resolution vector region |
 | `BIFROST_BIND_HOST` | `127.0.0.1` | Bifrost dashboard bind address |
 | `BIFROST_PORT` | `8083` | Bifrost dashboard host port |
 | `BIFROST_PUBLIC_URL` | Derived from bind host/port | Link shown by the instance dashboard |
@@ -71,10 +72,12 @@ The generated environment also contains ArcadeDB and Bifrost credentials plus
 raw and hashed device, administrator, and synchronization tokens. Avoid
 editing only one side of a raw-token/digest pair.
 
-The installer persists `LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS` in
-`instance.env`, and Compose passes it to the API container. Set the variable
-before the first install, or edit the persisted value and recreate the
-`instance` service. Values must be whole seconds greater than zero.
+The installer persists `LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS` and
+`LOREHOLM_V2_EMBEDDING_DIMENSIONS` in `instance.env`, and Compose passes them
+to the API container. Set them before the first install. The quiet period may
+be edited later before recreating the `instance` service. Embedding dimensions
+define the durable HNSW region and must not be changed in place after mentions
+exist; changing the embedding model or width requires a new vector region.
 
 ## Health and status
 
@@ -110,14 +113,23 @@ The current dashboard can:
 
 - show instance, Bifrost, and configured model status;
 - edit capture-class and remote-processing policy;
-- pause or activate structured extraction; and
-- configure an OpenAI-compatible model endpoint and declare its local or remote
-  processing location through Bifrost.
+- pause or activate extraction and entity resolution; and
+- configure OpenAI-compatible inference and embedding model names, the fixed
+  embedding width, and local or remote processing through Bifrost.
 
-Mining defaults to paused. Activating it permits candidate extraction only;
-entity resolution and graph commit remain unavailable. A remote endpoint
-receives raw extraction input only for classes whose processing mode is
-`unrestricted`.
+The embedding provider name is a logical Bifrost route selected by Loreholm.
+The operator creates and owns that provider's endpoint, credentials, and model
+routing in Bifrost; Loreholm does not provision an embedding runtime. If the
+inference and embedding provider names are the same, the route configured by
+this form enables both request types. Otherwise the named embedding provider
+must already exist in Bifrost.
+
+Mining defaults to paused. Activating it permits candidate extraction followed
+by mention embedding and entity resolution; claim/Evidence commit remains
+unavailable. A remote endpoint receives raw extraction input only for classes
+whose processing mode is `unrestricted`. Remote resolution of locally derived
+mentions requires `derived_only` or `unrestricted`; the stricter extraction
+rule still controls a combined run.
 
 It does not yet provide capture inventory, deletion, mining runs, graph
 inspection, backup, or restore.
@@ -128,6 +140,17 @@ Mining runs are currently inspectable as JSON outside the dashboard:
 curl -fsS \
   -H "Authorization: Bearer $LOREHOLM_V2_ADMIN_TOKEN" \
   "http://127.0.0.1:${LOREHOLM_V2_PORT:-8082}/v2/admin/mining/runs?limit=20"
+```
+
+Resolved mention decisions and stable entities are also inspectable:
+
+```bash
+curl -fsS \
+  -H "Authorization: Bearer $LOREHOLM_V2_ADMIN_TOKEN" \
+  "http://127.0.0.1:${LOREHOLM_V2_PORT:-8082}/v2/admin/resolution/mentions?limit=20"
+curl -fsS \
+  -H "Authorization: Bearer $LOREHOLM_V2_ADMIN_TOKEN" \
+  "http://127.0.0.1:${LOREHOLM_V2_PORT:-8082}/v2/admin/resolution/entities?limit=20"
 ```
 
 The response contains candidate output, source capture IDs, lineage, and

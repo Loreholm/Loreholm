@@ -98,6 +98,12 @@ class ModelEndpointConfig(BaseModel):
     provider_name: str = Field(default="vllm-local", pattern=r"^[a-z][a-z0-9-]{2,63}$")
     allow_private_network: bool = True
     processing_location: Literal["local", "remote"] = "local"
+    embedding_provider_name: str = Field(
+        default="embeddings-local", pattern=r"^[a-z][a-z0-9-]{2,63}$"
+    )
+    embedding_model_name: str = Field(default="loreholm-embeddings", min_length=1, max_length=256)
+    embedding_dimensions: int = Field(default=384, ge=2, le=16_384)
+    embedding_processing_location: Literal["local", "remote"] = "local"
 
 
 class ChatMessage(BaseModel):
@@ -139,3 +145,31 @@ class MiningRunView(BaseModel):
     error: str | None
     created_at: datetime
     completed_at: datetime
+
+
+class EntityView(BaseModel):
+    entity_id: str
+    canonical_surface: str
+    normalized_surface: str
+    entity_type: str
+    created_at: datetime
+
+
+class ResolvedMentionView(BaseModel):
+    mention_id: str
+    run_id: str
+    capture_id: str
+    source_start: int
+    source_end: int
+    surface: str
+    entity_type: str
+    context: str
+    embedding_model: str
+    resolver_version: str
+    entity_id: str
+    resolution_method: str
+    vector_score: float | None
+    string_score: float | None
+    combined_score: float | None
+    decision_details: dict[str, Any]
+    created_at: datetime

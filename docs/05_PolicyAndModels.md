@@ -78,7 +78,8 @@ The policy exposes `active` and `paused`, defaults to `paused`, and migrates the
 retired `unavailable_not_implemented` value to `paused`. Session assembly,
 salience, and durable mining-work creation continue while paused, but the
 mining worker claims nothing and performs no model egress. Active mining runs
-the structured extraction stage; it does not activate graph commit.
+structured extraction and entity resolution; it does not activate claim or
+Evidence commit.
 
 ## Bifrost model boundary
 
@@ -127,10 +128,17 @@ Ollama fallback.
 
 ## Planned mining roles
 
-Pipeline stages declare capability tiers rather than provider names:
+The field console configures the inference provider and selects a logical
+Bifrost provider/model name for embeddings. Operators own the embedding
+provider's actual endpoint and credentials in Bifrost. Loreholm needs only its
+route name, declared local/remote location, and output width for policy and
+storage enforcement. The embedding width must match the instance's fixed
+vector region. Pipeline stages are designed to declare capability tiers rather
+than provider names:
 
 - extraction: high capability;
-- entity-resolution middle-band judge: low capability;
+- entity-resolution middle-band judge: low capability (implemented through the
+  currently selected inference model; tier mapping remains planned);
 - episode summary: medium capability;
 - schema maintainer: high capability.
 
@@ -156,10 +164,10 @@ Budget ownership stays with the instance, not the provider or front door.
   models.
 - Manual, calendar, and rolling replenishment policies are accepted design.
 
-The deterministic salience admission threshold is implemented as a versioned
-code configuration. Future cost controls include an operator policy surface
-for that threshold, the tier-to-model map, and the width of the
-entity-resolution LLM judge band.
+The deterministic salience admission threshold and entity-resolution judge
+band are implemented as versioned code configuration. Future cost controls
+include an operator policy surface for those thresholds and the tier-to-model
+map.
 
 None of the budget ledger, reservation, replenishment, model tiers, role map,
 or quality self-test is implemented in the foundation milestone.

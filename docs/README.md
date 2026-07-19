@@ -28,8 +28,9 @@ The architecture page uses explicit **Implemented** and **Planned** labels.
 That distinction is important in the current foundation milestone: capture
 ingestion, policy blocking, durable staging, session assembly, admission work,
 mechanical trimming, salience decisions, structured extraction through Bifrost,
-and reusable incremental mining-run lineage exist today. Entity resolution,
-graph commit, and graph query/surfacing remain design work.
+reusable incremental mining-run lineage, mention vector regions, and entity
+resolution exist today. Claim/Evidence commit and graph query/surfacing remain
+design work.
 
 Pages covering mixed milestones begin with a status statement and label
 unimplemented controls directly. The numbered guides are the operational and

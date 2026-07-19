@@ -21,11 +21,14 @@ from .models import (
     AdminStatus,
     CaptureEnvelope,
     ChatStreamRequest,
+    EntityView,
     InstancePolicy,
     MiningRunView,
     ModelEndpointConfig,
+    ResolvedMentionView,
 )
 from .mining import BifrostExtractionGateway, MiningWorker
+from .resolution import BifrostResolutionGateway, EntityResolver
 from .router import get_capture_service, require_device_token, router
 from .salience import SalienceWorker
 from .service import ArcadeCaptureStore, CaptureService
@@ -41,9 +44,11 @@ def create_app() -> FastAPI:
         "ARCADEDB_USERNAME": os.getenv("ARCADEDB_USERNAME", ""),
         "ARCADEDB_PASSWORD": os.getenv("ARCADEDB_PASSWORD", ""),
     }
+    embedding_dimensions = max(2, int(os.getenv("LOREHOLM_V2_EMBEDDING_DIMENSIONS", "384")))
     store = ArcadeCaptureStore(
         required["ARCADEDB_URL"], required["ARCADEDB_DATABASE"],
         required["ARCADEDB_USERNAME"], required["ARCADEDB_PASSWORD"],
+        embedding_dimensions=embedding_dimensions,
     ) if all(required.values()) else None
     session_quiescence_seconds = max(
         1,
@@ -70,16 +75,20 @@ def create_app() -> FastAPI:
     )
     mining_poll_seconds = max(1, int(os.getenv("LOREHOLM_V2_MINING_POLL_SECONDS", "5")))
     extraction_gateway = BifrostExtractionGateway(bifrost_url, bifrost_auth)
+    resolution_gateway = BifrostResolutionGateway(bifrost_url, bifrost_auth)
+    resolver = EntityResolver(store, resolution_gateway) if store else None
 
     def selected_endpoint() -> ModelEndpointConfig:
         stored = service.store.get_config("model_endpoint") if service is not None else None
         if stored is None:
-            return ModelEndpointConfig()
+            return ModelEndpointConfig(embedding_dimensions=embedding_dimensions)
         # Older endpoint records did not state whether inference crossed the
         # instance boundary. Treat that ambiguity as remote until the operator
         # saves an explicit choice in the field console.
         if "processing_location" not in stored:
             stored = {**stored, "processing_location": "remote"}
+        if "embedding_dimensions" not in stored:
+            stored = {**stored, "embedding_dimensions": embedding_dimensions}
         return ModelEndpointConfig.model_validate(stored)
 
     mining_worker = MiningWorker(
@@ -88,6 +97,7 @@ def create_app() -> FastAPI:
         worker_id=f"mining-{os.getpid()}-{secrets.token_hex(4)}",
         policy=lambda: service.policy,
         endpoint=selected_endpoint,
+        resolver=resolver,
     ) if store else None
 
     def bifrost_request(method: str, path: str, **kwargs) -> httpx.Response:
@@ -243,8 +253,32 @@ def create_app() -> FastAPI:
             limit=bounded
         )]
 
+    @app.get("/v2/admin/resolution/mentions", response_model=list[ResolvedMentionView])
+    def resolved_mentions(
+        limit: int = 50, _: None = Depends(require_admin)
+    ) -> list[ResolvedMentionView]:
+        return [
+            ResolvedMentionView.model_validate(mention.__dict__)
+            for mention in service.store.list_resolved_mentions(limit=limit)
+        ]
+
+    @app.get("/v2/admin/resolution/entities", response_model=list[EntityView])
+    def entities(limit: int = 50, _: None = Depends(require_admin)) -> list[EntityView]:
+        return [
+            EntityView.model_validate(entity.__dict__)
+            for entity in service.store.list_entities(limit=limit)
+        ]
+
     @app.put("/v2/admin/model")
     def configure_model(config: ModelEndpointConfig, _: None = Depends(require_admin)) -> dict:
+        if config.embedding_dimensions != embedding_dimensions:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"embedding_dimensions must match the instance vector region "
+                    f"({embedding_dimensions})"
+                ),
+            )
         provider = {
             "network_config": {
                 "base_url": config.base_url,
@@ -258,18 +292,37 @@ def create_app() -> FastAPI:
             "custom_provider_config": {
                 "is_key_less": True,
                 "base_provider_type": "openai",
-                "allowed_requests": {"list_models": True, "chat_completion": True, "chat_completion_stream": True},
+                "allowed_requests": {
+                    "list_models": True,
+                    "chat_completion": True,
+                    "chat_completion_stream": True,
+                    "embedding": config.provider_name == config.embedding_provider_name,
+                },
             },
         }
         existing = bifrost_request("GET", "/api/providers", timeout=10).json().get("providers", [])
         if any(item.get("name") == config.provider_name for item in existing):
-            response = bifrost_request("PUT", f"/api/providers/{config.provider_name}", json=provider, timeout=15)
+            response = bifrost_request(
+                "PUT", f"/api/providers/{config.provider_name}", json=provider, timeout=15
+            )
         else:
-            response = bifrost_request("POST", "/api/providers", json={"provider": config.provider_name, **provider}, timeout=15)
+            response = bifrost_request(
+                "POST", "/api/providers",
+                json={"provider": config.provider_name, **provider}, timeout=15,
+            )
         if response.is_error:
-            raise HTTPException(status_code=502, detail=f"Bifrost rejected model configuration: {response.text[:500]}")
+            raise HTTPException(
+                status_code=502,
+                detail=f"Bifrost rejected {config.provider_name}: {response.text[:500]}",
+            )
         service.store.set_config("model_endpoint", config.model_dump(mode="json"))
-        return {"ok": True, "provider": config.provider_name, "model": config.model_name}
+        return {
+            "ok": True,
+            "provider": config.provider_name,
+            "model": config.model_name,
+            "embedding_provider": config.embedding_provider_name,
+            "embedding_model": config.embedding_model_name,
+        }
 
     @app.post("/api/chat/stream")
     async def chat_stream(payload: ChatStreamRequest, _: None = Depends(require_sync)) -> StreamingResponse:

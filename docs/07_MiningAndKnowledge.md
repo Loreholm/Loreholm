@@ -3,9 +3,9 @@
 **Status:** Accepted design, partially implemented. Raw capture staging,
 quarantine, durable session assembly, quiescence, immediate push admission, and
 the leased admission and mining work queues exist. Mechanical trimming,
-scheduled work consumption, durable salience decisions, and policy-gated
-structured extraction through Bifrost also exist. Entity resolution, graph
-commit, and surfacing do not.
+scheduled work consumption, durable salience decisions, policy-gated structured
+extraction through Bifrost, mention vector storage, and entity resolution also
+exist. Schema-backed claim/Evidence commit and surfacing do not.
 
 ## The idea in plain language
 
@@ -99,6 +99,43 @@ Remote extraction currently permits raw input only for classes set to
 `unrestricted`; `local_only`, `sanitized_remote`, and `derived_only` fail
 closed because sanitizer and local-derived transformations do not exist yet.
 
+## Implemented entity resolution
+
+After a successful extraction, `entity-resolver-v1` materializes each new
+mention as a durable `V2Mention` document. Its mention-in-context text is sent
+through Bifrost's embedding endpoint, normalized to unit length, and stored in
+a persistent ArcadeDB cosine HNSW region. Raw captures are never embedded.
+Each vector region is locked to one provider/model name and dimension count;
+changing either requires a new region so incomparable vector spaces are never
+silently mixed.
+
+Resolution first reuses an exact normalized surface and entity-type match. For
+other mentions it retrieves same-type mention neighbors, combines cosine and
+string similarity, accepts a match above the high threshold, and mints a new
+content-free `V2Entity` vertex below the low threshold. The configurable middle
+band asks the selected inference model through Bifrost to choose only from the
+retrieved entity IDs or mint a new entity. A judgment that names any other ID
+is rejected and the owned mining work is retried.
+
+Every resolved mention records its extraction run, exact capture span,
+embedding model, resolver version, method, scores, thresholds, retrieved
+candidate set, and optional model judgment. Mention and mint keys make the
+stage idempotent after partial failure: a retry reuses already written mentions
+and cannot mint a second entity for the same mention. Mining work completes
+only after all extracted mentions have resolved successfully.
+An idempotent `V2ResolutionRun` marker covers zero-mention output as well as
+populated runs. Startup backfill reopens successful extraction work created by
+older releases only when that marker is absent.
+Administrators can inspect recent decisions and entities through authenticated
+`GET /v2/admin/resolution/mentions` and
+`GET /v2/admin/resolution/entities` endpoints. These are audit views, not the
+planned grounded recall API.
+
+The resolver rechecks current capture policy before embedding. Local processing
+requires the source class to remain enabled. Remote derived resolution requires
+`derived_only` or `unrestricted`; the current combined extraction/resolution
+run still requires `unrestricted` because raw extraction input leaves first.
+
 ## Salience gate
 
 The implemented initial gate uses no LLM and no raw embeddings.
@@ -134,7 +171,7 @@ resolves against the existing entity registry.
 Entities use content-free surrogate UUIDv7 IDs. Names, aliases, and types are
 evidence-backed claims, not the entity's identity.
 
-Each extracted mention is resolved using:
+The implemented resolver uses:
 
 - nearest-neighbor search over mention-in-context vectors;
 - string similarity over surface forms;
@@ -142,9 +179,10 @@ Each extracted mention is resolved using:
 - automatic minting below a low threshold; and
 - an LLM judge for the configurable middle band.
 
-Automatic merge keeps the older canonical entity and appends a `merged_into`
-supersession relationship. Unmerge closes that relationship. Split
-repartitions mentions rather than rewriting source provenance.
+Merge, unmerge, and split operations remain planned. Their accepted behavior
+keeps the older canonical entity, records `merged_into` supersession rather
+than erasing either identity, and repartitions mentions without rewriting
+source provenance.
 
 ## Claims and time
 
@@ -182,9 +220,8 @@ inference retry.
 
 ## Idempotency and re-mining
 
-The mining-run foundation is implemented even though no model-backed stage
-executes yet. Before future paid inference, a stage searches for a successful
-result matching:
+The mining-run foundation is used by the model-backed extractor. Before
+inference, the stage searches for a successful result matching:
 
 - source scope;
 - stage and miner version;
@@ -221,9 +258,10 @@ The current foundation uses an append-only `V2Capture` document for each raw
 envelope, mutable `V2Session` aggregates, idempotent `V2SessionCapture`
 membership documents, generation-numbered `V2WorkItem` documents,
 `V2SalienceRecord` derived gates, and reusable `V2MiningRun` output documents.
-The expanded production layout still needs concrete event time-series,
-snapshot, external-payload, derived, vector, and graph types, buckets, and
-indexes.
+It also uses `V2Mention` derived documents with a persistent cosine vector
+index and stable `V2Entity` vertices. The expanded production layout still
+needs concrete event time-series, snapshot, external-payload, claim, Evidence,
+and maintenance types, buckets, and indexes.
 
 ## Vector policy
 
@@ -274,7 +312,8 @@ A practical sequence is:
 4. mining-run identity, compatible predecessor selection, reusable output
    store, incremental delta, and context-only evidence boundary — implemented;
 5. mention and candidate-claim extraction through Bifrost — implemented;
-6. vector regions and entity resolution;
+6. mention vector region and entity resolution — implemented; merge/unmerge,
+   split, and multi-region migration remain planned;
 7. schema-backed deterministic claim commit and Evidence records;
 8. maintenance notices, re-mining, and scoped supersession; and
 9. grounded query/surfacing API.

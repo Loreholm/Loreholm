@@ -49,9 +49,13 @@
               <label>Route name <button class="tip" data-tip="A unique Bifrost provider name for this endpoint, such as local-vllm or work-models." aria-label="About route name">?</button><input id="providerName" value="vllm-local" pattern="[a-z][a-z0-9-]{2,63}" required></label>
               <label>Endpoint <button class="tip" data-tip="The OpenAI-compatible base URL Bifrost connects to. Docker service names work inside the instance network." aria-label="About model endpoint">?</button><input id="modelUrl" value="http://vllm:8000" required></label>
               <label>Served model <button class="tip" data-tip="The exact model identifier advertised by the endpoint and used for Loreholm inference requests." aria-label="About served model">?</button><input id="modelName" value="loreholm-local" required></label>
+              <label>Embedding route name <button class="tip" data-tip="A Bifrost provider already configured by the operator to serve OpenAI-compatible embeddings. Loreholm selects it but does not provision its endpoint." aria-label="About embedding route">?</button><input id="embeddingProviderName" value="embeddings-local" pattern="[a-z][a-z0-9-]{2,63}" required></label>
+              <label>Embedding model <button class="tip" data-tip="The exact embedding-model identifier used to vectorize extracted mentions for identity matching." aria-label="About embedding model">?</button><input id="embeddingModelName" value="loreholm-embeddings" required></label>
+              <label>Embedding dimensions <button class="tip" data-tip="Must match the instance vector region. Changing it requires a new vector region and is not an in-place console operation." aria-label="About embedding dimensions">?</button><input id="embeddingDimensions" value="384" type="number" min="2" max="16384" required></label>
+              <label>Embedding location <button class="tip" data-tip="Remote embedding sends locally derived mention context outside the instance and requires Derived only or Unrestricted policy." aria-label="About embedding location">?</button><select id="embeddingProcessingLocation"><option value="local">Local instance</option><option value="remote">Remote endpoint</option></select></label>
               <label>Processing location <button class="tip" data-tip="Local means the model runs inside this Loreholm instance. Remote applies each capture class's remote-processing rule and currently requires Unrestricted for raw extraction." aria-label="About processing location">?</button><select id="processingLocation"><option value="local">Local instance</option><option value="remote">Remote endpoint</option></select></label>
               <label class="check"><input id="privateNetwork" type="checkbox" checked><span>Permit private Docker network <button class="tip" data-tip="Allows Bifrost to connect to RFC1918 addresses and Docker service networks. Keep this off for public endpoints." aria-label="About private network access">?</button></span></label>
-              <button>Configure Bifrost route <b>→</b></button>
+              <button>Save Loreholm routes <b>→</b></button>
               <a id="bifrostConfigureLink" class="bifrost-guide" href="#" target="_blank" rel="noopener">Open your Bifrost dashboard ↗</a>
             </form>
           </section>
@@ -59,7 +63,7 @@
           <section class="panel signal-panel">
             <p class="index">03 / SIGNAL</p>
             <h2>Pipeline topology</h2>
-            <div class="pipeline"><span>ADAPTER</span><i></i><span>STAGING</span><i></i><span>EXTRACTOR</span><i></i><span class="pipeline-sealed">GRAPH / SEALED</span></div>
+            <div class="pipeline"><span>STAGING</span><i></i><span>EXTRACTOR</span><i></i><span>RESOLVER</span><i></i><span class="pipeline-sealed">CLAIMS / SEALED</span></div>
             <p id="notice" class="notice">Console synchronized.</p>
           </section>
         </aside>

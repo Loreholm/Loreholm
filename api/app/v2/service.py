@@ -107,6 +107,49 @@ class MiningRun:
     completed_at: datetime
 
 
+@dataclass(frozen=True)
+class Entity:
+    entity_id: str
+    entity_key: str
+    canonical_surface: str
+    normalized_surface: str
+    entity_type: str
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class ResolvedMention:
+    mention_id: str
+    mention_key: str
+    run_id: str
+    capture_id: str
+    source_start: int
+    source_end: int
+    surface: str
+    normalized_surface: str
+    entity_type: str
+    context: str
+    embedding: list[float]
+    embedding_model: str
+    resolver_version: str
+    entity_id: str
+    resolution_method: Literal[
+        "exact", "automatic_match", "automatic_mint", "judged_match", "judged_mint"
+    ]
+    vector_score: float | None
+    string_score: float | None
+    combined_score: float | None
+    decision_details: dict
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class EntityCandidate:
+    entity: Entity
+    vector_score: float
+    mention_surface: str
+
+
 def _new_uuid7() -> str:
     millis = int(time.time() * 1000)
     value = (millis & ((1 << 48) - 1)) << 80
@@ -236,6 +279,40 @@ class CaptureStore:
     def list_mining_runs(self, *, limit: int = 50) -> list[MiningRun]:
         raise NotImplementedError
 
+    def get_resolved_mention(self, mention_key: str) -> ResolvedMention | None:
+        raise NotImplementedError
+
+    def put_resolved_mention(self, mention: ResolvedMention) -> ResolvedMention:
+        raise NotImplementedError
+
+    def get_entity(self, entity_id: str) -> Entity | None:
+        raise NotImplementedError
+
+    def find_entity_by_surface(self, normalized_surface: str, entity_type: str) -> Entity | None:
+        raise NotImplementedError
+
+    def put_entity(self, entity: Entity) -> Entity:
+        raise NotImplementedError
+
+    def find_entity_candidates(
+        self, embedding: list[float], entity_type: str, *, limit: int = 10
+    ) -> list[EntityCandidate]:
+        raise NotImplementedError
+
+    def list_resolved_mentions(self, *, limit: int = 50) -> list[ResolvedMention]:
+        raise NotImplementedError
+
+    def list_entities(self, *, limit: int = 50) -> list[Entity]:
+        raise NotImplementedError
+
+    def mark_resolution_complete(
+        self, run_id: str, resolver_version: str, mention_count: int, *, completed_at: datetime
+    ) -> None:
+        raise NotImplementedError
+
+    def is_resolution_complete(self, run_id: str) -> bool:
+        raise NotImplementedError
+
 
 class MemoryCaptureStore(CaptureStore):
     """Deterministic development/test store, never selected in production."""
@@ -250,6 +327,10 @@ class MemoryCaptureStore(CaptureStore):
         self._salience: dict[str, SalienceRecord] = {}
         self._mining_work: dict[str, MiningWorkItem] = {}
         self._mining_runs: dict[str, MiningRun] = {}
+        self._entities: dict[str, Entity] = {}
+        self._entity_by_key: dict[str, str] = {}
+        self._mentions: dict[str, ResolvedMention] = {}
+        self._resolution_complete: dict[str, dict] = {}
         self._scheduled_captures: set[str] = set()
         self._lock = Lock()
 
@@ -292,6 +373,14 @@ class MemoryCaptureStore(CaptureStore):
     @property
     def mining_work_items(self) -> tuple[MiningWorkItem, ...]:
         return tuple(self._mining_work.values())
+
+    @property
+    def entities(self) -> tuple[Entity, ...]:
+        return tuple(self._entities.values())
+
+    @property
+    def resolved_mentions(self) -> tuple[ResolvedMention, ...]:
+        return tuple(self._mentions.values())
 
     def _new_work(
         self,
@@ -511,7 +600,24 @@ class MemoryCaptureStore(CaptureStore):
         before = len(self._mining_work)
         for record in tuple(self._salience.values()):
             self.schedule_mining(record)
-        return len(self._mining_work) - before
+        created = len(self._mining_work) - before
+        for run in self._mining_runs.values():
+            if (
+                run.status != "succeeded"
+                or run.stage != "interpret_extract"
+                or self.is_resolution_complete(run.run_id)
+            ):
+                continue
+            work = next((
+                item for item in self._mining_work.values() if item.salience_id == run.salience_id
+            ), None)
+            if work is not None and work.state == "completed":
+                work.state = "pending"
+                work.available_at = run.completed_at
+                work.updated_at = run.completed_at
+                work.last_error = None
+                created += 1
+        return created
 
     def claim_ready_mining_work(
         self,
@@ -613,16 +719,101 @@ class MemoryCaptureStore(CaptureStore):
             reverse=True,
         )[:bounded]
 
+    def get_resolved_mention(self, mention_key: str) -> ResolvedMention | None:
+        return self._mentions.get(mention_key)
+
+    def put_resolved_mention(self, mention: ResolvedMention) -> ResolvedMention:
+        with self._lock:
+            existing = self._mentions.get(mention.mention_key)
+            if existing is not None:
+                return existing
+            self._mentions[mention.mention_key] = mention
+            return mention
+
+    def get_entity(self, entity_id: str) -> Entity | None:
+        return self._entities.get(entity_id)
+
+    def find_entity_by_surface(self, normalized_surface: str, entity_type: str) -> Entity | None:
+        return next((
+            entity for entity in self._entities.values()
+            if entity.normalized_surface == normalized_surface and entity.entity_type == entity_type
+        ), None)
+
+    def put_entity(self, entity: Entity) -> Entity:
+        with self._lock:
+            existing_id = self._entity_by_key.get(entity.entity_key)
+            if existing_id is not None:
+                return self._entities[existing_id]
+            self._entities[entity.entity_id] = entity
+            self._entity_by_key[entity.entity_key] = entity.entity_id
+            return entity
+
+    def find_entity_candidates(
+        self, embedding: list[float], entity_type: str, *, limit: int = 10
+    ) -> list[EntityCandidate]:
+        import math
+
+        query_norm = math.sqrt(sum(value * value for value in embedding))
+        best: dict[str, EntityCandidate] = {}
+        if query_norm == 0:
+            return []
+        for mention in self._mentions.values():
+            if mention.entity_type != entity_type or len(mention.embedding) != len(embedding):
+                continue
+            candidate_norm = math.sqrt(sum(value * value for value in mention.embedding))
+            if candidate_norm == 0:
+                continue
+            score = sum(a * b for a, b in zip(embedding, mention.embedding)) / (
+                query_norm * candidate_norm
+            )
+            entity = self._entities.get(mention.entity_id)
+            if entity is None:
+                continue
+            candidate = EntityCandidate(entity, score, mention.surface)
+            previous = best.get(entity.entity_id)
+            if previous is None or candidate.vector_score > previous.vector_score:
+                best[entity.entity_id] = candidate
+        return sorted(best.values(), key=lambda item: item.vector_score, reverse=True)[:limit]
+
+    def list_resolved_mentions(self, *, limit: int = 50) -> list[ResolvedMention]:
+        bounded = max(1, min(limit, 250))
+        return sorted(
+            self._mentions.values(), key=lambda item: (item.created_at, item.mention_id), reverse=True
+        )[:bounded]
+
+    def list_entities(self, *, limit: int = 50) -> list[Entity]:
+        bounded = max(1, min(limit, 250))
+        return sorted(
+            self._entities.values(), key=lambda item: (item.created_at, item.entity_id), reverse=True
+        )[:bounded]
+
+    def mark_resolution_complete(
+        self, run_id: str, resolver_version: str, mention_count: int, *, completed_at: datetime
+    ) -> None:
+        with self._lock:
+            self._resolution_complete.setdefault(run_id, {
+                "resolver_version": resolver_version,
+                "mention_count": mention_count,
+                "completed_at": completed_at,
+            })
+
+    def is_resolution_complete(self, run_id: str) -> bool:
+        return run_id in self._resolution_complete
+
 
 class ArcadeCaptureStore(CaptureStore):
     """ArcadeDB document-store adapter for the append-only capture region."""
 
-    def __init__(self, base_url: str, database: str, username: str, password: str) -> None:
+    def __init__(
+        self, base_url: str, database: str, username: str, password: str,
+        *, embedding_dimensions: int = 384,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.database = database
         self.command_url = f"{self.base_url}/api/v1/command/{database}"
         self.auth = (username, password)
         self.timeout = httpx.Timeout(15.0, connect=3.0)
+        self.embedding_dimensions = embedding_dimensions
 
     def _command(self, command: str, params: dict | None = None) -> dict:
         response = httpx.post(
@@ -766,6 +957,50 @@ class ArcadeCaptureStore(CaptureStore):
             "CREATE INDEX IF NOT EXISTS ON V2MiningRun (run_key) UNIQUE",
             "CREATE INDEX IF NOT EXISTS ON V2MiningRun (scope_id, generation) NOTUNIQUE",
             "CREATE INDEX IF NOT EXISTS ON V2MiningRun (status, stage) NOTUNIQUE",
+            "CREATE VERTEX TYPE V2Entity IF NOT EXISTS",
+            "CREATE PROPERTY V2Entity.entity_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Entity.entity_key IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Entity.canonical_surface IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Entity.normalized_surface IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Entity.entity_type IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Entity.created_at IF NOT EXISTS DATETIME",
+            "CREATE INDEX IF NOT EXISTS ON V2Entity (entity_id) UNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2Entity (entity_key) UNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2Entity (normalized_surface, entity_type) NOTUNIQUE",
+            "CREATE DOCUMENT TYPE V2Mention IF NOT EXISTS",
+            "CREATE PROPERTY V2Mention.mention_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Mention.mention_key IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Mention.run_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Mention.capture_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Mention.source_start IF NOT EXISTS INTEGER",
+            "CREATE PROPERTY V2Mention.source_end IF NOT EXISTS INTEGER",
+            "CREATE PROPERTY V2Mention.surface IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Mention.normalized_surface IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Mention.entity_type IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Mention.context IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Mention.embedding IF NOT EXISTS ARRAY_OF_FLOATS",
+            "CREATE PROPERTY V2Mention.embedding_model IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Mention.resolver_version IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Mention.entity_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Mention.resolution_method IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Mention.vector_score IF NOT EXISTS DOUBLE",
+            "CREATE PROPERTY V2Mention.string_score IF NOT EXISTS DOUBLE",
+            "CREATE PROPERTY V2Mention.combined_score IF NOT EXISTS DOUBLE",
+            "CREATE PROPERTY V2Mention.decision_json IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Mention.created_at IF NOT EXISTS DATETIME",
+            "CREATE INDEX IF NOT EXISTS ON V2Mention (mention_id) UNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2Mention (mention_key) UNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2Mention (run_id) NOTUNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2Mention (entity_id) NOTUNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2Mention (entity_type) NOTUNIQUE",
+            f"CREATE INDEX IF NOT EXISTS ON V2Mention (embedding) LSM_VECTOR METADATA "
+            f"{{dimensions: {self.embedding_dimensions}, similarity: 'COSINE'}}",
+            "CREATE DOCUMENT TYPE V2ResolutionRun IF NOT EXISTS",
+            "CREATE PROPERTY V2ResolutionRun.run_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ResolutionRun.resolver_version IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ResolutionRun.mention_count IF NOT EXISTS INTEGER",
+            "CREATE PROPERTY V2ResolutionRun.completed_at IF NOT EXISTS DATETIME",
+            "CREATE INDEX IF NOT EXISTS ON V2ResolutionRun (run_id) UNIQUE",
         )
         for statement in statements:
             self._command(statement)
@@ -1333,6 +1568,25 @@ class ArcadeCaptureStore(CaptureStore):
             self.schedule_mining(record)
             if not existed:
                 created += 1
+        unresolved = self._command(
+            "SELECT run_id, salience_id, completed_at FROM V2MiningRun "
+            "WHERE status = 'succeeded' AND stage = 'interpret_extract' ORDER BY completed_at"
+        ).get("result", [])
+        for run in unresolved:
+            if self.is_resolution_complete(run["run_id"]):
+                continue
+            reopened = self._command(
+                "UPDATE V2MiningWork SET state = 'pending', available_at = :available_at, "
+                "lease_owner = null, leased_until = null, last_error = null, updated_at = :updated_at "
+                "RETURN AFTER @this WHERE salience_id = :salience_id AND state = 'completed'",
+                {
+                    "available_at": _epoch_millis(self._datetime(run["completed_at"])),
+                    "updated_at": _epoch_millis(self._datetime(run["completed_at"])),
+                    "salience_id": run["salience_id"],
+                },
+            ).get("result", [])
+            if reopened:
+                created += 1
         return created
 
     def claim_ready_mining_work(
@@ -1526,6 +1780,199 @@ class ArcadeCaptureStore(CaptureStore):
             f"SELECT FROM V2MiningRun ORDER BY completed_at DESC, run_id DESC LIMIT {bounded}"
         ).get("result", [])
         return [self._mining_run_from_row(row) for row in rows]
+
+    @classmethod
+    def _entity_from_row(cls, row: dict) -> Entity:
+        return Entity(
+            entity_id=row["entity_id"],
+            entity_key=row["entity_key"],
+            canonical_surface=row["canonical_surface"],
+            normalized_surface=row["normalized_surface"],
+            entity_type=row["entity_type"],
+            created_at=cls._datetime(row["created_at"]),
+        )
+
+    @classmethod
+    def _mention_from_row(cls, row: dict) -> ResolvedMention:
+        return ResolvedMention(
+            mention_id=row["mention_id"],
+            mention_key=row["mention_key"],
+            run_id=row["run_id"],
+            capture_id=row["capture_id"],
+            source_start=int(row["source_start"]),
+            source_end=int(row["source_end"]),
+            surface=row["surface"],
+            normalized_surface=row["normalized_surface"],
+            entity_type=row["entity_type"],
+            context=row["context"],
+            embedding=[float(value) for value in row.get("embedding") or []],
+            embedding_model=row["embedding_model"],
+            resolver_version=row["resolver_version"],
+            entity_id=row["entity_id"],
+            resolution_method=row["resolution_method"],
+            vector_score=float(row["vector_score"]) if row.get("vector_score") is not None else None,
+            string_score=float(row["string_score"]) if row.get("string_score") is not None else None,
+            combined_score=float(row["combined_score"]) if row.get("combined_score") is not None else None,
+            decision_details=json.loads(row.get("decision_json") or "{}"),
+            created_at=cls._datetime(row["created_at"]),
+        )
+
+    def get_resolved_mention(self, mention_key: str) -> ResolvedMention | None:
+        rows = self._command(
+            "SELECT FROM V2Mention WHERE mention_key = :mention_key LIMIT 1",
+            {"mention_key": mention_key},
+        ).get("result", [])
+        return self._mention_from_row(rows[0]) if rows else None
+
+    def put_resolved_mention(self, mention: ResolvedMention) -> ResolvedMention:
+        existing = self.get_resolved_mention(mention.mention_key)
+        if existing is not None:
+            return existing
+        params = {
+            **mention.__dict__,
+            "decision_json": json.dumps(
+                mention.decision_details, separators=(",", ":"), sort_keys=True
+            ),
+            "created_at": _epoch_millis(mention.created_at),
+        }
+        try:
+            self._command(
+                "INSERT INTO V2Mention SET mention_id = :mention_id, mention_key = :mention_key, "
+                "run_id = :run_id, capture_id = :capture_id, source_start = :source_start, "
+                "source_end = :source_end, surface = :surface, normalized_surface = :normalized_surface, "
+                "entity_type = :entity_type, context = :context, embedding = :embedding, "
+                "embedding_model = :embedding_model, resolver_version = :resolver_version, "
+                "entity_id = :entity_id, "
+                "resolution_method = :resolution_method, vector_score = :vector_score, "
+                "string_score = :string_score, combined_score = :combined_score, "
+                "decision_json = :decision_json, "
+                "created_at = :created_at",
+                params,
+            )
+        except RuntimeError:
+            existing = self.get_resolved_mention(mention.mention_key)
+            if existing is None:
+                raise
+            return existing
+        return mention
+
+    def get_entity(self, entity_id: str) -> Entity | None:
+        rows = self._command(
+            "SELECT FROM V2Entity WHERE entity_id = :entity_id LIMIT 1",
+            {"entity_id": entity_id},
+        ).get("result", [])
+        return self._entity_from_row(rows[0]) if rows else None
+
+    def find_entity_by_surface(self, normalized_surface: str, entity_type: str) -> Entity | None:
+        rows = self._command(
+            "SELECT FROM V2Entity WHERE normalized_surface = :normalized_surface "
+            "AND entity_type = :entity_type ORDER BY created_at LIMIT 1",
+            {"normalized_surface": normalized_surface, "entity_type": entity_type},
+        ).get("result", [])
+        return self._entity_from_row(rows[0]) if rows else None
+
+    def put_entity(self, entity: Entity) -> Entity:
+        rows = self._command(
+            "SELECT FROM V2Entity WHERE entity_key = :entity_key LIMIT 1",
+            {"entity_key": entity.entity_key},
+        ).get("result", [])
+        if rows:
+            return self._entity_from_row(rows[0])
+        try:
+            self._command(
+                "INSERT INTO V2Entity SET entity_id = :entity_id, entity_key = :entity_key, "
+                "canonical_surface = :canonical_surface, normalized_surface = :normalized_surface, "
+                "entity_type = :entity_type, created_at = :created_at",
+                {
+                    **entity.__dict__,
+                    "created_at": _epoch_millis(entity.created_at),
+                },
+            )
+        except RuntimeError:
+            rows = self._command(
+                "SELECT FROM V2Entity WHERE entity_key = :entity_key LIMIT 1",
+                {"entity_key": entity.entity_key},
+            ).get("result", [])
+            if not rows:
+                raise
+            return self._entity_from_row(rows[0])
+        return entity
+
+    def find_entity_candidates(
+        self, embedding: list[float], entity_type: str, *, limit: int = 10
+    ) -> list[EntityCandidate]:
+        if len(embedding) != self.embedding_dimensions:
+            raise ValueError(
+                f"embedding has {len(embedding)} dimensions; expected {self.embedding_dimensions}"
+            )
+        search_limit = min(max(limit * 5, 20), 250)
+        rows = self._command(
+            # ArcadeDB 26.3.x registers the compatibility alias without a
+            # namespace; newer releases also expose vector.neighbors().
+            "SELECT expand(vectorNeighbors('V2Mention[embedding]', :embedding, :limit))",
+            {"embedding": embedding, "limit": search_limit},
+        ).get("result", [])
+        candidates: dict[str, EntityCandidate] = {}
+        for row in rows:
+            if row.get("entity_type") != entity_type:
+                continue
+            entity = self.get_entity(row.get("entity_id", ""))
+            if entity is None:
+                continue
+            distance = float(row.get("distance") or 0.0)
+            candidate = EntityCandidate(
+                entity=entity,
+                vector_score=max(-1.0, min(1.0, 1.0 - distance)),
+                mention_surface=row.get("surface") or entity.canonical_surface,
+            )
+            existing = candidates.get(entity.entity_id)
+            if existing is None or candidate.vector_score > existing.vector_score:
+                candidates[entity.entity_id] = candidate
+        return sorted(
+            candidates.values(), key=lambda item: item.vector_score, reverse=True
+        )[:max(1, min(limit, 50))]
+
+    def list_resolved_mentions(self, *, limit: int = 50) -> list[ResolvedMention]:
+        bounded = max(1, min(limit, 250))
+        rows = self._command(
+            f"SELECT FROM V2Mention ORDER BY created_at DESC, mention_id DESC LIMIT {bounded}"
+        ).get("result", [])
+        return [self._mention_from_row(row) for row in rows]
+
+    def list_entities(self, *, limit: int = 50) -> list[Entity]:
+        bounded = max(1, min(limit, 250))
+        rows = self._command(
+            f"SELECT FROM V2Entity ORDER BY created_at DESC, entity_id DESC LIMIT {bounded}"
+        ).get("result", [])
+        return [self._entity_from_row(row) for row in rows]
+
+    def mark_resolution_complete(
+        self, run_id: str, resolver_version: str, mention_count: int, *, completed_at: datetime
+    ) -> None:
+        if self.is_resolution_complete(run_id):
+            return
+        try:
+            self._command(
+                "INSERT INTO V2ResolutionRun SET run_id = :run_id, "
+                "resolver_version = :resolver_version, mention_count = :mention_count, "
+                "completed_at = :completed_at",
+                {
+                    "run_id": run_id,
+                    "resolver_version": resolver_version,
+                    "mention_count": mention_count,
+                    "completed_at": _epoch_millis(completed_at),
+                },
+            )
+        except RuntimeError:
+            if not self.is_resolution_complete(run_id):
+                raise
+
+    def is_resolution_complete(self, run_id: str) -> bool:
+        rows = self._command(
+            "SELECT run_id FROM V2ResolutionRun WHERE run_id = :run_id LIMIT 1",
+            {"run_id": run_id},
+        ).get("result", [])
+        return bool(rows)
 
 
 class CaptureService:

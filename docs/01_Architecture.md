@@ -84,7 +84,7 @@ mechanical trim + salience record      [implemented]
 interpret + candidate extraction       [implemented]
     |
     v
-resolve                                [planned]
+mention vectors + resolve              [implemented]
     |
     v
 knowledge graph + provenance           [planned]
@@ -259,8 +259,8 @@ graph commit must later use that lineage so a new successful generation can
 supersede covered derived output without replacing stable accreted identities
 or destroying independent evidence.
 
-The structured interpreter/extractor is implemented. No entity-resolution
-worker, graph-commit worker, or query stage is implemented in the current
+The structured interpreter/extractor and entity resolver are implemented. No
+schema-backed claim-commit worker or query stage is implemented in the current
 foundation milestone.
 
 See [mining and knowledge](07_MiningAndKnowledge.md) for the accepted identity,
@@ -280,7 +280,8 @@ provenance, schema, vector, and surfacing decisions, and
 | Surface adapters | Planned | Convert IDE, browser, mobile, and other native context into captures |
 | Embedded spine | Planned | Identity, policy enforcement, redaction, ordering, and offline delivery |
 | Structured extractor | Implemented | Turn admitted captures into versioned episode, mention, and candidate-claim output |
-| Resolver and graph miner | Planned | Resolve entities and commit claims with first-class evidence |
+| Entity resolver | Implemented | Embed extracted mentions, retrieve typed candidates, and persist audited identity decisions |
+| Claim and evidence committer | Planned | Validate relation schema and commit claims with first-class evidence |
 | Graph query/surfacing | Planned | Retrieve mined knowledge for users and assistants |
 
 ## Source map
@@ -290,6 +291,8 @@ provenance, schema, vector, and surfacing decisions, and
 - `api/app/v2/salience.py` — bounded mechanical views and admission decisions
 - `api/app/v2/mining.py` — incremental preparation, Bifrost extraction, policy
   enforcement, validation, and mining-run persistence
+- `api/app/v2/resolution.py` — Bifrost embeddings, vector/string candidate
+  scoring, bounded identity judgment, and durable mention resolution
 - `api/app/v2/app.py` — Loreholm application, administration, and chat capture
 - `deploy/docker-compose.v2.yml` — private instance deployment
 - `deploy/docker-compose.v2.remote.yml` — retained tunnel topology, currently wired for chat

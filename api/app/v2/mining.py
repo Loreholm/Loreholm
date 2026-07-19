@@ -81,6 +81,12 @@ class ExtractionGateway(Protocol):
     def extract(self, preparation: "MiningPreparation", endpoint: ModelEndpointConfig) -> dict: ...
 
 
+class ResolutionStage(Protocol):
+    def resolve_run(
+        self, run: MiningRun, endpoint: ModelEndpointConfig, policy: InstancePolicy
+    ) -> list: ...
+
+
 class BifrostExtractionGateway:
     def __init__(self, base_url: str, auth: tuple[str, str]) -> None:
         self.base_url = base_url.rstrip("/")
@@ -333,6 +339,7 @@ class MiningWorker:
         worker_id: str,
         policy: Callable[[], InstancePolicy],
         endpoint: Callable[[], ModelEndpointConfig],
+        resolver: ResolutionStage | None = None,
         lease_for: timedelta = timedelta(minutes=5),
         retry_after: timedelta = timedelta(seconds=30),
         batch_size: int = 2,
@@ -342,6 +349,7 @@ class MiningWorker:
         self.worker_id = worker_id
         self.policy = policy
         self.endpoint = endpoint
+        self.resolver = resolver
         self.lease_for = lease_for
         self.retry_after = retry_after
         self.batch_size = batch_size
@@ -438,6 +446,8 @@ class MiningWorker:
                         evidence_capture_ids=evidence_ids,
                         now=started_at,
                     )
+                if self.resolver is not None:
+                    self.resolver.resolve_run(run, endpoint, policy)
                 if not self.store.complete_mining_work(
                     work.mining_work_id, self.worker_id, now=started_at
                 ):

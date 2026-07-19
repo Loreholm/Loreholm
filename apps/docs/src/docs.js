@@ -575,7 +575,7 @@ export const adventureNodes = {
     depth: 1, eyebrow: 'What is real now', question: 'Where is this project at?',
     answer: [
       'Loreholm is at the working-foundation stage, not at the finished-product stage. You can run a containerized private instance, authenticate clients, accept and safely stage context, configure model routing, and protect remote access behind the private network.',
-      'Browser chat already captures both sides of a conversation without a separate save command. The mining pipeline, derived vector regions, evidence-backed graph, lifecycle tools, and natural-language surfacing experience are accepted design that still needs to be implemented. That makes the project useful today for technical evaluation and bounded pilots, but not yet as the only memory system an individual or organization depends on.',
+      'Browser chat already captures both sides of a conversation without a separate save command. The instance also admits salient context, extracts source-linked candidates, embeds mentions, and resolves them to stable entities. Claim and Evidence commit, lifecycle tools, and natural-language surfacing remain accepted design. That makes the project useful today for technical evaluation and bounded pilots, but not yet as the only memory system an individual or organization depends on.',
     ],
     status: 'mixed', docs: ['operations', 'architecture', 'chat'], scene: 'builder',
     options: [
@@ -769,8 +769,8 @@ export const adventureNodes = {
   minerrole: {
     depth: 5, eyebrow: 'Models with bounded assignments', question: 'What does the miner need a model for?',
     answer: [
-      'The first model-backed role now extracts versioned episodes, mentions, temporal signals, and candidate claims from admitted context. Ambiguous entity judging, summaries, schema maintenance, and tier-to-model assignment remain planned roles.',
-      'Mechanical trimming, salience admission, strict output validation, incremental idempotency, and the evidence-eligible capture boundary remain deterministic. Every extraction call passes through Bifrost; graph commit remains sealed.',
+      'The first model-backed role extracts versioned episodes, mentions, temporal signals, and candidate claims from admitted context. A second bounded role judges only ambiguous identity matches: it may select one retrieved entity ID or ask Loreholm to mint a new entity. Summaries, schema maintenance, and tier-to-model assignment remain planned roles.',
+      'Mechanical trimming, salience admission, strict output validation, vector/string thresholds, incremental idempotency, and candidate-set enforcement remain deterministic. Extraction, embeddings, and ambiguous judgments pass through Bifrost; claim commit remains sealed.',
     ],
     status: 'mixed', docs: ['policy', 'mining'], scene: 'evidence',
     options: [
@@ -809,7 +809,7 @@ export const adventureNodes = {
     depth: 3, eyebrow: 'From history to meaning', question: 'How does saved history become connected knowledge?',
     answer: [
       'Saved history preserves what happened. It does not automatically know that two names mean the same person, that a statement replaced an older one, or which source supports a conclusion.',
-      'Loreholm now selects admitted context and extracts source-linked episode, mention, and candidate-claim records. Connecting identities, committing time-aware claims, and surfacing grounded answers remain planned.',
+      'Loreholm now selects admitted context, extracts source-linked episode, mention, and candidate-claim records, and connects mentions to stable entities through an audited vector/string resolver. Committing time-aware claims and surfacing grounded answers remain planned.',
     ],
     status: 'mixed', docs: ['mining', 'architecture'], scene: 'evidence',
     options: [
@@ -821,8 +821,8 @@ export const adventureNodes = {
   mining: {
     depth: 4, eyebrow: 'The quiet librarian', question: 'How does the knowledge-building pipeline commit graph knowledge?',
     answer: [
-      'The instance now admits context, claims durable mining work, and asks a model through Bifrost for strictly validated episodes, mentions, temporal signals, and candidate claims. Those versioned candidates cite exact spans from eligible new captures and are inspectable through the administrator mining-runs endpoint.',
-      'Entity resolution, schema-backed validation, first-class Evidence records, and graph commit remain planned. Clients stay deliberately less powerful: they observe and deliver, but never decide graph truth.',
+      'The instance now admits context, claims durable mining work, and asks a model through Bifrost for strictly validated episodes, mentions, temporal signals, and candidate claims. It embeds extracted mentions, retrieves same-type identity candidates, and persists exact, automatic, or bounded model-judged resolutions to stable entity vertices.',
+      'Schema-backed claim validation, first-class Evidence records, and claim commit remain planned. Clients stay deliberately less powerful: they observe and deliver, but never decide graph truth.',
     ],
     status: 'mixed', docs: ['mining', 'architecture'], scene: 'evidence',
     options: [
@@ -834,10 +834,10 @@ export const adventureNodes = {
   identity: {
     depth: 4, eyebrow: 'Names are not people', question: 'How does Loreholm decide that two mentions refer to the same entity?',
     answer: [
-      'It does not equate matching text with identity. The accepted design uses normalized aliases, context, candidate retrieval, conservative matching, and merge records so uncertain mentions remain distinct.',
-      'Identity decisions carry lineage and can be revisited. The goal is not a magically clean graph—it is an auditable graph that can admit uncertainty.',
+      'It does not equate matching text with identity. The implemented resolver embeds mention-in-context text, retrieves same-type neighbors, combines vector and string scores, automatically accepts only above a high threshold, and mints below a low threshold.',
+      'Middle-band cases go through Bifrost, where the model may choose only a retrieved entity ID or mint a new one. Every mention keeps its source span, run, model, resolver version, thresholds, candidates, scores, and judgment. Merge, unmerge, split, and the correction interface remain planned.',
     ],
-    status: 'planned', docs: ['mining', 'architecture'], scene: 'evidence',
+    status: 'mixed', docs: ['mining', 'architecture'], scene: 'evidence',
     options: [
       {next: 'evidence'},
       {next: 'knowledge'},
@@ -925,8 +925,8 @@ export const adventureNodes = {
   operations: {
     depth: 3, eyebrow: 'Raise the world', question: 'What services and operations exist in the current foundation?',
     answer: [
-      'The current foundation installs a containerized Loreholm instance, generates separated credentials, exposes the authenticated instance boundary through the tunnel shim, persists captures in ArcadeDB, assembles transcript sessions, records deterministic salience, and runs policy-gated structured extraction through Bifrost.',
-      'Entity resolution, the reusable client spine, retention coordinator, graph commit, and evidence-backed recall experience remain clearly marked planned work.',
+      'The current foundation installs a containerized Loreholm instance, generates separated credentials, exposes the authenticated instance boundary through the tunnel shim, persists captures in ArcadeDB, assembles transcript sessions, records deterministic salience, and runs policy-gated structured extraction and entity resolution through Bifrost.',
+      'The reusable client spine, retention coordinator, claim/Evidence commit, and evidence-backed recall experience remain clearly marked planned work.',
     ],
     status: 'implemented', docs: ['operations', 'development', 'architecture'], scene: 'builder',
     options: [

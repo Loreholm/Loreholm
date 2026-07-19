@@ -66,8 +66,9 @@ rest.
 
 Capture authorization controls who may submit context; it does not make every
 captured statement true. Capture hints are non-authoritative. The implemented
-extractor produces candidates only, and the planned graph miner remains
-responsible for identity resolution, validation, and graph commit.
+extractor produces candidates only. The implemented resolver records bounded,
+auditable identity decisions, while the planned claim committer remains
+responsible for relation validation, Evidence creation, and graph truth.
 
 ## Model-egress boundary
 
