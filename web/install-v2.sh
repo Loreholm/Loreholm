@@ -14,8 +14,8 @@ BIFROST_BIND_HOST="${BIFROST_BIND_HOST:-127.0.0.1}"
 BIFROST_PORT="${BIFROST_PORT:-8083}"
 BIFROST_PUBLIC_URL="${BIFROST_PUBLIC_URL:-http://$BIFROST_BIND_HOST:$BIFROST_PORT}"
 
-say() { printf 'Loreholm V2: %s\n' "$*"; }
-die() { printf 'Loreholm V2: error: %s\n' "$*" >&2; exit 1; }
+say() { printf 'Loreholm: %s\n' "$*"; }
+die() { printf 'Loreholm: error: %s\n' "$*" >&2; exit 1; }
 need() { command -v "$1" >/dev/null 2>&1 || die "'$1' is required"; }
 
 need curl
@@ -79,7 +79,7 @@ if ! grep -q '^BIFROST_ADMIN_PASSWORD=' "$ENV_FILE"; then
   umask "$previous_umask"
 fi
 
-# Upgrade older V2 installs that predate the dashboard credential without
+# Upgrade older installs that predate the dashboard credential without
 # replacing their existing database or device credentials.
 if ! grep -q '^LOREHOLM_V2_ADMIN_TOKEN=' "$ENV_FILE"; then
   admin_token="$(openssl rand -hex 32)"
@@ -105,7 +105,7 @@ curl --fail --location --silent --show-error "$SOURCE_URL" -o "$tmp/loreholm.tar
 mkdir -p "$tmp/unpacked"
 tar -xzf "$tmp/loreholm.tar.gz" -C "$tmp/unpacked"
 compose_file="$(find "$tmp/unpacked" -type f -path '*/deploy/docker-compose.v2.yml' -print -quit)"
-[[ -n "$compose_file" ]] || die "release does not contain the V2 stack"
+[[ -n "$compose_file" ]] || die "release does not contain the Loreholm stack"
 source_root="${compose_file%/deploy/docker-compose.v2.yml}"
 
 rm -rf "$SOURCE_DIR.next"

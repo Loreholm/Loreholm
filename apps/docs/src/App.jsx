@@ -8,7 +8,9 @@ import {
   getRegion, looseThreads, regions,
 } from './docs';
 
-const statusLabels = {implemented: 'Known land', mixed: 'Shore in mist', planned: 'Beyond the veil'};
+const statusLabels = {implemented: 'Works today', mixed: 'Partly available', planned: 'Designed, not built yet'};
+const depthLabels = ['', 'The Shore', 'The Trail', 'The Keep', 'The Underhall', 'The Runesmithy'];
+const depthDescriptions = ['', 'Everyday outcome', 'What it means for you', 'How the pieces fit', 'Architecture and trust', 'Exact contracts and internals'];
 const routeFromHash = () => {
   const match = window.location.hash.match(/^#\/doc\/([a-z-]+)/);
   return match ? {view: 'doc', id: match[1]} : {view: 'saga'};
@@ -42,7 +44,7 @@ const Topbar = ({route, setRoute, onSearch, visited}) => (
   <header className="topbar">
     <button className="brand" onClick={() => setRoute({view: 'saga'})} aria-label="Return to the saga gate">
       <span className="brand-mark"><i>ᚺ</i></span>
-      <span><b>LOREHOLM</b><small>THE LIVING SAGA / V2</small></span>
+      <span><b>LOREHOLM</b><small>THE LIVING SAGA</small></span>
     </button>
     <div className="topbar-actions">
       <div className="discovery"><span>{visited.length}</span> / {documents.length} TOMES OPENED</div>
@@ -66,7 +68,8 @@ const FjordWindow = () => (
       <path className="fjord-water" d="M0 375c115-25 188 35 296 4 117-34 210-16 324 18v163H0z" />
       <g className="longship">
         <path d="M185 412c59 24 165 24 233 0l-26 38c-67 21-141 20-189 0z" />
-        <path d="M191 412l-31-37 11-4 39 42M416 414l34-46 11 5-28 48" />
+        <path d="M202 419l-42-44 11-4 39 42z" />
+        <path className="dragon-prow" d="M409 416l41-48 13 5-10 7 7 8-12-2-22 38z" />
         <path d="M300 413V294M301 305l92 76h-92z" />
         <path d="M301 305l-75 76h75z" />
         <circle cx="239" cy="427" r="8" /><circle cx="274" cy="432" r="8" /><circle cx="310" cy="433" r="8" /><circle cx="346" cy="430" r="8" /><circle cx="380" cy="424" r="8" />
@@ -80,9 +83,9 @@ const FjordWindow = () => (
 const Hero = ({choose}) => (
   <section className="saga-hero">
     <div className="hero-copy">
-      <p className="eyebrow"><span /> THE GATE OF QUESTIONS</p>
-      <h1>You did not come<br />for a <em>manual.</em></h1>
-      <p className="hero-lede">You came because something about Loreholm caught at you. Choose the question that brought you across the fjord. The documents will appear when they become useful.</p>
+      <p className="eyebrow"><span /> A DEEP WORLD, ONE QUESTION AT A TIME</p>
+      <h1>There is a lot<br />to <em>learn.</em></h1>
+      <p className="hero-lede">Loreholm has deep systems beneath a simple promise: private memory that helps you understand your work. You do not need to learn it all at once. Choose what matters now, then follow the trail as far as your curiosity takes you.</p>
       <div className="entry-runes">
         {entryQuestions.map((entry) => (
           <button key={entry.next} onClick={() => choose(entry.next)}>
@@ -99,7 +102,7 @@ const StoryProof = ({docId, setRoute, primary}) => {
   const doc = getDocument(docId);
   return (
     <button className={`story-proof ${primary ? 'primary' : ''}`} onClick={() => setRoute({view: 'doc', id: doc.id})}>
-      <Sigil doc={doc} small /><span><small>{primary ? 'OPEN THE SOURCE TOME' : 'RELATED LORE'}</small><b>{doc.title}</b></span><em>{doc.time} ↗</em>
+      <Sigil doc={doc} small /><span><small>{primary ? 'READ THE GUIDE BEHIND THIS ANSWER' : 'RELATED TECHNICAL GUIDE'}</small><b>{doc.title}</b></span><em>{doc.time} ↗</em>
     </button>
   );
 };
@@ -111,7 +114,7 @@ const Adventure = ({trail, choose, back, reset, setRoute}) => {
   if (!node) return (
     <section className="adventure empty-adventure" id="adventure">
       <p className="eyebrow"><span /> THE ORACLE FIRE WAITS</p>
-      <h2>Choose a rune above.<br /><em>Your saga will gather here.</em></h2>
+      <h2>Begin with one question.<br /><em>The world deepens from there.</em></h2>
     </section>
   );
   return (
@@ -124,11 +127,16 @@ const Adventure = ({trail, choose, back, reset, setRoute}) => {
       <div className="adventure-grid">
         <article className="oracle-card">
           <div className="oracle-rune">{entryQuestions.find((entry) => trail[0] === entry.next)?.mark || 'ᚱ'}</div>
+          <div className="depth-marker">
+            <span>DEPTH {node.depth} / 5</span>
+            <div>{[1, 2, 3, 4, 5].map((level) => <i key={level} className={level <= node.depth ? 'reached' : ''} />)}</div>
+            <b>{depthLabels[node.depth]}</b><small>{depthDescriptions[node.depth]}</small>
+          </div>
           <p className="eyebrow"><span /> {node.eyebrow}</p>
           <h2>{node.question}</h2>
           <Status status={node.status} />
           <div className="oracle-answer">{node.answer.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</div>
-          <div className="proofs"><StoryProof docId={node.docs[0]} setRoute={setRoute} primary />{node.docs.slice(1).map((id) => <StoryProof key={id} docId={id} setRoute={setRoute} />)}</div>
+          <div className="proofs"><p>Want the source behind this answer?</p><StoryProof docId={node.docs[0]} setRoute={setRoute} primary />{node.depth >= 3 && node.docs.slice(1).map((id) => <StoryProof key={id} docId={id} setRoute={setRoute} />)}</div>
         </article>
 
         <div className="vision-panel">
@@ -152,7 +160,11 @@ const Adventure = ({trail, choose, back, reset, setRoute}) => {
       </div>
       <div className="next-questions">
         <div><small>THE FIRE SHIFTS</small><h3>What do you ask next?</h3></div>
-        {node.options.map((option, index) => <button key={option.next} onClick={() => choose(option.next)}><i>0{index + 1}</i><span>{option.label}</span><em>→</em></button>)}
+        {node.options.map((option, index) => {
+          const targetDepth = getAdventureNode(option.next).depth;
+          const direction = targetDepth > node.depth ? `Descend to ${depthLabels[targetDepth]}` : targetDepth < node.depth ? `Return to ${depthLabels[targetDepth]}` : `Explore ${depthLabels[targetDepth]}`;
+          return <button key={option.next} onClick={() => choose(option.next)}><i>0{index + 1}</i><span><b>{option.label}</b><small>{direction}</small></span><em>→</em></button>;
+        })}
       </div>
     </section>
   );
@@ -193,7 +205,7 @@ const Saga = ({setRoute, visited, trail, choose, begin, back, reset}) => (
     <Adventure trail={trail} choose={choose} back={back} reset={reset} setRoute={setRoute} />
     <LooseThreads choose={choose} />
     <CodexHall visited={visited} setRoute={setRoute} />
-    <footer className="saga-footer"><span className="brand-mark"><i>ᚺ</i></span><p>Context is the sea.<br />Evidence is the shore.</p><small>V2 lore distinguishes built ground from territory still hidden in mist.</small></footer>
+    <footer className="saga-footer"><span className="brand-mark"><i>ᚺ</i></span><p>Context is the sea.<br />Evidence is the shore.</p><small>Every path distinguishes what works today from territory still hidden in mist.</small></footer>
   </main>
 );
 
@@ -251,7 +263,7 @@ const Article = ({id, setRoute, visited, markVisited, ask}) => {
           <div className="guide-questions"><small>TRAVELERS OPEN THIS TOME TO ASK</small>{questions.slice(0, 3).map((item) => <button key={item.id} onClick={() => ask(item.id)}>{item.question}<span>Follow this question ↗</span></button>)}</div>
         </header>
         <div className="article-grid"><div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{h1: () => <></>, h2: ({children}) => <Heading level={2}>{children}</Heading>, h3: ({children}) => <Heading level={3}>{children}</Heading>, a: link, code: CodeBlock, pre: FieldSketch, table: ({children}) => <div className="table-scroll"><table>{children}</table></div>}}>{doc.raw}</ReactMarkdown></div>
-          <aside className="toc"><p>RUNES IN THIS TOME</p>{toc.map((item) => <button key={`${item.id}-${item.level}`} className={`toc-${item.level}`} onClick={() => document.getElementById(item.id)?.scrollIntoView({behavior: 'smooth', block: 'start'})}>{item.label}</button>)}<div className="toc-legend"><Status status={doc.status} /><p>{doc.status === 'planned' ? 'Accepted lore. Not executable yet.' : doc.status === 'mixed' ? 'Some shores remain in mist.' : 'Grounded in current V2 code.'}</p></div></aside>
+          <aside className="toc"><p>RUNES IN THIS TOME</p>{toc.map((item) => <button key={`${item.id}-${item.level}`} className={`toc-${item.level}`} onClick={() => document.getElementById(item.id)?.scrollIntoView({behavior: 'smooth', block: 'start'})}>{item.label}</button>)}<div className="toc-legend"><Status status={doc.status} /><p>{doc.status === 'planned' ? 'Accepted lore. Not executable yet.' : doc.status === 'mixed' ? 'Some shores remain in mist.' : 'Grounded in current Loreholm code.'}</p></div></aside>
         </div>
         <footer className="next-guide"><div><p>ANOTHER PATH THROUGH THE SAGA</p><h2>{questions[0]?.question || next.title}</h2><span>Return to the fire and follow the question instead of reading in file order.</span></div><button onClick={() => questions[0] ? ask(questions[0].id) : setRoute({view: 'doc', id: next.id})}><span className="door-rune">ᚱ</span><span>Follow the question<br /><b>Back to the saga ↗</b></span></button></footer>
       </article>

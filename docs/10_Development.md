@@ -1,10 +1,9 @@
-# Loreholm V2 development stack
+# Loreholm development stack
 
-V2 is a greenfield instance and does not reuse a V1 database. The initial
-executable slice implements contract-v2 capture ingestion, policy sync,
+The current executable slice implements contract-v2 capture ingestion, policy sync,
 idempotent staging, clock normalization, and unknown-class quarantine.
 
-The adopter path is the installer; it checks prerequisites, generates instance
+The installation path uses the installer; it checks prerequisites, generates instance
 and device credentials, installs under `~/.local/share/loreholm-v2`, starts the
 stack, waits for health, and prints actionable logs if startup fails:
 
@@ -27,9 +26,9 @@ docker compose --env-file deploy/.env.v2 -f deploy/docker-compose.v2.yml up -d -
 curl http://127.0.0.1:8082/health
 ```
 
-The base development API is intentionally bound to loopback. V2's retained
+The base development API is intentionally bound to loopback. Loreholm's retained
 remote architecture uses the public front door and Headscale/Tailscale tunnel
-described in [V2 networking](02_Networking.md); do not publish the instance
+described in [Loreholm networking](02_Networking.md); do not publish the instance
 directly as a substitute. Bifrost is present as the sole model-egress boundary,
 but endpoint configuration remains instance-owned and is not baked into the
 repository. Mining is not enabled in this foundation milestone.
@@ -55,7 +54,7 @@ providers in the development Bifrost instance. The sole development model name
 is `loreholm-local`; Bifrost must route it to the local vLLM service and must
 have no fallback provider.
 
-The GPU development overlay is separate from the adopter stack so a normal V2
+The GPU development overlay is separate from the adopter stack so a normal Loreholm
 installation does not require an NVIDIA GPU. It defaults to the cached
 `Qwen/Qwen3-8B` weights and NVIDIA vLLM 25.11, the newest tested image
 compatible with the dev machine's 580-series driver:
@@ -76,7 +75,7 @@ capture is not reliable on the current GB10 development driver stack.
 
 ## Browser chat networking
 
-The V2 browser chat remains a separate-origin static application. It sends an
+The Loreholm browser chat remains a separate-origin static application. It sends an
 OIDC access token to the cloud API's `/chat/stream` endpoint; the cloud resolves
 the user's Tailnet address and replaces that credential with the per-user sync
 token before dialing port `8081`. In development, the retained tunnel topology

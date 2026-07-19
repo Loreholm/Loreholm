@@ -1,4 +1,4 @@
-# V2 clients, adapters, and embedded spine
+# Loreholm clients, adapters, and embedded spine
 
 **Status:** Accepted design. No general-purpose adapter or reusable spine is
 implemented yet. Browser chat directly exercises the capture service and is
@@ -75,12 +75,12 @@ are not implemented by the single-token foundation service.
 
 ## Initial capture scope
 
-V2 begins with:
+Loreholm begins with:
 
 - assistant transcripts from chat and IDE-agent surfaces; and
 - explicit pushes through a “remember this” or share gesture.
 
-Pushed documents and screens use snapshot identity with a content hash. V2 does
+Pushed documents and screens use snapshot identity with a content hash. Loreholm does
 not initially passively watch files, browser history, or the screen. “Passive
 capture” in the initial scope refers to transcript capture occurring as part of
 using an assistant, without explicit memory-tool calls.
@@ -97,7 +97,7 @@ deduplication or summarization into hints does not make it valid client logic.
 
 ## Packaging contract still needed
 
-Before a reusable spine can ship, V2 still needs concrete specifications for:
+Before a reusable spine can ship, Loreholm still needs concrete specifications for:
 
 - local queue storage and encryption expectations;
 - policy refresh and compatibility negotiation;

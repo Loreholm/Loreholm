@@ -1,9 +1,9 @@
-# V2 capture API
+# Loreholm capture API
 
 **Status:** Implemented foundation contract. Adapter/spine automation is
 planned; the HTTP ingestion and persistence path exists now.
 
-V2 clients submit observed context, not graph facts. The instance accepts raw
+Loreholm clients submit observed context, not graph facts. The instance accepts raw
 events and snapshots, stores them idempotently, and will eventually mine them
 into knowledge server-side.
 
@@ -182,7 +182,7 @@ The foundation stores each complete envelope as JSON in an ArcadeDB
 `V2Capture` document with indexed identity, class, kind, state, surface,
 session reference, device time, receipt time, and normalized time.
 
-The accepted V2 storage design later divides events, snapshots, external
+The accepted Loreholm storage design later divides events, snapshots, external
 payloads, sessions, derived content, vectors, and graph knowledge into the
 appropriate ArcadeDB models. That expanded schema is not implemented yet.
 

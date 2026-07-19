@@ -2,8 +2,8 @@
 
 loreholm is a trust product: captured context and mined knowledge belong on
 instances users control. Security reports are therefore the highest-priority
-work in the project. The current V2 trust model — including its loopback-only
-base stack and retained front-door/Tailscale deployment — is documented in
+work in the project. The current trust model — including its loopback-only
+base stack and front-door/Tailscale deployment — is documented in
 [docs/13_SecurityModel.md](docs/13_SecurityModel.md); claims in that document
 are explicitly in scope for review.
 
@@ -35,14 +35,14 @@ below are honest rather than impressive:
 
 ## Scope notes
 
-- The V2 instance API (`:8082`) and Bifrost management proxy (`:8083`) bind to
+- The Loreholm instance API (`:8082`) and Bifrost management proxy (`:8083`) bind to
   loopback by default. ArcadeDB and Bifrost inference remain private to the
   Compose bridge. Intentional LAN rebinding is an operator-controlled risk,
   but reports that defaults or warnings are unsafe are welcome.
-- In the current V2 tunnel implementation, the Tailnet-facing `:8081` shim must
-  expose only health and `/api/chat/*`. Any new route requires an explicit V2
+- In the current tunnel implementation, the Tailnet-facing `:8081` shim must
+  expose only health and `/api/chat/*`. Any new route requires an explicit Loreholm
   application contract and security review. Direct reachability of ArcadeDB,
   Bifrost, Docker, or the host through that shim is in scope.
-- V2 secrets live in the mode-0600
+- Loreholm secrets live in the mode-0600
   `~/.local/share/loreholm-v2/state/instance.env`; local privilege escalation
   on a user's already-compromised host is out of scope.

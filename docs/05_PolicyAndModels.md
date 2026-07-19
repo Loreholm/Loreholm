@@ -1,4 +1,4 @@
-# V2 policy, model routing, and budgets
+# Loreholm policy, model routing, and budgets
 
 This page separates the controls implemented in the foundation from the mining
 controls accepted for later milestones.
@@ -35,7 +35,7 @@ complete end-to-end guarantee.
 
 ### Remote-processing modes
 
-| Mode | Accepted V2 meaning | Enforcement status |
+| Mode | Meaning | Enforcement status |
 |---|---|---|
 | `local_only` | No representation leaves the instance for model processing | Planned mining enforcement |
 | `sanitized_remote` | Only a deterministic sanitized representation may leave | Planned sanitizer and enforcement |
@@ -155,4 +155,4 @@ or quality self-test is implemented in the foundation milestone.
 - Bifrost's management proxy is authenticated and blocks `/v1/*` on its host
   port; instance inference stays on the Compose bridge.
 - Raw request/response storage is disabled in the provider configuration the
-  V2 dashboard creates.
+  Loreholm dashboard creates.

@@ -1,8 +1,8 @@
-# V2 instance installation and operations
+# Loreholm instance installation and operations
 
 **Status:** The base local stack and installer are implemented. The retained
 front-door/Tailscale deployment is implemented for browser chat and documented
-separately in [V2 networking](02_Networking.md).
+separately in [Loreholm networking](02_Networking.md).
 
 ## Requirements
 
@@ -14,14 +14,14 @@ separately in [V2 networking](02_Networking.md).
 
 ## Install
 
-From a V2 checkout:
+From the active release checkout:
 
 ```bash
 LOREHOLM_SOURCE_URL=https://github.com/Loreholm/Loreholm/archive/refs/heads/v2.tar.gz \
   bash web/install-v2.sh
 ```
 
-The installer downloads the V2 source, generates credentials, bootstraps
+The installer downloads the Loreholm source, generates credentials, bootstraps
 Bifrost authentication, builds the instance image, starts the stack, and waits
 up to 120 seconds for instance health.
 
@@ -43,7 +43,7 @@ installed source while preserving `instance.env` and Docker volumes.
 
 | Service | Purpose | Host exposure |
 |---|---|---|
-| `instance` | V2 API, dashboard, capture service, and chat path | `127.0.0.1:8082` by default |
+| `instance` | Loreholm API, dashboard, capture service, and chat path | `127.0.0.1:8082` by default |
 | `arcadedb` | One ArcadeDB database owned by this instance | None |
 | `bifrost` | Mandatory model gateway | None |
 | `bifrost-dashboard` | Authenticated Bifrost management proxy | `127.0.0.1:8083` by default |
@@ -58,7 +58,7 @@ Set installer overrides before the first run:
 | Variable | Default | Purpose |
 |---|---|---|
 | `LOREHOLM_HOME` | `~/.local/share/loreholm-v2` | Installation root |
-| `LOREHOLM_SOURCE_URL` | V2 branch archive | Release source archive |
+| `LOREHOLM_SOURCE_URL` | Loreholm branch archive | Release source archive |
 | `LOREHOLM_V2_BIND_HOST` | `127.0.0.1` | Instance API bind address |
 | `LOREHOLM_V2_PORT` | `8082` | Instance API host port |
 | `BIFROST_BIND_HOST` | `127.0.0.1` | Bifrost dashboard bind address |
@@ -84,7 +84,7 @@ curl -fsS "http://127.0.0.1:${LOREHOLM_V2_PORT:-8082}/health"
 Expected health shape:
 
 ```json
-{"ok":true,"version":"2.0.0","storage":"arcadedb"}
+{"ok":true,"version":"1.0.0","storage":"arcadedb"}
 ```
 
 Recent logs:
@@ -140,7 +140,7 @@ overlay services explicitly as part of their operational runbook.
 
 ## Backup status
 
-V2 has an accepted design for secret-free, instance-consistent backups, but no
+Loreholm has an accepted design for secret-free, instance-consistent backups, but no
 backup coordinator or supported restore command yet. Copying a live ArcadeDB
 volume is not documented as a consistent backup. See [data lifecycle](08_DataLifecycle.md).
 

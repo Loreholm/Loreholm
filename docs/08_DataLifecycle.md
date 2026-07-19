@@ -1,4 +1,4 @@
-# V2 data lifecycle: retention, deletion, backup, and sharing
+# Loreholm data lifecycle: retention, deletion, backup, and sharing
 
 **Status:** Accepted design unless explicitly labeled implemented. The
 foundation currently retains captures in ArcadeDB and has no capture inventory,
@@ -88,7 +88,7 @@ may retain pre-deletion bytes until their configured retention expires; restore
 must identify backup age and reapply any available later deletion tombstones
 before restored content becomes active.
 
-V2 does not initially require redundant ArcadeDB or object storage. Backup
+Loreholm does not initially require redundant ArcadeDB or object storage. Backup
 destinations may be local removable storage or an operator-selected remote
 target; destination credentials remain outside the backup payload.
 

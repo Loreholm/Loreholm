@@ -91,7 +91,7 @@ def create_app() -> FastAPI:
             service.load_policy()
         yield
 
-    app = FastAPI(title="Loreholm V2 Instance", version="2.0.0", lifespan=lifespan)
+    app = FastAPI(title="Loreholm Instance", version="1.0.0", lifespan=lifespan)
 
     def service_dependency() -> CaptureService:
         if service is None:
@@ -252,7 +252,7 @@ def create_app() -> FastAPI:
 
     @app.get("/health")
     def health() -> dict[str, str | bool]:
-        return {"ok": service is not None, "version": "2.0.0", "storage": "arcadedb" if service else "unconfigured"}
+        return {"ok": service is not None, "version": "1.0.0", "storage": "arcadedb" if service else "unconfigured"}
 
     static_dir = Path(__file__).with_name("static")
     app.mount("/dashboard/assets", StaticFiles(directory=static_dir), name="dashboard-assets")

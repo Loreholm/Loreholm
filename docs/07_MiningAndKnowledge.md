@@ -1,4 +1,4 @@
-# V2 mining and knowledge model
+# Loreholm mining and knowledge model
 
 **Status:** Accepted design, not implemented in the foundation milestone. The
 current code stops after raw capture staging and quarantine.
@@ -181,7 +181,7 @@ claims are excluded from normal reads. Full provenance, additional evidence,
 history, and earlier generations require explicit query options.
 
 Endpoint and request/response schemas for surfacing remain undecided and must
-not be inferred from V1 MCP search tools.
+not be inferred from retired search-tool behavior.
 
 ## Implementation milestones
 

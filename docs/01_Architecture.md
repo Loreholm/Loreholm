@@ -1,26 +1,21 @@
-# Loreholm V2 architecture
+# Loreholm architecture
 
-Loreholm V2 is a self-hosted capture and knowledge-mining framework. Its
-central design change from V1 is who decides what becomes knowledge:
+Loreholm is a self-hosted capture and knowledge-building framework. Connected
+tools submit the context around a person's work; the user's Loreholm instance
+alone decides how that context becomes entities, claims, relationships, and
+other durable knowledge.
 
-- **V1:** an external LLM called MCP write tools to submit already interpreted
-  entities, memories, and relationships.
-- **V2:** clients submit raw context as captures. The Loreholm instance owns
-  interpretation, mining, entity resolution, provenance, and graph commit.
-
-V2 is greenfield at the application and data-model layers. It does not preserve
-the V1 MCP write contract or database schema. It **does** preserve the proven
-network boundary: a public front door reaches containerized user instances
-through a Headscale-managed Tailscale tunnel while the data itself stays local.
+This boundary keeps individual integrations simple and keeps interpretation,
+identity, evidence, and graph changes under one instance-owned policy. A public
+front door can reach the containerized instance through a Headscale-managed
+Tailscale tunnel while the data itself stays local.
 
 ## Status legend
 
 This document distinguishes running code from accepted design:
 
-- **Implemented** means the V2 application and deployment provide it now.
-- **Planned** means the behavior is specified in
-  [`notes/Architecture-Decisions.md`](../notes/Architecture-Decisions.md) but is
-  not executable yet.
+- **Implemented** means the Loreholm application and deployment provide it now.
+- **Planned** means the behavior is accepted design but is not executable yet.
 
 ## Data flow
 
@@ -85,23 +80,23 @@ until the instance supports their class.
 Authenticated clients read instance policy from `GET /v2/policy`. Policy
 advertises the supported contract range, capture-class controls, remote
 processing mode, and mining status. Administrators can update the persisted
-policy through the local V2 dashboard API.
+policy through the local Loreholm dashboard API.
 
 The future embedded spine will cache and enforce this policy before upload.
 That client-side spine and its offline queue are not implemented yet.
 
 ### Browser chat capture
 
-The V2 chat path records both the user's message and the completed assistant
+The Loreholm chat path records both the user's message and the completed assistant
 response as raw `transcript.message` captures. This is the first working
 example of passive capture: using the conversation surface creates capture
 records without a separate “remember this” tool call. See
-[V2 browser chat](09_Chat.md) for the front-door, streaming, and capture
+[Loreholm browser chat](09_Chat.md) for the front-door, streaming, and capture
 contract.
 
 ### Instance deployment
 
-One V2 instance is one lifecycle and trust boundary:
+One Loreholm instance is one lifecycle and trust boundary:
 
 ```text
 host
@@ -117,9 +112,9 @@ is the only process that writes captures to ArcadeDB. Hosting several separate
 knowledge worlds means deploying several instances, not creating tenants in a
 shared instance database.
 
-### Retained front-door and tunnel topology
+### Front-door and tunnel topology
 
-V2 keeps the V1 network shape even though the traffic crossing it changes:
+Loreholm keeps the public service separate from the private instance:
 
 ```text
 browser / remote client
@@ -135,7 +130,7 @@ Tailnet endpoint shim :8081
           |
           | explicit application routes only
           v
-V2 instance API ------ ArcadeDB
+Loreholm instance API ------ ArcadeDB
           |
           `------------ Bifrost
 ```
@@ -147,13 +142,13 @@ and Bifrost remain on the private Compose bridge. The tunnel therefore reaches
 locally stored data through the instance's application contract, never through
 direct database or model-gateway exposure.
 
-The V2 remote Compose overlay already implements the Tailscale sidecar and
+The Loreholm remote Compose overlay already implements the Tailscale sidecar and
 `:8081` endpoint pattern for browser chat. The current shim allow-list forwards
 `/api/chat/*` only. As capture, policy, and graph-surfacing flows are connected
 to the front door, they should extend this application-level allow-list without
 placing ArcadeDB, Bifrost, or the host on the Tailnet.
 
-See [V2 networking](02_Networking.md) for the retained invariants and current
+See [Loreholm networking](02_Networking.md) for the retained invariants and current
 implementation boundary.
 
 The implemented HTTP envelope and receipt semantics are documented in the
@@ -162,7 +157,7 @@ The implemented HTTP envelope and receipt semantics are documented in the
 
 ## Planned mining pipeline
 
-The accepted V2 design calls for the instance to turn staged context into
+The accepted Loreholm design calls for the instance to turn staged context into
 inspectable knowledge:
 
 1. **Trigger:** process transcript sessions after quiescence, explicit pushes
@@ -194,7 +189,7 @@ provenance, schema, vector, and surfacing decisions, and
 
 | Component | Status | Responsibility |
 |---|---|---|
-| V2 instance API | Implemented | Authentication, policy, capture ingestion, dashboard, chat proxy |
+| Loreholm instance API | Implemented | Authentication, policy, capture ingestion, dashboard, chat proxy |
 | ArcadeDB capture store | Implemented | Append-only raw captures and instance configuration |
 | Bifrost gateway | Implemented | Sole model-egress boundary and provider management |
 | Browser-chat capture | Implemented | Automatically records both sides of a chat transcript |
@@ -209,8 +204,7 @@ provenance, schema, vector, and surfacing decisions, and
 
 - `api/app/v2/models.py` — capture, policy, model, and chat contracts
 - `api/app/v2/service.py` — capture ingestion and ArcadeDB persistence
-- `api/app/v2/app.py` — V2 application, administration, and chat capture
+- `api/app/v2/app.py` — Loreholm application, administration, and chat capture
 - `deploy/docker-compose.v2.yml` — private instance deployment
 - `deploy/docker-compose.v2.remote.yml` — retained tunnel topology, currently wired for chat
 - `deploy/v2-endpoint-shim.py` — Tailnet application-route allow-list
-- `notes/Architecture-Decisions.md` — accepted design beyond the executable slice

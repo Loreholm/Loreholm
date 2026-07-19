@@ -119,4 +119,4 @@ class AdminStatus(BaseModel):
     model_provider: dict[str, Any] | None = None
     vllm_ok: bool
     bifrost_dashboard_url: str
-    version: str = "2.0.0"
+    version: str = "1.0.0"

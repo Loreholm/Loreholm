@@ -1,8 +1,9 @@
-# Loreholm V2 networking
+# Loreholm networking
 
-V2 preserves Loreholm's front-door and private-tunnel architecture. The major
-V2 change is what the local instance does with context, not where user data
-lives or how remote clients reach it.
+Loreholm uses a public front door and a private tunnel to make a user-owned
+instance reachable without making its database, model service, or host machine
+public. The public service helps users reach their data; it does not become the
+place where that data lives.
 
 ## Topology
 
@@ -23,7 +24,7 @@ user machine
    |- tailscale container (only Tailnet identity)
    |- endpoint container (shares Tailscale network namespace)
    `- private Compose bridge
-        |- V2 instance API
+        |- Loreholm instance API
         |- ArcadeDB
         `- Bifrost
 ```
@@ -32,9 +33,9 @@ The public server is the front door; it is not the memory store. Raw captures,
 future mined graph data, model configuration, and instance credentials remain
 with the user's containerized instance.
 
-## Retained invariants
+## Security invariants
 
-These properties carry forward into V2:
+These properties define the network boundary:
 
 1. **One public front door.** Browsers and remote clients authenticate to the
    public service rather than dialing a database or arbitrary home-network
@@ -48,7 +49,7 @@ These properties carry forward into V2:
    Tailscale namespace and listens on `:8081`; the application, database, and
    model gateway do not.
 5. **Application access, not database access.** The endpoint forwards an
-   explicit allow-list of V2 routes to the instance over the private Docker
+   explicit allow-list of Loreholm routes to the instance over the private Docker
    bridge. It never forwards raw ArcadeDB or Bifrost ports.
 6. **User isolation.** The Headscale/Tailscale ACL allows the front-door
    identity to reach user endpoint nodes and denies user-to-user paths and
@@ -59,20 +60,16 @@ These properties carry forward into V2:
    door. It substitutes a per-instance synchronization credential when dialing
    the private endpoint.
 
-## What changes in V2
+## Why the application boundary matters
 
-V1 used the tunnel primarily for MCP-generated memory and graph operations.
-V2 uses the same protected route to reach an instance that captures raw
-context and, once implemented, mines and surfaces its own knowledge graph.
-
-The network must not reintroduce V1's authority model. Passing through the
-front door does not authorize a client to submit interpreted entities or graph
-facts. Remote capture inputs remain raw capture envelopes, and graph mutation
-remains an instance-owned mining responsibility.
+Passing through the front door authorizes a narrow application request; it
+does not authorize a client to write directly to the knowledge graph. Remote
+inputs remain raw context, and graph changes remain an instance-owned
+knowledge-building responsibility.
 
 ## Current implementation
 
-The executable V2 repository contains both halves of the retained path:
+The executable Loreholm repository contains both halves of the retained path:
 
 - The cloud chat proxy authenticates an OIDC user, resolves their Tailscale IP,
   derives the user's sync credential, and dials port `8081`.
@@ -80,11 +77,11 @@ The executable V2 repository contains both halves of the retained path:
   containers.
 - `deploy/v2-endpoint-shim.py` forwards `/api/chat/*` and returns 404 for other
   application routes.
-- The V2 instance validates the sync credential, proxies inference through
+- The Loreholm instance validates the sync credential, proxies inference through
   Bifrost, and stores both sides of the conversation as raw captures.
 
-This means the retained topology is implemented end to end for V2 browser
-chat. It is not yet connected to every future V2 capability. The capture spine,
+This means the retained topology is implemented end to end for Loreholm browser
+chat. It is not yet connected to every future Loreholm capability. The capture spine,
 remote policy synchronization, mined-graph queries, and sharing will extend the
 route set only when their application contracts and authorization rules exist.
 
@@ -94,14 +91,14 @@ route set only when their application contracts and authorization rules exist.
 |---|---|---|
 | Front-door API sidecar | Cloud Tailnet identity | Outbound to user endpoint `:8081` |
 | User Tailscale sidecar | User Tailnet identity | Tailnet coordination only |
-| User endpoint shim | Shares user Tailscale namespace | Allow-listed V2 routes on `:8081` |
-| V2 instance | Private Compose bridge | Endpoint shim and explicitly bound local/LAN access |
-| ArcadeDB | Private Compose bridge | V2 instance only |
-| Bifrost | Private Compose bridge | V2 instance only |
+| User endpoint shim | Shares user Tailscale namespace | Allow-listed Loreholm routes on `:8081` |
+| Loreholm instance | Private Compose bridge | Endpoint shim and explicitly bound local/LAN access |
+| ArcadeDB | Private Compose bridge | Loreholm instance only |
+| Bifrost | Private Compose bridge | Loreholm instance only |
 
 ## Rules for extending the tunnel
 
-Every new remotely reachable V2 feature should answer these questions before
+Every new remotely reachable Loreholm feature should answer these questions before
 its route is added:
 
 - Which authenticated front-door action requires it?

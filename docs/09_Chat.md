@@ -1,8 +1,8 @@
-# V2 browser chat
+# Loreholm browser chat
 
 **Status:** A minimal end-to-end chat and transcript-capture path is
 implemented. Conversation persistence, history, abort, preferences, and mined
-memory surfacing are not implemented in the V2 chat client or instance.
+memory surfacing are not implemented in the Loreholm chat client or instance.
 
 ## Request path
 
@@ -16,7 +16,7 @@ front door POST /chat/stream
 endpoint shim POST /api/chat/stream
   |
   v
-V2 instance -> Bifrost -> configured model
+Loreholm instance -> Bifrost -> configured model
 ```
 
 The browser never receives the instance sync token, Bifrost credentials, or a
@@ -57,7 +57,7 @@ message list on each turn. A new conversation creates a new browser UUID and
 clears that in-memory list. Reloading the page currently loses the conversation
 view.
 
-The V2 instance accepts 1–200 messages, each with role `system`, `user`, or
+The Loreholm instance accepts 1–200 messages, each with role `system`, `user`, or
 `assistant`, and content up to 100,000 characters. It requires at least one
 user message.
 
@@ -111,7 +111,7 @@ the model-egress boundary.
 
 ## Current limitations
 
-- No V2 conversation database or history list
+- No Loreholm conversation database or history list
 - No resend, edit, branch, abort, or regeneration controls
 - No mined-memory retrieval or graph grounding
 - No token/cost usage display
@@ -120,6 +120,6 @@ the model-egress boundary.
 - No rendering beyond plain text
 - No automatic OIDC token refresh recovery in the send path
 
-The older cloud chat router still contains additional V1 proxy routes. Their
+The cloud chat router still contains additional legacy proxy routes. Their
 presence in the repository does not make conversation CRUD, preferences,
-database prompts, models, usage, or abort part of the V2 instance contract.
+database prompts, models, usage, or abort part of the Loreholm instance contract.

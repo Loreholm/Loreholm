@@ -1,1 +1,1 @@
-"""Loreholm V2 instance API."""
+"""Loreholm instance API."""

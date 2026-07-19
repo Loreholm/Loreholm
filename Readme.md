@@ -1,18 +1,15 @@
-# Loreholm V2
+# Loreholm
 
 Loreholm is a self-hosted capture and knowledge-mining framework for assistant
-conversations. V2 owns the client contract, raw capture store, policy, model
+conversations. Loreholm owns the client contract, raw capture store, policy, model
 gateway, and knowledge graph so third-party clients never write interpreted
 facts directly into the database.
 
-V2 is greenfield. It does not migrate or remain compatible with V1 databases,
-MCP write tools, or deployment topology.
-
 ## Current milestone
 
-The executable V2 foundation currently provides:
+The executable Loreholm foundation currently provides:
 
-- contract-v2 capture ingestion for transcript events and explicit pushes;
+- versioned capture ingestion for transcript events and explicit pushes;
 - UUIDv7 capture identity and idempotent retry handling;
 - snapshot content-hash validation;
 - device-time normalization with the original timestamp retained;
@@ -21,15 +18,14 @@ The executable V2 foundation currently provides:
 - a self-contained ArcadeDB, instance API, and Bifrost deployment.
 
 Mining, graph commit, query/surfacing, retention UI, sharing, backup, and client
-adapters are specified in [Architecture-Decisions.md](notes/Architecture-Decisions.md)
-but are not implemented in this milestone.
+adapters are designed but are not implemented in this milestone.
 
 ## Architecture
 
 ```text
 assistant adapter
       |
-      | contract-v2 raw captures
+      | raw context captures
       v
 embedded spine  ---> offline queue / local permission enforcement
       |
@@ -42,11 +38,11 @@ instance API  ---> ArcadeDB staging ---> miner (planned) ---> knowledge graph
 The adapter is a sensor, not an authority. Interpretation happens inside the
 instance. Bifrost is the only permitted model-egress path.
 
-V2 retains Loreholm's remote trust boundary: browsers and remote clients enter
+Loreholm's remote trust boundary lets browsers and remote clients enter
 through the public front door, which authenticates them and reaches their
 containerized instance over a Headscale-managed Tailscale tunnel. ArcadeDB,
 Bifrost, and durable context remain local and are never exposed directly on
-the Tailnet. See [V2 networking](docs/02_Networking.md).
+the Tailnet. See [Loreholm networking](docs/02_Networking.md).
 
 ## Requirements
 
@@ -58,7 +54,7 @@ the Tailnet. See [V2 networking](docs/02_Networking.md).
 The API binds to loopback by default. Use an authenticated TLS proxy or private
 overlay network before connecting a client from another machine.
 
-## Install from the V2 branch
+## Install from source
 
 From a checkout:
 
@@ -97,7 +93,7 @@ curl -fsS "http://127.0.0.1:${LOREHOLM_V2_PORT:-8082}/health"
 Expected response:
 
 ```json
-{"ok":true,"version":"2.0.0","storage":"arcadedb"}
+{"ok":true,"version":"1.0.0","storage":"arcadedb"}
 ```
 
 ### 2. Read the client policy
@@ -193,7 +189,7 @@ Stop containers while preserving credentials and database volumes:
 bash "$LOREHOLM_HOME/source/web/uninstall-v2.sh"
 ```
 
-Permanently remove the V2 volumes, credentials, and installed source:
+Permanently remove the Loreholm volumes, credentials, and installed source:
 
 ```bash
 LOREHOLM_ERASE_DATA=1 bash "$LOREHOLM_HOME/source/web/uninstall-v2.sh"
@@ -204,18 +200,17 @@ The second command is destructive and cannot be undone without a backup.
 ## Documentation
 
 - [Documentation index](docs/README.md)
-- [V2 architecture](docs/01_Architecture.md)
-- [V2 networking](docs/02_Networking.md)
+- [Loreholm architecture](docs/01_Architecture.md)
+- [Loreholm networking](docs/02_Networking.md)
 - [Capture API](docs/03_CaptureAPI.md)
 - [Instance operations](docs/04_InstanceOperations.md)
 - [Policy and models](docs/05_PolicyAndModels.md)
 - [Clients and embedded spine](docs/06_ClientsAndSpine.md)
 - [Mining and knowledge model](docs/07_MiningAndKnowledge.md)
 - [Data lifecycle](docs/08_DataLifecycle.md)
-- [V2 browser chat](docs/09_Chat.md)
-- [Architecture decisions](notes/Architecture-Decisions.md)
-- [V2 development stack](docs/V2-Development.md)
-- [V2 trust and security model](docs/13_SecurityModel.md)
+- [Loreholm browser chat](docs/09_Chat.md)
+- [Loreholm development stack](docs/10_Development.md)
+- [Loreholm trust and security model](docs/13_SecurityModel.md)
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
 

@@ -9,7 +9,7 @@ on:
     branches: ["main", "v2"]
     paths:
       - "web/**"
-      - "apps/docs-v2/**"
+      - "apps/docs/**"
       - "docs/**"
       - "notes/Architecture-Decisions.md"
       - ".github/workflows/pages.yml"
@@ -36,20 +36,20 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: apps/docs-v2/package.json
+          cache-dependency-path: apps/docs/package.json
 
       - name: Install documentation dependencies
-        working-directory: apps/docs-v2
+        working-directory: apps/docs
         run: npm install --no-audit --no-fund
 
       - name: Build documentation atlas
-        working-directory: apps/docs-v2
+        working-directory: apps/docs
         run: npm run build
 
       - name: Assemble static site
         run: |
           mkdir -p _site
-          # Keep the coming-soon page at the root while making the V2 atlas
+          # Keep the coming-soon page at the root while making the docs atlas
           # available at /docs/.
           cp web/coming-soon.html _site/index.html
           cp -a web/docs _site/docs

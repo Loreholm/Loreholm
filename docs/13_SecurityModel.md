@@ -1,6 +1,6 @@
-# Loreholm V2 trust and security model
+# Loreholm trust and security model
 
-V2 retains Loreholm's front-door, Headscale/Tailscale tunnel, container
+Loreholm's front-door, Headscale/Tailscale tunnel, container
 isolation, and local-data boundary. It changes how knowledge is produced behind
 that boundary. This page distinguishes the base local stack from the retained
 remote topology; future mining and sharing features will require their own
@@ -8,14 +8,14 @@ threat-model review as they are implemented.
 
 ## Default local boundary
 
-A normal V2 installation is private to the machine by default:
+A normal Loreholm installation is private to the machine by default:
 
 - The instance API is published on `127.0.0.1:8082`.
 - The authenticated Bifrost management proxy is published separately on
   `127.0.0.1:8083` and blocks Bifrost's `/v1/*` inference routes.
 - ArcadeDB and Bifrost inference remain on the private Compose bridge and have
   no host ports.
-- The instance is the only application process that persists V2 captures.
+- The instance is the only application process that persists Loreholm captures.
 
 Binding the instance or Bifrost dashboard to a LAN address is an explicit
 operator choice. Authentication still applies, but operators should avoid
@@ -40,7 +40,7 @@ than using the raw bearer values as its comparison source.
 
 Treat the environment file as the key to the instance. Host compromise or an
 account that can read that file is outside the isolation the application can
-provide. V2 currently relies on host disk or volume encryption for data at
+provide. Loreholm currently relies on host disk or volume encryption for data at
 rest.
 
 ## Capture and policy authorization
@@ -77,10 +77,10 @@ On the user machine, the remote Compose overlay adds:
 - a Tailscale client with its own container network namespace; and
 - an endpoint shim sharing that namespace on port `8081`.
 
-The current V2 shim returns health on `/healthz` and forwards only
+The current Loreholm shim returns health on `/healthz` and forwards only
 `POST /api/chat/*` to the instance. All other GET and POST paths return 404. It
 does not expose `/v2/captures`, `/v2/policy`, `/v2/admin`, ArcadeDB, or Bifrost.
-That allow-list will grow only as V2 adds authorized remote application
+That allow-list will grow only as Loreholm adds authorized remote application
 contracts; direct database, model-gateway, Docker, and host access remain
 outside the design.
 
@@ -91,7 +91,7 @@ resulting user and assistant messages as raw transcript captures.
 
 The Tailnet ACL, cloud credential exchange, endpoint allow-list, and container
 network namespaces are load-bearing parts of the retained topology. Changes to
-any of them require security review. See [V2 networking](02_Networking.md).
+any of them require security review. See [Loreholm networking](02_Networking.md).
 
 ## Data and deletion limits
 
