@@ -1,156 +1,160 @@
-# Trust Model & Security (4 min read)
+# Loreholm trust and security model
 
-Installing loreholm means running networking software on your machine that
-connects to a control server you don't operate. That's a reasonable thing to
-be cautious about, especially on a personal computer that has other things on
-it. This page explains exactly what that connection can and cannot do, and how
-you can verify every claim yourself.
+Loreholm's front door, Headscale/Tailscale tunnel, container isolation, and
+local-data boundary define how requests reach user-owned memory. The knowledge
+pipeline changes how information is produced behind that boundary. This page
+distinguishes the base local stack from the retained remote topology; future
+mining and sharing features will require their own threat-model review as they
+are implemented.
 
-**The short version:** your computer does not join our network. A single,
-isolated Docker container does. From the outside, exactly one port is
-reachable, only by the loreholm API, and only to run read-only queries you
-control. Everything else is denied by default.
+## Custody is not invisibility
 
-## 1. Your computer never joins the mesh — a container does
+Self-hosting changes who owns Loreholm's durable context and policy. It does not
+make an external model endpoint unable to read or retain a payload it receives.
+The strongest confidentiality boundary is to keep content local; whenever
+remote processing is allowed, provider settings, contract, jurisdiction, and
+retention behavior remain part of the threat model.
 
-The Tailscale client does **not** run on your host operating system. It runs
-inside the `loreholm-tailscale` Docker container, which has its own isolated
-network namespace. That means:
+Loreholm should expose the complete effective model request and the policy
+decision behind it. That universal egress inspection is a planned security
+control, not an implemented guarantee in the current foundation. See
+[why Loreholm exists](00_Principles.md).
 
-- The Tailnet interface (`tailscale0`), the Tailnet IP, and the mesh routing
-  table live **inside that container** — not on your host.
-- Your host machine has **no Tailnet IP**, is **not addressable** by our
-  cloud or by any other node, and its own networking, DNS, and routes are
-  untouched.
-- Only one other container — the `:8081` endpoint shim — opts into that
-  container's network namespace. The database (`:2480`), the LLM gateway
-  (`:8080`), and the dashboard (`:4466`) all live on a normal Docker bridge
-  and are never placed on the Tailnet at all.
+## Default local boundary
 
-So "connecting to a stranger's server" is really "running an isolated
-networking sandbox in a container." Stopping that one container
-(`docker stop loreholm-tailscale`) removes your machine from the mesh entirely,
-without touching your data.
+A normal Loreholm installation is private to the machine by default:
 
-## 2. The cloud can reach exactly one port — everything else is denied
+- The instance API is published on `127.0.0.1:8082`.
+- The authenticated Bifrost management proxy is published separately on
+  `127.0.0.1:8083` and blocks Bifrost's `/v1/*` inference routes.
+- ArcadeDB and Bifrost inference remain on the private Compose bridge and have
+  no host ports.
+- The instance is the only application process that persists Loreholm captures.
 
-Reachability is enforced by the Headscale ACL
-(`deploy/headscale-acl.hujson`), which is short enough to read in full:
+Binding the instance or Bifrost dashboard to a LAN address is an explicit
+operator choice. Authentication still applies, but operators should avoid
+`0.0.0.0` on machines with untrusted interfaces and place remote access behind
+an authenticated TLS proxy or private overlay.
 
-```hujson
-"acls": [
-  {
-    "action": "accept",
-    "src": ["group:api"],
-    "dst": ["*:8081"]
-  }
-  // IMPLICIT DENY: all other communication is blocked
-]
-```
+## Credentials
 
-The cloud API may reach `:8081` and nothing else. Every other port, and every
-machine-to-machine path, is blocked by the implicit-deny rule. Other users'
-machines cannot reach yours, and yours cannot reach theirs.
+The installer generates separate random credentials for:
 
-This is defended in **three independent layers**, so a regression in any one
-still leaves the other two standing:
+- device capture and policy access;
+- instance dashboard administration;
+- optional cloud-to-instance chat synchronization;
+- ArcadeDB administration; and
+- Bifrost administration.
 
-1. **The ACL** permits only `:8081`.
-2. **The network namespace** — only the shim is on the Tailnet, so `:2480`,
-   `:8080`, and `:4466` aren't even listening on the Tailnet interface.
-3. **The shim's own routing** — it forwards only `/api/sync/*` (queries) and
-   `/api/chat/*` (the optional chat app) and returns 404 for anything else.
+Raw bearer tokens and passwords are stored in
+`~/.local/share/loreholm-v2/state/instance.env`. The state directory is mode
+`0700` and the environment file is mode `0600`. The application receives
+SHA-256 token digests for device, dashboard, and sync authentication rather
+than using the raw bearer values as its comparison source.
 
-## 3. The cloud can only pull, and only read
+Treat the environment file as the key to the instance. Host compromise or an
+account that can read that file is outside the isolation the application can
+provide. Loreholm currently relies on host disk or volume encryption for data at
+rest.
 
-- **Pull-only.** The loreholm application on your machine never initiates an
-  outbound connection to our cloud API. All cloud↔local communication is
-  started by the cloud, inbound, over the mesh. (The only outbound traffic is
-  the Tailscale client maintaining its standard mesh connection to the control
-  plane — coordination, not your data.)
-- **Read-first, with a local firewall.** Every query the cloud sends arrives
-  at the local dashboard's `POST /api/sync/query`, where it passes a policy
-  hook — read-only enforcement, per-key rate limits, a Cypher language guard,
-  and any policy rules you author — **before** it is allowed to touch the
-  database. Writes do not commit directly; they land as staging proposals that
-  the local reconciler decides on.
+## Capture and policy authorization
 
-## 4. Your data and credentials stay on your machine
+- `GET /v2/policy` and `POST /v2/captures` require the device bearer token.
+- `/v2/admin/*` endpoints require the distinct administrator bearer token.
+- `/api/chat/*` requires the distinct synchronization bearer token.
+- Token digests are compared with constant-time comparison.
 
-- Your memories live only in the local ArcadeDB server's Docker volumes on
-  your machine. The cloud never stores your data.
-- Database credentials (the ArcadeDB root password, sync/API tokens) live in
-  files under `~/.loreholm/` on your machine. The cloud does **not** keep a
-  copy of your database host, port, or credentials — it routes to your machine
-  by Tailnet IP and lets the local dashboard hold the credentials.
+Capture authorization controls who may submit context; it does not make every
+captured statement true. Capture hints are non-authoritative. The implemented
+extractor produces candidates only. The implemented resolver records bounded,
+auditable identity decisions, while the deterministic claim committer validates
+the versioned relation schema and creates first-class Evidence before graph
+truth is admitted.
 
-## 5. Hardened by default
+## Model-egress boundary
 
-The Tailscale container is configured to minimize what the control server and
-the container can do:
+Bifrost is the only permitted path from the instance to a model endpoint. The
+instance does not fall back to direct provider calls. Provider selection,
+processing mode, and future mining budgets belong to instance policy. Before
+structured extraction, the worker rechecks current capture policy for every
+source and applies the endpoint's operator-declared `local` or `remote`
+processing location. Remote raw extraction requires `unrestricted` for every
+involved class; the other modes fail closed until their transformations exist.
 
-- **No `--accept-routes`.** A leaf node never needs subnet routes advertised
-  to it, so this is disabled — the control server cannot push routes to steer
-  your node's traffic.
-- **Minimal Linux capabilities.** The container runs with `NET_ADMIN` only
-  (needed to create the VPN interface). It does **not** get `SYS_MODULE`,
-  which would let a container load kernel modules into your host.
-- **No host networking.** The container is never run with `network_mode: host`.
+Grounded query follows the same boundary in two stages. The question embedding
+contains user-supplied query text rather than stored capture content. A remote
+planner also receives derived entity candidates, so their source captures must
+permit `derived_only` or `unrestricted`. Optional remote answer synthesis
+receives exact raw Evidence excerpts and therefore requires `unrestricted` for
+every included capture. Loreholm validates the selected entity IDs, relations,
+and final Evidence citation handles independently of the model.
 
-## What you're trusting (the honest part)
+The processing-location declaration is a security assertion, not network
+detection. Marking an externally hosted endpoint as `local` defeats the remote
+egress gate. Operators must use `local` only for a model running inside the
+Loreholm instance boundary.
 
-No system is trust-free; here is the full list of what installing loreholm
-asks you to trust, so there are no surprises:
+For development, the supported configuration is the local `loreholm-local`
+model through vLLM with no cloud fallback. Production operators may configure
+their own compatible endpoint through Bifrost.
 
-- **The container images** you pull (`tailscale/tailscale`,
-  `arcadedata/arcadedb`, `maximhq/bifrost`, and the loreholm dashboard
-  image). They run on your machine.
-- **The install script**, which you can read before running — it only writes
-  to `~/.loreholm/` and starts the containers described above.
-- **The Headscale control plane** for *coordination* of the mesh. The layers
-  above are specifically designed so that even a misbehaving control plane
-  cannot reach past `:8081` or push routes to your node.
+## Front-door and tunnel boundary
 
-What loreholm **cannot** do: reach any port on your machine other than the
-shim's `:8081`, see or route your other network traffic, read files outside
-the paths you mount, or have your node initiate data uploads to our cloud.
+The production architecture keeps a public front door between remote clients
+and user instances. The front door authenticates users with OIDC, uses
+Headscale to resolve the correct node, and reaches that node over Tailscale.
+It replaces the public credential with a per-instance synchronization token
+before dialing the user's endpoint.
 
-## Verify it yourself
+On the user machine, the remote Compose overlay adds:
+
+- a Tailscale client with its own container network namespace; and
+- an endpoint shim sharing that namespace on port `8081`.
+
+The current Loreholm shim returns health on `/healthz` and forwards only
+`POST /api/chat/*` to the instance. All other GET and POST paths return 404. It
+does not expose `/v2/captures`, `/v2/policy`, `/v2/admin`, ArcadeDB, or Bifrost.
+That allow-list will grow only as Loreholm adds authorized remote application
+contracts; direct database, model-gateway, Docker, and host access remain
+outside the design.
+
+The separate-origin browser sends its OIDC access token to the cloud API. The
+cloud resolves the user's Tailnet endpoint and replaces that credential with
+the per-instance sync token before calling the shim. The instance records the
+resulting user and assistant messages as raw transcript captures.
+
+The Tailnet ACL, cloud credential exchange, endpoint allow-list, and container
+network namespaces are load-bearing parts of the retained topology. Changes to
+any of them require security review. See [Loreholm networking](02_Networking.md).
+
+## Data and deletion limits
+
+Raw captures currently persist in ArcadeDB without an implemented retention or
+deletion interface. The planned design includes capture-level deletion,
+provenance-aware derived-data cleanup, backup semantics, and retention policy,
+but those controls do not exist in the foundation milestone. Do not document
+planned deletion guarantees as available behavior.
+
+The accepted lifecycle guarantees and their unimplemented status are detailed
+in [data lifecycle](08_DataLifecycle.md).
+
+## Verify a local installation
 
 ```bash
-# Your HOST has no Tailnet interface — this returns nothing:
-ip addr | grep tailscale
+export LOREHOLM_HOME=${LOREHOLM_HOME:-$HOME/.local/share/loreholm-v2}
+ENV_FILE="$LOREHOLM_HOME/state/instance.env"
+COMPOSE_FILE="$LOREHOLM_HOME/source/deploy/docker-compose.v2.yml"
 
-# Only the container is on the mesh; see its single node identity:
-docker exec loreholm-tailscale tailscale status
-
-# See what is running and which ports are published to your machine:
-docker ps
-
-# Read the ACL that governs what the cloud can reach (in this repo):
-cat deploy/headscale-acl.hujson
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps
+ss -lnt | grep -E ':(8082|8083)'
+curl -fsS "http://127.0.0.1:${LOREHOLM_V2_PORT:-8082}/health"
 ```
 
-## Pause, disconnect, or remove
+For the tunnel deployment, also inspect
+`deploy/docker-compose.v2.remote.yml`, `deploy/v2-endpoint-shim.py`, and the
+active Headscale/Tailscale ACL before relying on its reachability boundary.
 
-```bash
-# Drop OFF the mesh (cloud can no longer reach you); data is preserved:
-docker stop loreholm-tailscale
+## Reporting security issues
 
-# Stop everything (dashboard, database, mesh); data is preserved:
-cd ~/.loreholm && docker compose down
-
-# Remove the node from the mesh and delete everything:
-cd ~/.loreholm && docker compose down
-docker volume ls | grep loreholm | awk '{print $2}' | xargs docker volume rm
-rm -rf ~/.loreholm
-```
-
-## Related
-
-- [01_Architecture.md](01_Architecture.md) — the diagram and the
-  cloud/Tailnet trust boundary.
-- [07_BYODB.md](07_BYODB.md) — the query-proxy topology and sync protocol.
-- [09_HeadscaleSetup.md](09_HeadscaleSetup.md) — the private networking setup.
-- [07_NextSteps.md](07_NextSteps.md) — planned trust features, including the
-  in-dashboard **Connection & Security** panel.
+See [`SECURITY.md`](../SECURITY.md). Do not test against hosted infrastructure
+or another user's instance without explicit authorization.

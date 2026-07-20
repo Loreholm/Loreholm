@@ -1,0 +1,6 @@
+{
+  "groups": {"group:api": ["plane-api"]},
+  "acls": [
+    {"action": "accept", "src": ["group:api"], "dst": ["*:8081"]}
+  ]
+}

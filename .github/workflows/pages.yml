@@ -6,9 +6,12 @@ name: Publish Site
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "v2"]
     paths:
       - "web/**"
+      - "apps/docs/**"
+      - "docs/**"
+      - "notes/Architecture-Decisions.md"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -28,13 +31,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/docs/package.json
+
+      - name: Install documentation dependencies
+        working-directory: apps/docs
+        run: npm install --no-audit --no-fund
+
+      - name: Build documentation atlas
+        working-directory: apps/docs
+        run: npm run build
+
       - name: Assemble static site
         run: |
           mkdir -p _site
-          # Coming-soon page is the entire public site until launch; the real
-          # landing page and docs (web/index.html, web/docs.html) ship with
-          # the full stack at launch.
+          # Keep the coming-soon page at the root while making the docs atlas
+          # available at /docs/.
           cp web/coming-soon.html _site/index.html
+          cp -a web/docs _site/docs
           touch _site/.nojekyll
 
       - name: Upload Pages artifact

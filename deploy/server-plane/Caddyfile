@@ -1,0 +1,20 @@
+{
+    email {$ACME_EMAIL}
+}
+
+{$CHAT_DOMAIN} {
+    reverse_proxy chat:80
+    header {
+        Content-Security-Policy "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://{$API_DOMAIN} {$OIDC_ISSUER}; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'"
+        X-Content-Type-Options nosniff
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+}
+
+{$API_DOMAIN} {
+    reverse_proxy tailscale-api:8080
+}
+
+{$MESH_DOMAIN} {
+    reverse_proxy headscale:8080
+}

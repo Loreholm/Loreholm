@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Loreholm — A quiet place to think</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="grain"></div>
+  <section id="gate" class="gate">
+    <div class="mark">L</div>
+    <p class="eyebrow">YOUR PRIVATE LORE</p>
+    <h1>A quiet place<br>to think aloud.</h1>
+    <p class="lede">The conversation travels through Loreholm's private mesh. Your instance—and only your instance—keeps the transcript.</p>
+    <button id="signIn">Enter Loreholm <span>↗</span></button>
+    <p id="gateError" class="error"></p>
+  </section>
+
+  <div id="app" class="shell" hidden>
+    <header>
+      <a class="wordmark" href="#">LOREHOLM <i>CHAT</i></a>
+      <div class="signal"><span></span> PRIVATE INSTANCE</div>
+      <button id="signOut" class="text-button">Sign out</button>
+    </header>
+    <main>
+      <aside>
+        <p class="index">CONVERSATION / <b id="shortId"></b></p>
+        <h2>What’s on<br>your mind?</h2>
+        <p>Your words become raw transcript captures. Interpretation happens later, inside your instance.</p>
+        <button id="newChat" class="new-chat">＋ New conversation</button>
+      </aside>
+      <section class="conversation">
+        <div id="messages" class="messages">
+          <div id="empty" class="empty">
+            <span>BEGIN ANYWHERE</span>
+            <p>Ask a question, develop an idea,<br>or simply leave a thought here.</p>
+          </div>
+        </div>
+        <form id="composer">
+          <textarea id="input" rows="1" maxlength="100000" placeholder="Write to Loreholm…" aria-label="Message"></textarea>
+          <div class="compose-foot">
+            <span>↵ SEND · SHIFT ↵ NEW LINE</span>
+            <button id="send" aria-label="Send">↑</button>
+          </div>
+        </form>
+      </section>
+    </main>
+  </div>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+name: loreholm-v2
+
+services:
+  instance:
+    build:
+      context: ../api
+      dockerfile: Dockerfile.v2
+    restart: unless-stopped
+    depends_on:
+      arcadedb:
+        condition: service_healthy
+      bifrost:
+        condition: service_started
+    environment:
+      ARCADEDB_URL: http://arcadedb:2480
+      ARCADEDB_DATABASE: loreholm_v2
+      ARCADEDB_USERNAME: root
+      ARCADEDB_PASSWORD: ${ARCADEDB_ROOT_PASSWORD:?set ARCADEDB_ROOT_PASSWORD}
+      LOREHOLM_V2_DEVICE_TOKEN_SHA256: ${LOREHOLM_V2_DEVICE_TOKEN_SHA256:?set LOREHOLM_V2_DEVICE_TOKEN_SHA256}
+      LOREHOLM_V2_ADMIN_TOKEN_SHA256: ${LOREHOLM_V2_ADMIN_TOKEN_SHA256:?set LOREHOLM_V2_ADMIN_TOKEN_SHA256}
+      LOREHOLM_V2_SYNC_TOKEN_SHA256: ${LOREHOLM_V2_SYNC_TOKEN_SHA256:?set LOREHOLM_V2_SYNC_TOKEN_SHA256}
+      LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS: ${LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS:-300}
+      LOREHOLM_V2_EMBEDDING_DIMENSIONS: ${LOREHOLM_V2_EMBEDDING_DIMENSIONS:-384}
+      BIFROST_URL: http://bifrost:8080
+      BIFROST_PUBLIC_URL: ${BIFROST_PUBLIC_URL:-http://127.0.0.1:8083}
+      BIFROST_ADMIN_USERNAME: ${BIFROST_ADMIN_USERNAME:?set BIFROST_ADMIN_USERNAME}
+      BIFROST_ADMIN_PASSWORD: ${BIFROST_ADMIN_PASSWORD:?set BIFROST_ADMIN_PASSWORD}
+    ports:
+      - "${LOREHOLM_V2_BIND_HOST:-127.0.0.1}:${LOREHOLM_V2_PORT:-8082}:8080"
+
+  arcadedb:
+    image: ${ARCADEDB_IMAGE:-arcadedata/arcadedb:26.3.1}
+    restart: unless-stopped
+    environment:
+      ARCADEDB_ROOT_PASSWORD: ${ARCADEDB_ROOT_PASSWORD:?set ARCADEDB_ROOT_PASSWORD}
+      JAVA_OPTS: >-
+        -Darcadedb.server.rootPassword=${ARCADEDB_ROOT_PASSWORD:?set ARCADEDB_ROOT_PASSWORD}
+        -Darcadedb.server.mode=development
+        -Darcadedb.profile=low-ram
+        -Xms1G -Xmx4G
+    volumes:
+      - arcadedb_data:/home/arcadedb/databases
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 2480"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+
+  bifrost:
+    image: maximhq/bifrost:latest
+    restart: unless-stopped
+    volumes:
+      - bifrost_data:/app/data
+
+  bifrost-dashboard:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      bifrost:
+        condition: service_started
+    ports:
+      - "${BIFROST_BIND_HOST:-127.0.0.1}:${BIFROST_PORT:-8083}:8080"
+    volumes:
+      - ./bifrost-dashboard.nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  arcadedb_data:
+  bifrost_data:

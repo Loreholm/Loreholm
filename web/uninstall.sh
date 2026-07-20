@@ -41,7 +41,8 @@ Usage: $0 [options]
 Options:
   --dir <path>  Installation directory (default: $INSTALL_DIR)
   --keep-data   Remove containers only; keep the memory database, chat
-                history, and $INSTALL_DIR so a reinstall re-adopts them
+                history, dashboard account, and $INSTALL_DIR so a reinstall
+                re-adopts them
   --yes         Skip confirmation prompt
   -h, --help    Show help
 EOF
@@ -86,7 +87,7 @@ confirm_uninstall() {
     echo ""
     if [[ "$KEEP_DATA" == "true" ]]; then
         warn "This removes the loreholm containers but KEEPS your data:"
-        warn "  memory database, chat history, and $INSTALL_DIR."
+        warn "  memory database, chat history, dashboard account, and $INSTALL_DIR."
     else
         warn "This PERMANENTLY DELETES your loreholm data and cannot be undone:"
         warn "  the memory database and chat history (loreholm-* Docker volumes),"

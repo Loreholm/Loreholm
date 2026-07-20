@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Loreholm Field Console</title>
+  <link rel="stylesheet" href="/dashboard/assets/dashboard.css">
+</head>
+<body>
+  <div class="grain"></div>
+  <header>
+    <div class="mark"><span>LH</span></div>
+    <div><p class="eyebrow">PRIVATE KNOWLEDGE INSTRUMENT</p><h1>Loreholm <em>Field Console</em></h1></div>
+    <div class="header-state"><i id="overallLight"></i><span id="overallText">LOCKED</span></div>
+  </header>
+
+  <main>
+    <section id="unlock" class="unlock panel">
+      <p class="index">00 / ACCESS</p>
+      <h2>Enter the instance key.</h2>
+      <p>Your dashboard credential lives in <code>~/.local/share/loreholm-v2/state/instance.env</code>. It never leaves this instance.</p>
+      <form id="unlockForm"><input id="token" type="password" autocomplete="current-password" placeholder="LOREHOLM_V2_ADMIN_TOKEN" required><button>Open console <b>→</b></button></form>
+      <p id="unlockError" class="error"></p>
+    </section>
+
+    <div id="console" hidden>
+      <section class="status-strip">
+        <div><span>INSTANCE <button class="tip" data-tip="The Loreholm API that receives captures, enforces policy, and serves this console." aria-label="About instance status">?</button></span><strong id="instanceState">—</strong></div>
+        <div><span>ARCADEDB <button class="tip" data-tip="The durable local store for raw captures, quarantine, policy, resolved entities, Claims, and Evidence." aria-label="About ArcadeDB status">?</button></span><strong class="good">ONLINE</strong></div>
+        <div><span><a id="bifrostDashboardLink" class="status-link" href="#" target="_blank" rel="noopener">BIFROST ↗</a> <button class="tip" data-tip="Open your Bifrost dashboard to add provider credentials, inspect model traffic, and manage routing." aria-label="About Bifrost status">?</button></span><strong id="bifrostState">—</strong></div>
+        <div><span>LOCAL MODEL <button class="tip" data-tip="READY means Bifrost can reach the configured vLLM endpoint and list its models." aria-label="About local model status">?</button></span><strong id="modelState">—</strong></div>
+        <div><span>POLICY REV. <button class="tip" data-tip="The durable policy version. It increments after each successful policy commit." aria-label="About policy revision">?</button></span><strong id="policyVersion">—</strong></div>
+      </section>
+
+      <div class="layout">
+        <section class="panel policy-panel">
+          <p class="index">01 / CAPTURE BOUNDARY</p>
+          <div class="section-head"><div><h2>What enters the archive?</h2><p>Capture and model-egress are separate decisions. Tighten them independently.</p></div><button id="savePolicy" class="save">Commit policy</button></div>
+          <div id="classes" class="class-list"></div>
+          <div class="mining-row"><div><span class="glyph">M</span><div><h3>Mining state <button class="tip" data-tip="Active claims admitted scopes for extraction, identity resolution, schema validation, and evidence-backed commit. Paused keeps capture and admission running without model egress." aria-label="About mining state">?</button></h3><p>Active mining commits only schema-valid claims with inspectable source evidence.</p></div></div><select id="miningStatus" aria-label="Mining state"><option value="paused">Paused</option><option value="active">Active</option></select></div>
+          <div class="knowledge-summary">
+            <div class="section-head"><div><p class="index">COMMITTED KNOWLEDGE</p><h3>Recent graph truth</h3></div><div class="knowledge-counts"><strong id="claimCount">0</strong><span>recent claims</span><strong id="evidenceCount">0</strong><span>recent evidence</span></div></div>
+            <div id="recentClaims" class="recent-claims"><p>No committed claims yet.</p></div>
+          </div>
+        </section>
+
+        <aside>
+          <section class="panel model-panel">
+            <p class="index">02 / MODEL EGRESS</p>
+            <h2>Model gateway route</h2>
+            <p class="lede">Choose the OpenAI-compatible endpoint Loreholm should use through Bifrost. Local and hosted endpoints are both supported; provider charges remain yours.</p>
+            <form id="modelForm">
+              <label>Route name <button class="tip" data-tip="A unique Bifrost provider name for this endpoint, such as local-vllm or work-models." aria-label="About route name">?</button><input id="providerName" value="vllm-local" pattern="[a-z][a-z0-9-]{2,63}" required></label>
+              <label>Endpoint <button class="tip" data-tip="The OpenAI-compatible base URL Bifrost connects to. Docker service names work inside the instance network." aria-label="About model endpoint">?</button><input id="modelUrl" value="http://vllm:8000" required></label>
+              <label>Served model <button class="tip" data-tip="The exact model identifier advertised by the endpoint and used for Loreholm inference requests." aria-label="About served model">?</button><input id="modelName" value="loreholm-local" required></label>
+              <label>Embedding route name <button class="tip" data-tip="A Bifrost provider already configured by the operator to serve OpenAI-compatible embeddings. Loreholm selects it but does not provision its endpoint." aria-label="About embedding route">?</button><input id="embeddingProviderName" value="embeddings-local" pattern="[a-z][a-z0-9-]{2,63}" required></label>
+              <label>Embedding model <button class="tip" data-tip="The exact embedding-model identifier used to vectorize extracted mentions for identity matching." aria-label="About embedding model">?</button><input id="embeddingModelName" value="loreholm-embeddings" required></label>
+              <label>Embedding dimensions <button class="tip" data-tip="Must match the instance vector region. Changing it requires a new vector region and is not an in-place console operation." aria-label="About embedding dimensions">?</button><input id="embeddingDimensions" value="384" type="number" min="2" max="16384" required></label>
+              <label>Embedding location <button class="tip" data-tip="Remote embedding sends locally derived mention context outside the instance and requires Derived only or Unrestricted policy." aria-label="About embedding location">?</button><select id="embeddingProcessingLocation"><option value="local">Local instance</option><option value="remote">Remote endpoint</option></select></label>
+              <label>Processing location <button class="tip" data-tip="Local means the model runs inside this Loreholm instance. Remote applies each capture class's remote-processing rule and currently requires Unrestricted for raw extraction." aria-label="About processing location">?</button><select id="processingLocation"><option value="local">Local instance</option><option value="remote">Remote endpoint</option></select></label>
+              <label class="check"><input id="privateNetwork" type="checkbox" checked><span>Permit private Docker network <button class="tip" data-tip="Allows Bifrost to connect to RFC1918 addresses and Docker service networks. Keep this off for public endpoints." aria-label="About private network access">?</button></span></label>
+              <button>Save Loreholm routes <b>→</b></button>
+              <a id="bifrostConfigureLink" class="bifrost-guide" href="#" target="_blank" rel="noopener">Open your Bifrost dashboard ↗</a>
+            </form>
+          </section>
+
+          <section class="panel signal-panel">
+            <p class="index">03 / SIGNAL</p>
+            <h2>Pipeline topology</h2>
+            <div class="pipeline"><span>STAGING</span><i></i><span>EXTRACTOR</span><i></i><span>RESOLVER</span><i></i><span class="pipeline-live">CLAIMS + EVIDENCE</span></div>
+            <p id="notice" class="notice">Console synchronized.</p>
+          </section>
+        </aside>
+      </div>
+
+      <section class="panel maintenance-panel">
+        <div class="section-head">
+          <div><p class="index">04 / KNOWLEDGE MAINTENANCE</p><h2>The compensating ledger</h2><p>Reprocess a scope without hiding its current knowledge. Review temporal gaps, competing state, and extension-schema migrations in one place.</p></div>
+          <div class="maintenance-counts"><strong id="openNoticeCount">0</strong><span>OPEN NOTICES</span><strong id="extensionCount">0</strong><span>EXTENSIONS</span></div>
+        </div>
+        <div class="maintenance-grid">
+          <div class="ledger-column">
+            <p class="ledger-label">NOTICE QUEUE</p>
+            <div id="maintenanceNotices" class="ledger-list"><p>No maintenance notices.</p></div>
+          </div>
+          <div class="ledger-column">
+            <p class="ledger-label">SCOPED RE-MINING</p>
+            <form id="reminingForm" class="remining-form">
+              <label>Successful source run<select id="reminingRun" required></select></label>
+              <label>Reason<input id="reminingReason" maxlength="500" placeholder="Correct stale or incomplete knowledge" required></label>
+              <button>Queue safe replacement <b>→</b></button>
+            </form>
+            <div id="reminingRequests" class="ledger-list compact"><p>No re-mining requests.</p></div>
+          </div>
+          <div class="ledger-column extension-column">
+            <p class="ledger-label">EXTENSION SCHEMA</p>
+            <div id="extensionRelations" class="ledger-list"><p>No admitted extensions.</p></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script src="/dashboard/assets/dashboard.js"></script>
+</body>
+</html>
