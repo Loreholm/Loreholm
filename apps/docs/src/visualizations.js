@@ -221,9 +221,9 @@ export const visualizations = {
   ], 'The aim is an auditable memory, not an unquestionable oracle.'),
 
   today: stack('The project today', [
-    item('Planned', 'Entity resolution, graph-backed recall, lifecycle, reusable spine'),
-    item('Partly available', 'Policy surface, structured extraction, model boundary'),
-    item('Works today', 'Private instance, capture, tunnel, chat, operations'),
+    item('Planned', 'Multi-hop and episode recall, lifecycle, reusable spine'),
+    item('Partly available', 'Policy surface, correction experience, model controls'),
+    item('Works today', 'Capture, mining, entity resolution, grounded one-hop query'),
   ], 'The foundation is executable; the deeper knowledge experience remains under construction.'),
 
   promise: stack('Three labels, three honest claims', [
@@ -278,7 +278,7 @@ export const visualizations = {
     item('Saved context', 'The original conversation remains inspectable'),
     item('Knowledge', 'Decision, reason, and time become connected'),
     item('Three weeks later', '“Why did we choose that?” opens the source'),
-  ], 'Capture and maintained knowledge work today; the grounded answer surface remains planned.'),
+  ], 'Capture, maintained knowledge, and one-hop grounded answers work today; broader recall remains planned.'),
 
   privacy: boundary('Public access without public memory', [
     item('Public front door', 'Authenticates identity and relays allowed traffic'),
@@ -396,8 +396,8 @@ export const visualizations = {
   ], 'A quarantined receipt preserves the observation until explicit support exists.'),
 
   operations: compare('What the foundation runs today',
-    side('Operational now', ['Containerized private instance', 'Separated credentials and tunnel shim', 'Capture, extraction, resolution, Claim/Evidence commit']),
-    side('Still planned', ['Grounded query and surfacing', 'Reusable embedded spine', 'Retention and coordinated recovery', 'Correction experience']),
+    side('Operational now', ['Containerized private instance', 'Separated credentials and tunnel shim', 'Capture through Claim/Evidence commit', 'Vector-seeded one-hop grounded query']),
+    side('Still planned', ['Multi-hop and episode recall', 'Reusable embedded spine', 'Retention and coordinated recovery', 'Correction experience']),
     'The current system is a working capture foundation, not yet the complete memory experience.'),
 };
 

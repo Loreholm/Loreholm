@@ -4,7 +4,8 @@ The current executable slice implements contract-v2 capture ingestion, policy sy
 server-side capture blocking, idempotent staging, clock normalization,
 unknown-class quarantine, session assembly, durable admission and mining work,
 salience, policy-gated structured extraction, mention vectors, and entity
-resolution.
+resolution, schema-backed Claim/Evidence commit, compensating maintenance, and
+vector-seeded grounded one-hop query.
 
 The installation path uses the installer; it checks prerequisites, generates instance
 and device credentials, installs under `~/.local/share/loreholm-v2`, starts the
@@ -41,6 +42,12 @@ through Bifrost, stores strict candidate output in `V2MiningRun`, embeds
 extracted mentions, resolves them to stable `V2Entity` vertices, validates
 candidate relations against `api/app/v2/relation_schema.json`, and commits
 idempotent `V2Claim` vertices with source-linked `V2Evidence` documents. The
+authenticated `POST /v2/query` path embeds each question through the configured
+embedding route, groups nearest mention vectors by resolved entity, uses a
+strict Bifrost plan for registered one-hop relations, and reconstructs Evidence
+excerpts from their capture offsets. Optional answer synthesis validates every
+returned citation handle against that bundle. Querying is read-only and does
+not mint entities or Claims. The
 transcript quiet period defaults to 300 seconds;
 `LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS` in the Compose environment overrides
 it and is passed into the API container. `LOREHOLM_V2_EMBEDDING_DIMENSIONS`

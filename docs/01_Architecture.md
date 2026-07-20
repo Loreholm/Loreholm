@@ -50,8 +50,9 @@ inspectable, vector retrieval works over selected derived material, and the
 graph is built from rich metadata and evidence rather than isolated chunks.
 Capture, idempotent staging, derived mention vectors, extraction, identity
 resolution, evidence-backed graph commit, and compensating knowledge maintenance
-work today. Grounded surfacing and the remaining lifecycle layers are accepted
-design and remain to be implemented.
+work today. Vector-seeded one-hop grounded surfacing also works today; multi-hop
+and episode-style recall plus the remaining lifecycle layers remain to be
+implemented.
 
 ## Status legend
 
@@ -91,7 +92,7 @@ mention vectors + resolve              [implemented]
 schema-valid Claims + Evidence          [implemented]
     |
     v
-query and surfacing                     [planned]
+vector-seeded query and surfacing       [implemented]
 ```
 
 The adapter is a sensor, not an authority. It maps native context into a
@@ -233,7 +234,7 @@ The implemented HTTP envelope and receipt semantics are documented in the
 [capture API](03_CaptureAPI.md). The planned adapter side is documented in
 [clients and spine](06_ClientsAndSpine.md).
 
-## Admission and the planned mining pipeline
+## Admission, mining, and grounded query pipeline
 
 The accepted Loreholm design calls for the instance to turn staged context into
 inspectable knowledge:
@@ -250,7 +251,10 @@ inspectable knowledge:
 5. **Commit:** write claims and first-class evidence records that link every
    derived assertion back to its source captures and mining run.
 6. **Surface:** answer queries from the mined graph while retaining the raw
-   context and its audit trail.
+   context and its audit trail. The implemented first slice embeds the question,
+   groups nearest mention vectors by resolved entity, traverses registered
+   one-hop Claims, hydrates active Evidence, and optionally synthesizes a
+   citation-validated answer through Bifrost.
 
 The implemented `V2MiningRun` foundation carries stage, miner,
 model/configuration, and input fingerprints plus parent-run lineage. For a new
@@ -263,9 +267,10 @@ supersession across replacement generations is implemented as an explicit,
 audited re-mining request: replacement commit succeeds before unsupported old
 Evidence is retired, and independently supported Claims remain active.
 
-The structured interpreter/extractor, entity resolver, and deterministic claim
-committer are implemented. No grounded query stage is implemented in the
-current foundation milestone.
+The structured interpreter/extractor, entity resolver, deterministic claim
+committer, compensating maintainer, and grounded one-hop query stage are
+implemented. Multi-hop query planning and episode-style broad recall remain
+planned.
 
 See [mining and knowledge](07_MiningAndKnowledge.md) for the accepted identity,
 provenance, schema, vector, and surfacing decisions, and
@@ -286,7 +291,7 @@ provenance, schema, vector, and surfacing decisions, and
 | Structured extractor | Implemented | Turn admitted captures into versioned episode, mention, and candidate-claim output |
 | Entity resolver | Implemented | Embed extracted mentions, retrieve typed candidates, and persist audited identity decisions |
 | Claim and evidence committer | Implemented | Validate the versioned relation schema and commit idempotent Claims with first-class Evidence |
-| Graph query/surfacing | Planned | Retrieve mined knowledge for users and assistants |
+| Graph query/surfacing | Implemented | Use mention vectors to seed bounded Claim traversal and return source-linked Evidence with optional cited synthesis |
 
 ## Source map
 
@@ -299,6 +304,8 @@ provenance, schema, vector, and surfacing decisions, and
   scoring, bounded identity judgment, and durable mention resolution
 - `api/app/v2/claims.py` — deterministic relation validation, semantic Claim
   identity, Evidence attachment, and commit markers
+- `api/app/v2/query.py` — vector seed discovery, constrained planning, Claim
+  traversal, Evidence hydration, policy checks, and cited synthesis
 - `api/app/v2/relation_schema.json` — shipped Git-versioned core relation schema
 - `api/app/v2/app.py` — Loreholm application, administration, and chat capture
 - `deploy/docker-compose.v2.yml` — private instance deployment

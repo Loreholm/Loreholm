@@ -8,7 +8,13 @@ from pydantic import ValidationError
 from app.v2.claims import ClaimCommitter, load_relation_schema
 from app.v2.mining import BifrostExtractionGateway, MiningRunCoordinator, MiningWorker
 from app.v2.maintenance import KnowledgeMaintainer
-from app.v2.models import CaptureEnvelope, InstancePolicy, ModelEndpointConfig
+from app.v2.models import (
+    CaptureEnvelope,
+    GroundedQueryRequest,
+    InstancePolicy,
+    ModelEndpointConfig,
+)
+from app.v2.query import BifrostQueryGateway, GroundedQueryService
 from app.v2.resolution import (
     BifrostResolutionGateway,
     EntityResolver,
@@ -16,7 +22,16 @@ from app.v2.resolution import (
     normalize_surface,
 )
 from app.v2.salience import SalienceConfig, SalienceWorker, mechanically_trim
-from app.v2.service import ArcadeCaptureStore, CaptureService, MemoryCaptureStore, _epoch_millis
+from app.v2.service import (
+    ArcadeCaptureStore,
+    CaptureService,
+    Claim,
+    Entity,
+    Evidence,
+    MemoryCaptureStore,
+    ResolvedMention,
+    _epoch_millis,
+)
 
 
 CAPTURE_ID = "018f5e2a-1234-7abc-8def-1234567890ab"
@@ -1208,6 +1223,285 @@ def test_relation_schema_is_versioned_and_extraction_temporal_bounds_are_ordered
     with pytest.raises(ValidationError, match="valid_to"):
         from app.v2.mining import ExtractionOutput
         ExtractionOutput.model_validate(invalid)
+
+
+class StubQueryGateway:
+    def __init__(self, *, selected_index=0, answer=None) -> None:
+        self.selected_index = selected_index
+        self.answer = answer or {"answer": "Deployment data is stored locally [E1].", "citations": ["E1"]}
+        self.embed_calls = []
+        self.plan_calls = []
+        self.synthesize_calls = []
+
+    def embed(self, texts, endpoint):
+        self.embed_calls.append((texts, endpoint))
+        return [[1.0, 0.0, 0.0] for _ in texts]
+
+    def plan(self, question, candidates, relations, endpoint):
+        self.plan_calls.append((question, candidates, relations, endpoint))
+        return {
+            "seed_entity_ids": [candidates[self.selected_index]["entity_id"]],
+            "relations": ["storage_location"],
+            "direction": "outgoing",
+        }
+
+    def synthesize(self, question, bundle, token_budget, endpoint):
+        self.synthesize_calls.append((question, bundle, token_budget, endpoint))
+        return self.answer
+
+
+def grounded_query_fixture(*, processing_location="local"):
+    store = MemoryCaptureStore()
+    policy = InstancePolicy(mining_status="active")
+    now = datetime(2026, 7, 10, 12, tzinfo=timezone.utc)
+    content = "Deployment data is stored locally."
+    capture = envelope(payload={"role": "user", "content": content})
+    CaptureService(store, policy).ingest(capture, now)
+    entity = store.put_entity(Entity(
+        entity_id="entity-deployment-data",
+        entity_key="entity-key-deployment-data",
+        canonical_surface="deployment data",
+        normalized_surface="deployment data",
+        entity_type="data_collection",
+        created_at=now,
+    ))
+    mention = store.put_resolved_mention(ResolvedMention(
+        mention_id="mention-deployment-data",
+        mention_key="mention-key-deployment-data",
+        run_id="query-source-run",
+        capture_id=capture.capture_id,
+        source_start=0,
+        source_end=len("Deployment data"),
+        surface="deployment data",
+        normalized_surface="deployment data",
+        entity_type="data_collection",
+        context=content,
+        embedding=[1.0, 0.0, 0.0],
+        embedding_model="embeddings-local/loreholm-embeddings",
+        resolver_version="entity-resolver-v1",
+        entity_id=entity.entity_id,
+        resolution_method="automatic_mint",
+        vector_score=None,
+        string_score=None,
+        combined_score=None,
+        decision_details={},
+        created_at=now,
+    ))
+    claim = store.put_claim(Claim(
+        claim_id="claim-storage",
+        claim_key="claim-key-storage",
+        subject_entity_id=entity.entity_id,
+        relation="storage_location",
+        object_kind="literal",
+        object_entity_id=None,
+        object_literal="local",
+        object_literal_norm="local",
+        valid_from=None,
+        valid_to=None,
+        recorded_at=now,
+        statefulness="stateful",
+        cardinality="one",
+        schema_version="core-v1",
+        lifecycle="active",
+        first_run_id="query-source-run",
+    ))
+    evidence = store.put_evidence(Evidence(
+        evidence_id="evidence-storage",
+        evidence_key="evidence-key-storage",
+        claim_id=claim.claim_id,
+        capture_id=capture.capture_id,
+        source_start=0,
+        source_end=len(content),
+        run_id="query-source-run",
+        miner_version="structured-extractor-v1",
+        schema_version="core-v1",
+        lifecycle="active",
+        recorded_at=now,
+    ))
+    endpoint = ModelEndpointConfig(
+        processing_location=processing_location,
+        embedding_dimensions=3,
+    )
+    store.set_config("resolution_embedding_region", {
+        "model": "embeddings-local/loreholm-embeddings",
+        "dimensions": 3,
+    })
+    return store, policy, endpoint, entity, mention, claim, evidence, now
+
+
+def test_grounded_query_uses_vector_mentions_as_graph_seed_and_hydrates_evidence() -> None:
+    store, policy, endpoint, entity, _, claim, evidence, now = grounded_query_fixture()
+    gateway = StubQueryGateway()
+    service = GroundedQueryService(
+        store, gateway, load_relation_schema(), policy=lambda: policy, endpoint=lambda: endpoint
+    )
+
+    result = service.query(GroundedQueryRequest(
+        query="Where is the deployment information stored?",
+        as_of=now + timedelta(days=1),
+    ))
+
+    assert result.status == "ok"
+    assert result.seeds[0].entity_id == entity.entity_id
+    assert result.seeds[0].selected is True
+    assert result.claims[0].claim_id == claim.claim_id
+    assert result.claims[0].evidence_ids == [evidence.evidence_id]
+    assert result.evidence[0].excerpt == "Deployment data is stored locally."
+    assert result.evidence[0].citation == "E1"
+    assert result.answer == "Deployment data is stored locally [E1]."
+    assert result.citations == ["E1"]
+    assert gateway.plan_calls[0][1][0]["entity_id"] == entity.entity_id
+    assert gateway.synthesize_calls[0][1]["evidence"][0]["citation"] == "E1"
+
+
+def test_query_groups_multiple_vector_mentions_into_one_seed() -> None:
+    store, policy, endpoint, entity, mention, _, _, now = grounded_query_fixture()
+    store.put_resolved_mention(replace(
+        mention,
+        mention_id="mention-deployment-data-2",
+        mention_key="mention-key-deployment-data-2",
+        surface="the deployment records",
+        embedding=[0.99, 0.01, 0.0],
+    ))
+    service = GroundedQueryService(
+        store, StubQueryGateway(), load_relation_schema(),
+        policy=lambda: policy, endpoint=lambda: endpoint,
+    )
+
+    result = service.query(GroundedQueryRequest(
+        query="Where are the deployment records?", as_of=now, answer=False
+    ))
+
+    assert len([item for item in result.seeds if item.entity_id == entity.entity_id]) == 1
+    assert result.seeds[0].hit_count == 2
+    assert result.trace.synthesis == "not_requested"
+
+
+def test_query_excludes_superseded_and_future_claims_from_current_reads() -> None:
+    store, policy, endpoint, _, _, claim, evidence, now = grounded_query_fixture()
+    future = store.put_claim(replace(
+        claim,
+        claim_id="claim-future",
+        claim_key="claim-key-future",
+        object_literal="future location",
+        object_literal_norm="future location",
+        valid_from=now + timedelta(days=2),
+    ))
+    superseded = store.put_claim(replace(
+        claim,
+        claim_id="claim-superseded",
+        claim_key="claim-key-superseded",
+        object_literal="old location",
+        object_literal_norm="old location",
+        lifecycle="superseded",
+    ))
+    store.put_evidence(replace(
+        evidence, evidence_id="evidence-future", evidence_key="evidence-key-future",
+        claim_id=future.claim_id,
+    ))
+    store.put_evidence(replace(
+        evidence, evidence_id="evidence-superseded", evidence_key="evidence-key-superseded",
+        claim_id=superseded.claim_id, lifecycle="superseded",
+    ))
+    service = GroundedQueryService(
+        store, StubQueryGateway(), load_relation_schema(),
+        policy=lambda: policy, endpoint=lambda: endpoint,
+    )
+
+    result = service.query(GroundedQueryRequest(
+        query="Where is it stored?", as_of=now + timedelta(days=1), answer=False
+    ))
+
+    assert [item.claim_id for item in result.claims] == [claim.claim_id]
+
+
+def test_query_warns_when_vector_seed_has_a_near_scoring_alternative() -> None:
+    store, policy, endpoint, _, mention, _, _, now = grounded_query_fixture()
+    alternative = store.put_entity(Entity(
+        entity_id="entity-alternative",
+        entity_key="entity-key-alternative",
+        canonical_surface="deployment archive",
+        normalized_surface="deployment archive",
+        entity_type="data_collection",
+        created_at=now,
+    ))
+    store.put_resolved_mention(replace(
+        mention,
+        mention_id="mention-alternative",
+        mention_key="mention-key-alternative",
+        entity_id=alternative.entity_id,
+        surface="deployment archive",
+        normalized_surface="deployment archive",
+        embedding=[0.999, 0.001, 0.0],
+    ))
+    service = GroundedQueryService(
+        store, StubQueryGateway(), load_relation_schema(),
+        policy=lambda: policy, endpoint=lambda: endpoint,
+    )
+
+    result = service.query(GroundedQueryRequest(
+        query="deployment", as_of=now, answer=False, ambiguity_margin=0.1
+    ))
+
+    assert any(item.code == "ambiguous_seed" for item in result.warnings)
+
+
+def test_remote_grounded_synthesis_fails_closed_without_unrestricted_policy() -> None:
+    store, policy, endpoint, _, _, _, _, now = grounded_query_fixture(
+        processing_location="remote"
+    )
+    policy.classes["transcript.message"].remote_processing = "derived_only"
+    gateway = StubQueryGateway()
+    service = GroundedQueryService(
+        store, gateway, load_relation_schema(), policy=lambda: policy, endpoint=lambda: endpoint
+    )
+
+    with pytest.raises(PermissionError, match="unrestricted"):
+        service.query(GroundedQueryRequest(query="Where is it stored?", as_of=now))
+    assert len(gateway.plan_calls) == 1
+    assert gateway.synthesize_calls == []
+
+
+def test_grounded_answer_rejects_citations_outside_the_evidence_bundle() -> None:
+    store, policy, endpoint, _, _, _, _, now = grounded_query_fixture()
+    gateway = StubQueryGateway(answer={"answer": "Unsupported [E99].", "citations": ["E99"]})
+    service = GroundedQueryService(
+        store, gateway, load_relation_schema(), policy=lambda: policy, endpoint=lambda: endpoint
+    )
+
+    with pytest.raises(ValueError, match="outside the query bundle"):
+        service.query(GroundedQueryRequest(query="Where is it stored?", as_of=now))
+
+
+def test_bifrost_query_gateway_requests_strict_planner_schema(monkeypatch) -> None:
+    seen = {}
+
+    class Response:
+        is_error = False
+
+        def json(self):
+            return {"choices": [{"message": {"content": json.dumps({
+                "seed_entity_ids": ["entity-1"],
+                "relations": ["storage_location"],
+                "direction": "outgoing",
+            })}}]}
+
+    def fake_post(url, **kwargs):
+        seen["url"] = url
+        seen["payload"] = kwargs["json"]
+        return Response()
+
+    monkeypatch.setattr("app.v2.query.httpx.post", fake_post)
+    result = BifrostQueryGateway("http://bifrost:8080", ("user", "pass")).plan(
+        "Where is Atlas stored?",
+        [{"entity_id": "entity-1", "canonical_surface": "Atlas"}],
+        {"storage_location": {"description": "Storage location"}},
+        ModelEndpointConfig(),
+    )
+
+    assert result["seed_entity_ids"] == ["entity-1"]
+    assert seen["url"] == "http://bifrost:8080/v1/chat/completions"
+    assert seen["payload"]["response_format"]["json_schema"]["strict"] is True
 
 
 def test_bifrost_resolution_gateway_uses_embedding_route(monkeypatch) -> None:

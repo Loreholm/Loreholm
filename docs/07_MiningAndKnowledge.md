@@ -6,8 +6,8 @@ the leased admission and mining work queues exist. Mechanical trimming,
 scheduled work consumption, durable salience decisions, policy-gated structured
 extraction through Bifrost, mention vector storage, entity resolution, and
 schema-backed Claim/Evidence commit, maintenance notices, scoped re-mining,
-compensating supersession, and extension-schema maintenance also exist. Grounded
-surfacing does not.
+compensating supersession, extension-schema maintenance, and vector-seeded
+grounded query/surfacing also exist.
 
 ## The idea in plain language
 
@@ -53,6 +53,12 @@ deterministic validation and graph commit
     |
     v
 claims + entities + evidence
+    |
+    v
+query embedding -> mention-vector seed -> bounded Claim traversal
+    |
+    v
+source-span Evidence -> optional cited answer
 ```
 
 The observer and maintainer are one instance-owned agent expressed as
@@ -132,7 +138,7 @@ older releases only when that marker is absent.
 Administrators can inspect recent decisions and entities through authenticated
 `GET /v2/admin/resolution/mentions` and
 `GET /v2/admin/resolution/entities` endpoints. These are audit views, not the
-planned grounded recall API.
+grounded recall API.
 
 The resolver rechecks current capture policy before embedding. Local processing
 requires the source class to remain enabled. Remote derived resolution requires
@@ -235,7 +241,7 @@ so a partial infrastructure failure can safely retry.
 Administrators can audit the vocabulary and committed records through
 `GET /v2/admin/knowledge/schema`, `GET /v2/admin/knowledge/claims`, and
 `GET /v2/admin/knowledge/evidence`. These are inspection endpoints, not the
-planned grounded recall API.
+grounded recall API described below.
 
 ## Idempotency and re-mining
 
@@ -337,15 +343,48 @@ compensating supersession to the extension's Claims and Evidence; it never
 deletes history. Non-`ext:*` unknown relations still fail closed before graph
 writes.
 
-## Surfacing direction
+## Grounded query and surfacing
 
-The default model-facing result will contain current claims plus the strongest
-compact supporting evidence within a token budget. Archived and superseded
-claims are excluded from normal reads. Full provenance, additional evidence,
-history, and earlier generations require explicit query options.
+The authenticated `POST /v2/query` endpoint implements a read-only grounded
+query path. A natural-language question is embedded through the configured
+Bifrost embedding route with the same model and width locked to the
+`V2Mention` vector region. ArcadeDB nearest-neighbor search returns mention
+hits, groups them by their already-resolved `entity_id`, and ranks candidate
+graph seeds from their strongest and supporting hits. Querying never mints an
+entity or changes graph state.
 
-Endpoint and request/response schemas for surfacing remain undecided and must
-not be inferred from retired search-tool behavior.
+A strict Bifrost planner may select only those returned entity IDs, registered
+core or active extension relations, and an incoming, outgoing, or bidirectional
+one-hop traversal. Loreholm rejects invented planner output before querying the
+graph. It then:
+
+1. reads adjacent Claims for the selected seed entities;
+2. excludes deleted Claims in every mode and excludes superseded Claims from
+   normal reads;
+3. applies `valid_from` and `valid_to` to the request's timezone-aware `as_of`;
+4. loads active Evidence, rechecks current capture policy, and reconstructs
+   exact excerpts from raw capture bytes and stored source offsets;
+5. ranks independently supported Claims and packs representative Evidence
+   within the requested token budget; and
+6. optionally asks Bifrost for a strict cited answer whose `[E#]` handles must
+   match Evidence in the returned bundle.
+
+The structured Claims and Evidence remain available when answer synthesis is
+not requested. The response also includes all vector seed candidates, which
+ones the planner selected, the effective traversal, schema and embedding
+versions, truncation state, and explicit warnings for near-tied seeds,
+incomplete temporal bounds, competing single-valued Claims, extension
+relations, missing captures, invalid spans, or disabled capture classes.
+
+Remote query planning receives the question and derived entity candidates, so
+every seed source must permit `derived_only` or `unrestricted` processing.
+Remote answer synthesis additionally receives raw Evidence excerpts and
+therefore requires `unrestricted` for every included capture. Both calls stay
+inside the instance when their configured processing location is local.
+
+The initial implementation deliberately supports bounded one-hop Claim
+traversal. Multi-hop path planning, episode-summary vectors, broad transcript
+recall, and a correction interface remain later work.
 
 ## Implementation milestones
 
@@ -365,4 +404,6 @@ A practical sequence is:
 7. schema-backed deterministic claim commit and Evidence records — implemented;
 8. maintenance notices, re-mining, scoped supersession, and extension-schema
    admission/promotion/revert — implemented; and
-9. grounded query/surfacing API.
+9. vector-seeded grounded query/surfacing API with Evidence hydration and
+   optional cited synthesis — implemented; multi-hop and episode recall remain
+   planned.

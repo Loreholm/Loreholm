@@ -1,8 +1,9 @@
 # Why Loreholm exists
 
 **Status:** The user-owned capture and model-gateway foundation exists today.
-Complete egress inspection, mining, retention, deletion, and grounded recall are
-product requirements that remain partly or wholly unimplemented.
+Complete egress inspection, retention, and deletion remain product requirements
+that are partly or wholly unimplemented. Mining and one-hop grounded recall now
+exist, while broader episode-style and multi-hop recall remain incomplete.
 
 Loreholm begins with an uncomfortable observation: the message visible in an
 LLM text box is often not the whole request. A conversation surface may also

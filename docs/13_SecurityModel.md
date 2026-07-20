@@ -81,6 +81,14 @@ source and applies the endpoint's operator-declared `local` or `remote`
 processing location. Remote raw extraction requires `unrestricted` for every
 involved class; the other modes fail closed until their transformations exist.
 
+Grounded query follows the same boundary in two stages. The question embedding
+contains user-supplied query text rather than stored capture content. A remote
+planner also receives derived entity candidates, so their source captures must
+permit `derived_only` or `unrestricted`. Optional remote answer synthesis
+receives exact raw Evidence excerpts and therefore requires `unrestricted` for
+every included capture. Loreholm validates the selected entity IDs, relations,
+and final Evidence citation handles independently of the model.
+
 The processing-location declaration is a security assertion, not network
 detection. Marking an externally hosted endpoint as `local` defeats the remote
 egress gate. Operators must use `local` only for a model running inside the

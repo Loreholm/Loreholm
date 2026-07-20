@@ -151,6 +151,16 @@ class EntityCandidate:
 
 
 @dataclass(frozen=True)
+class QuerySeedCandidate:
+    entity: Entity
+    score: float
+    best_vector_score: float
+    hit_count: int
+    mention_surfaces: tuple[str, ...]
+    capture_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Claim:
     claim_id: str
     claim_key: str
@@ -377,6 +387,11 @@ class CaptureStore:
     ) -> list[EntityCandidate]:
         raise NotImplementedError
 
+    def find_query_seed_candidates(
+        self, embedding: list[float], *, limit: int = 10
+    ) -> list[QuerySeedCandidate]:
+        raise NotImplementedError
+
     def list_resolved_mentions(self, *, limit: int = 50) -> list[ResolvedMention]:
         raise NotImplementedError
 
@@ -404,6 +419,14 @@ class CaptureStore:
         raise NotImplementedError
 
     def list_evidence(self, *, limit: int = 50) -> list[Evidence]:
+        raise NotImplementedError
+
+    def claims_for_entity(
+        self, entity_id: str, direction: Literal["outgoing", "incoming", "both"], *, limit: int = 100
+    ) -> list[Claim]:
+        raise NotImplementedError
+
+    def evidence_for_claim(self, claim_id: str, *, limit: int = 20) -> list[Evidence]:
         raise NotImplementedError
 
     def mark_claim_commit_complete(
@@ -943,6 +966,48 @@ class MemoryCaptureStore(CaptureStore):
                 best[entity.entity_id] = candidate
         return sorted(best.values(), key=lambda item: item.vector_score, reverse=True)[:limit]
 
+    def find_query_seed_candidates(
+        self, embedding: list[float], *, limit: int = 10
+    ) -> list[QuerySeedCandidate]:
+        import math
+
+        query_norm = math.sqrt(sum(value * value for value in embedding))
+        if query_norm == 0:
+            return []
+        grouped: dict[str, list[tuple[float, str, str]]] = {}
+        for mention in self._mentions.values():
+            if len(mention.embedding) != len(embedding):
+                continue
+            candidate_norm = math.sqrt(sum(value * value for value in mention.embedding))
+            if candidate_norm == 0:
+                continue
+            score = sum(a * b for a, b in zip(embedding, mention.embedding)) / (
+                query_norm * candidate_norm
+            )
+            if mention.entity_id in self._entities:
+                grouped.setdefault(mention.entity_id, []).append(
+                    (score, mention.surface, mention.capture_id)
+                )
+        candidates: list[QuerySeedCandidate] = []
+        for entity_id, hits in grouped.items():
+            ranked = sorted(hits, reverse=True)
+            top = ranked[:3]
+            best_score = top[0][0]
+            mean_score = sum(item[0] for item in top) / len(top)
+            aggregate = max(-1.0, min(1.0, 0.75 * best_score + 0.20 * mean_score + 0.05 * min(len(hits) / 3, 1.0)))
+            surfaces = tuple(dict.fromkeys(item[1] for item in ranked[:5]))
+            capture_ids = tuple(dict.fromkeys(item[2] for item in ranked))
+            candidates.append(QuerySeedCandidate(
+                entity=self._entities[entity_id], score=aggregate,
+                best_vector_score=best_score, hit_count=len(hits), mention_surfaces=surfaces,
+                capture_ids=capture_ids,
+            ))
+        return sorted(
+            candidates,
+            key=lambda item: (item.score, item.best_vector_score, item.hit_count, item.entity.entity_id),
+            reverse=True,
+        )[:max(1, min(limit, 50))]
+
     def list_resolved_mentions(self, *, limit: int = 50) -> list[ResolvedMention]:
         bounded = max(1, min(limit, 250))
         return sorted(
@@ -1004,6 +1069,26 @@ class MemoryCaptureStore(CaptureStore):
             self._evidence.values(),
             key=lambda item: (item.recorded_at, item.evidence_id),
             reverse=True,
+        )[:bounded]
+
+    def claims_for_entity(
+        self, entity_id: str, direction: Literal["outgoing", "incoming", "both"], *, limit: int = 100
+    ) -> list[Claim]:
+        bounded = max(1, min(limit, 250))
+        matches = [
+            item for item in self._claims.values()
+            if (direction in {"outgoing", "both"} and item.subject_entity_id == entity_id)
+            or (direction in {"incoming", "both"} and item.object_entity_id == entity_id)
+        ]
+        return sorted(
+            matches, key=lambda item: (item.recorded_at, item.claim_id), reverse=True
+        )[:bounded]
+
+    def evidence_for_claim(self, claim_id: str, *, limit: int = 20) -> list[Evidence]:
+        bounded = max(1, min(limit, 100))
+        return sorted(
+            (item for item in self._evidence.values() if item.claim_id == claim_id),
+            key=lambda item: (item.recorded_at, item.evidence_id), reverse=True,
         )[:bounded]
 
     def mark_claim_commit_complete(
@@ -2366,6 +2451,60 @@ class ArcadeCaptureStore(CaptureStore):
             candidates.values(), key=lambda item: item.vector_score, reverse=True
         )[:max(1, min(limit, 50))]
 
+    def find_query_seed_candidates(
+        self, embedding: list[float], *, limit: int = 10
+    ) -> list[QuerySeedCandidate]:
+        if len(embedding) != self.embedding_dimensions:
+            raise ValueError(
+                f"embedding has {len(embedding)} dimensions; expected {self.embedding_dimensions}"
+            )
+        search_limit = min(max(limit * 8, 40), 250)
+        rows = self._command(
+            "SELECT expand(vectorNeighbors('V2Mention[embedding]', :embedding, :limit))",
+            {"embedding": embedding, "limit": search_limit},
+        ).get("result", [])
+        grouped: dict[str, list[tuple[float, str, str]]] = {}
+        for row in rows:
+            entity_id = row.get("entity_id", "")
+            if not entity_id or self.get_entity(entity_id) is None:
+                continue
+            distance = float(row.get("distance") or 0.0)
+            score = max(-1.0, min(1.0, 1.0 - distance))
+            grouped.setdefault(entity_id, []).append(
+                (score, row.get("surface") or "", row.get("capture_id") or "")
+            )
+        candidates: list[QuerySeedCandidate] = []
+        for entity_id, hits in grouped.items():
+            entity = self.get_entity(entity_id)
+            if entity is None:
+                continue
+            ranked = sorted(hits, reverse=True)
+            top = ranked[:3]
+            best_score = top[0][0]
+            mean_score = sum(item[0] for item in top) / len(top)
+            aggregate = max(
+                -1.0,
+                min(
+                    1.0,
+                    0.75 * best_score
+                    + 0.20 * mean_score
+                    + 0.05 * min(len(hits) / 3, 1.0),
+                ),
+            )
+            surfaces = tuple(
+                dict.fromkeys(item[1] or entity.canonical_surface for item in ranked[:5])
+            )
+            capture_ids = tuple(dict.fromkeys(item[2] for item in ranked if item[2]))
+            candidates.append(QuerySeedCandidate(
+                entity=entity, score=aggregate, best_vector_score=best_score,
+                hit_count=len(hits), mention_surfaces=surfaces, capture_ids=capture_ids,
+            ))
+        return sorted(
+            candidates,
+            key=lambda item: (item.score, item.best_vector_score, item.hit_count, item.entity.entity_id),
+            reverse=True,
+        )[:max(1, min(limit, 50))]
+
     def list_resolved_mentions(self, *, limit: int = 50) -> list[ResolvedMention]:
         bounded = max(1, min(limit, 250))
         rows = self._command(
@@ -2525,6 +2664,38 @@ class ArcadeCaptureStore(CaptureStore):
         bounded = max(1, min(limit, 250))
         rows = self._command(
             f"SELECT FROM V2Evidence ORDER BY recorded_at DESC, evidence_id DESC LIMIT {bounded}"
+        ).get("result", [])
+        return [self._evidence_from_row(row) for row in rows]
+
+    def claims_for_entity(
+        self, entity_id: str, direction: Literal["outgoing", "incoming", "both"], *, limit: int = 100
+    ) -> list[Claim]:
+        bounded = max(1, min(limit, 250))
+        rows: list[dict] = []
+        if direction in {"outgoing", "both"}:
+            rows.extend(self._command(
+                f"SELECT FROM V2Claim WHERE subject_entity_id = :entity_id "
+                f"ORDER BY recorded_at DESC LIMIT {bounded}",
+                {"entity_id": entity_id},
+            ).get("result", []))
+        if direction in {"incoming", "both"}:
+            rows.extend(self._command(
+                f"SELECT FROM V2Claim WHERE object_entity_id = :entity_id "
+                f"ORDER BY recorded_at DESC LIMIT {bounded}",
+                {"entity_id": entity_id},
+            ).get("result", []))
+        deduplicated = {row["claim_id"]: row for row in rows}
+        claims = [self._claim_from_row(row) for row in deduplicated.values()]
+        return sorted(
+            claims, key=lambda item: (item.recorded_at, item.claim_id), reverse=True
+        )[:bounded]
+
+    def evidence_for_claim(self, claim_id: str, *, limit: int = 20) -> list[Evidence]:
+        bounded = max(1, min(limit, 100))
+        rows = self._command(
+            f"SELECT FROM V2Evidence WHERE claim_id = :claim_id "
+            f"ORDER BY recorded_at DESC LIMIT {bounded}",
+            {"claim_id": claim_id},
         ).get("result", [])
         return [self._evidence_from_row(row) for row in rows]
 

@@ -127,7 +127,7 @@ The GPU development overlay defaults to cached `Qwen/Qwen3-8B` weights served
 by NVIDIA vLLM. It sets Hugging Face offline mode and provides no cloud or
 Ollama fallback.
 
-## Planned mining roles
+## Mining and query roles
 
 The field console configures the inference provider and selects a logical
 Bifrost provider/model name for embeddings. Operators own the embedding
@@ -140,6 +140,11 @@ than provider names:
 - extraction: high capability;
 - entity-resolution middle-band judge: low capability (implemented through the
   currently selected inference model; tier mapping remains planned);
+- grounded-query planner: selects only vector-retrieved entities and registered
+  relations (implemented through the currently selected inference model);
+- grounded-answer synthesizer: summarizes only the returned Claim/Evidence
+  bundle and emits validated citation handles (implemented through the
+  currently selected inference model);
 - episode summary: medium capability;
 - schema maintainer: high capability.
 
@@ -151,6 +156,13 @@ them to one model.
 Model assignment will run a small advisory self-test for structured output and
 required signals. Failure warns rather than blocks, and records the test-suite,
 model, and configuration versions.
+
+The query embedding contains only the user's question. A local planner and
+synthesizer keep all later material inside the instance. For a remote inference
+route, planning sends derived entity candidates and therefore requires every
+seed source to allow `derived_only` or `unrestricted`; synthesis sends raw
+Evidence excerpts and requires `unrestricted`. Loreholm rechecks those source
+classes for every query and fails closed before the disallowed model call.
 
 ## Planned budget enforcement
 

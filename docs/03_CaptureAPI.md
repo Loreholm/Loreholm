@@ -9,7 +9,8 @@ into knowledge server-side.
 
 ## Authentication
 
-`GET /v2/policy` and `POST /v2/captures` require the device bearer token:
+`GET /v2/policy`, `POST /v2/captures`, and `POST /v2/query` require the device
+bearer token:
 
 ```http
 Authorization: Bearer <LOREHOLM_V2_DEVICE_TOKEN>
@@ -54,6 +55,55 @@ Clients should refresh policy before uploading an offline queue. The instance
 also enforces `capture: false` as a defense-in-depth boundary. The planned spine
 will enforce the same rule locally and may always make instance policy stricter
 through a user pause or surface-specific control.
+
+## Query grounded knowledge
+
+```http
+POST /v2/query
+Content-Type: application/json
+```
+
+The natural-language query is embedded through Bifrost and searched against
+the mention-in-context vector region. Matching mentions are grouped by their
+resolved entity, a strict planner selects only returned entity IDs and
+registered relations, and Loreholm performs a bounded one-hop Claim traversal.
+The operation is read-only and never mints an entity.
+
+Example request:
+
+```json
+{
+  "query": "Where is the deployment data stored?",
+  "as_of": "2026-07-19T14:30:00Z",
+  "include_history": false,
+  "answer": true,
+  "candidate_limit": 10,
+  "minimum_seed_score": 0.45,
+  "max_claims": 20,
+  "max_evidence_per_claim": 3,
+  "token_budget": 1800,
+  "ambiguity_margin": 0.03
+}
+```
+
+Normal reads return only active Claims and Evidence applicable at `as_of`.
+`include_history` also permits superseded records but never returns deleted
+records. Evidence excerpts are reconstructed from the original capture and its
+stored source offsets. The response contains:
+
+- `status`: `ok`, `no_match`, or `no_evidence`;
+- optional synthesized `answer` and its validated `[E#]` `citations`;
+- ranked vector `seeds`, including the graph entities selected by the planner;
+- structured `claims` and source-linked `evidence`;
+- explicit ambiguity, temporal, conflict, extension, policy, and integrity
+  `warnings`; and
+- a `trace` with the embedding model, schema version, effective traversal,
+  `as_of`, truncation, and synthesis state.
+
+Set `answer` to `false` to receive the deterministic grounding bundle without
+a chat-completion call. A remote planner requires seed sources permitted for
+`derived_only` or `unrestricted` processing. Remote cited synthesis includes
+raw Evidence excerpts and requires `unrestricted` for every source capture.
 
 ## Submit captures
 

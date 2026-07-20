@@ -39,9 +39,10 @@ classification. Review captured records, logs, access, deletion expectations,
 and failure modes before connecting another source.
 
 The current browser-chat path can test capture, private routing, local storage,
-authentication, and model configuration. The evidence-backed mining and recall
-experience is still planned, so a pilot today evaluates the foundation and the
-trust boundary rather than a finished organizational knowledge product.
+authentication, model configuration, evidence-backed mining, and vector-seeded
+one-hop recall. Broader episode and multi-hop recall plus production lifecycle
+controls are still planned, so a pilot evaluates a bounded foundation and trust
+boundary rather than a finished organizational knowledge product.
 
 ## Deployment choices
 
@@ -96,5 +97,5 @@ yet. Before production adoption, an organization should require:
 
 The project documents planned behavior early so teams can evaluate the design,
 but every pilot should distinguish implemented candidate extraction, entity
-resolution, and deterministic Claim/Evidence commit from planned graph query
-and lifecycle capabilities.
+resolution, deterministic Claim/Evidence commit, and vector-seeded one-hop
+grounded query from planned multi-hop, broad recall, and lifecycle capabilities.

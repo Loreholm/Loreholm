@@ -32,13 +32,15 @@ The executable Loreholm foundation currently provides:
 - schema-backed deterministic Claims with first-class source Evidence;
 - durable maintenance notices, safe scoped re-mining, and compensating supersession;
 - conservatively admitted `ext:*` relations with reviewable promotion and revert history;
+- vector-seeded grounded graph queries with active-Claim filtering, source-span
+  Evidence, ambiguity warnings, and optional cited synthesis through Bifrost;
 - authenticated client policy sync; and
 - a self-contained ArcadeDB, instance API, and Bifrost deployment.
 
-Grounded query/surfacing, retention UI, sharing, backup, and client adapters are designed
-but are not implemented in this milestone. Extraction and identity output remain
-versioned candidate data until the instance validates them against its relation
-schema and commits an evidence-backed Claim.
+Retention UI, sharing, backup, and client adapters are designed but are not
+implemented in this milestone. Extraction and identity output remain versioned
+candidate data until the instance validates them against its relation schema and
+commits an evidence-backed Claim; grounded query reads only those committed records.
 
 ## Architecture
 
@@ -60,6 +62,9 @@ instance API  ---> ArcadeDB staging ---> admission queue ---> salience gate
       |                                      |
       |                                      v
       |                               Claims + Evidence
+      |                                      |
+      |                                      v
+      |                               grounded query
       |
       +-------> Bifrost ---> user-configured model endpoints
 ```
@@ -202,7 +207,7 @@ python3 -m venv /tmp/loreholm-v2-tests
 /tmp/loreholm-v2-tests/bin/python -m pytest api/tests/test_v2_capture.py -q
 ```
 
-Expected result: `4 passed`.
+Expected result: `58 passed`.
 
 ## Troubleshooting
 

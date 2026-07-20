@@ -27,6 +27,8 @@ from .models import (
     ExtensionPromotion,
     ExtensionRelationView,
     ExtensionRevert,
+    GroundedQueryRequest,
+    GroundedQueryResponse,
     InstancePolicy,
     MaintenanceNoticeView,
     MiningRunView,
@@ -39,6 +41,7 @@ from .claims import ClaimCommitter, extraction_schema_prompt, load_relation_sche
 from .maintenance import KnowledgeMaintainer
 from .mining import BifrostExtractionGateway, MiningWorker
 from .resolution import BifrostResolutionGateway, EntityResolver
+from .query import BifrostQueryGateway, GroundedQueryService
 from .router import get_capture_service, require_device_token, router
 from .salience import SalienceWorker
 from .service import ArcadeCaptureStore, CaptureService
@@ -114,6 +117,13 @@ def create_app() -> FastAPI:
         endpoint=selected_endpoint,
         resolver=resolver,
         committer=committer,
+    ) if store else None
+    query_service = GroundedQueryService(
+        store,
+        BifrostQueryGateway(bifrost_url, bifrost_auth),
+        relation_schema,
+        policy=lambda: service.policy,
+        endpoint=selected_endpoint,
     ) if store else None
 
     def bifrost_request(method: str, path: str, **kwargs) -> httpx.Response:
@@ -219,6 +229,20 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_capture_service] = service_dependency
     app.dependency_overrides[require_device_token] = auth_dependency
     app.include_router(router)
+
+    @app.post("/v2/query", response_model=GroundedQueryResponse)
+    def grounded_query(
+        payload: GroundedQueryRequest,
+        _: None = Depends(require_device_token),
+    ) -> GroundedQueryResponse:
+        if query_service is None:
+            raise HTTPException(status_code=503, detail="ArcadeDB storage is not configured")
+        try:
+            return query_service.query(payload)
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except (RuntimeError, ValueError) as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     def require_admin(authorization: str | None = Header(default=None)) -> None:
         if not admin_digest:

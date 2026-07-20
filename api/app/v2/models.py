@@ -205,6 +205,102 @@ class EvidenceView(BaseModel):
     recorded_at: datetime
 
 
+class GroundedQueryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=1, max_length=5_000)
+    as_of: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    include_history: bool = False
+    answer: bool = True
+    candidate_limit: int = Field(default=10, ge=2, le=25)
+    minimum_seed_score: float = Field(default=0.45, ge=-1, le=1)
+    max_claims: int = Field(default=20, ge=1, le=100)
+    max_evidence_per_claim: int = Field(default=3, ge=1, le=10)
+    token_budget: int = Field(default=1_800, ge=256, le=16_000)
+    ambiguity_margin: float = Field(default=0.03, ge=0, le=0.25)
+
+    @field_validator("as_of")
+    @classmethod
+    def require_query_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("as_of must include a timezone")
+        return value.astimezone(timezone.utc)
+
+
+class QuerySeedView(BaseModel):
+    entity_id: str
+    canonical_surface: str
+    entity_type: str
+    score: float
+    best_vector_score: float
+    hit_count: int
+    mention_surfaces: list[str]
+    selected: bool
+
+
+class GroundedClaimView(BaseModel):
+    claim_id: str
+    subject: EntityView
+    relation: str
+    object_kind: Literal["entity", "literal"]
+    object_entity: EntityView | None
+    object_literal: str | None
+    valid_from: datetime | None
+    valid_to: datetime | None
+    recorded_at: datetime
+    statefulness: Literal["stateful", "eventive"]
+    cardinality: Literal["one", "many"]
+    schema_version: str
+    lifecycle: Literal["active", "superseded", "deleted"]
+    evidence_ids: list[str]
+
+
+class GroundedEvidenceView(BaseModel):
+    citation: str
+    evidence_id: str
+    claim_id: str
+    capture_id: str
+    excerpt: str
+    source_start: int
+    source_end: int
+    surface: str
+    session_ref: str | None
+    occurred_at: datetime
+    normalized_at: datetime
+    run_id: str
+    miner_version: str
+    schema_version: str
+    lifecycle: Literal["active", "superseded", "deleted"]
+
+
+class QueryWarningView(BaseModel):
+    code: str
+    detail: str
+    claim_ids: list[str] = Field(default_factory=list)
+    entity_ids: list[str] = Field(default_factory=list)
+
+
+class QueryTraceView(BaseModel):
+    embedding_model: str
+    schema_version: str
+    as_of: datetime
+    direction: Literal["outgoing", "incoming", "both"]
+    relations: list[str]
+    truncated: bool
+    synthesis: Literal["completed", "not_requested", "no_evidence"]
+
+
+class GroundedQueryResponse(BaseModel):
+    status: Literal["ok", "no_match", "no_evidence"]
+    answer: str | None
+    citations: list[str]
+    seeds: list[QuerySeedView]
+    claims: list[GroundedClaimView]
+    evidence: list[GroundedEvidenceView]
+    warnings: list[QueryWarningView]
+    trace: QueryTraceView
+
+
 class ReminingCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

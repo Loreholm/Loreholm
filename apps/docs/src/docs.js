@@ -32,7 +32,7 @@ export const documents = [
     id: 'architecture', file: '01_Architecture.md', numeral: 'II', title: 'Architecture',
     short: 'See the whole machine before opening it.', region: 'threshold', status: 'mixed', depth: 1,
     time: '8 min', color: '#d9f99d', raw: architecture,
-    summary: 'How passive capture, durable extraction, the private network, and the planned graph-building pipeline fit together.',
+    summary: 'How passive capture, durable extraction, the private network, and vector-seeded grounded graph query fit together.',
   },
   {
     id: 'networking', file: '02_Networking.md', numeral: 'III', title: 'Private Network',
@@ -80,7 +80,7 @@ export const documents = [
     id: 'mining', file: '07_MiningAndKnowledge.md', numeral: 'X', title: 'Mining & Knowledge',
     short: 'Descend into identity, evidence, and time.', region: 'depths', status: 'mixed', depth: 5,
     time: '14 min', color: '#e87951', raw: mining,
-    summary: 'Implemented admission, extraction, identity, evidence-backed commit, and compensating maintenance; grounded surfacing remains planned.',
+    summary: 'Implemented admission, extraction, identity, evidence-backed commit, maintenance, and vector-seeded one-hop grounded surfacing.',
   },
   {
     id: 'lifecycle', file: '08_DataLifecycle.md', numeral: 'XI', title: 'Data Lifecycle',
@@ -239,7 +239,7 @@ export const adventureNodes = {
       'A chunk knows where it came from, but usually not what role it plays in the larger story. Similar passages may flood results, changed facts may compete without time attached, and a retrieved paragraph may not say which person or decision it concerns.',
       'Loreholm keeps raw source material for inspection, but creates vectors only for selected derived records such as mentions in context. Retrieval becomes one instrument for resolving and finding knowledge—not the database’s definition of truth.',
     ],
-    status: 'planned', docs: ['mining', 'architecture'], scene: 'evidence',
+    status: 'implemented', docs: ['mining', 'architecture'], scene: 'evidence',
     options: [
       {next: 'salience'},
       {next: 'identity'},
@@ -301,10 +301,10 @@ export const adventureNodes = {
   graphagent: {
     depth: 3, eyebrow: 'A cartographer with one purpose', question: 'Why give graph building its own specialist?',
     answer: [
-      'A source integration sees only one narrow slice of work, so it should not decide graph truth. The graph-building specialist can look across mined candidates, stable identities, relation rules, time, and existing claims before making a connection.',
+      'A source integration sees only one narrow slice of work, so it does not decide graph truth. The implemented instance pipeline looks across mined candidates, stable identities, relation rules, time, and existing claims before making a connection.',
       'It receives rich metadata telling it where an observation came from, when it applied, what evidence supports it, and which schema shapes are allowed. Deterministic validation still guards the final commit, so an LLM suggestion is not automatically accepted as fact. Keeping this responsibility inside the instance also means every connected tool benefits when graph policy improves.',
     ],
-    status: 'planned', docs: ['mining', 'architecture', 'clients'], scene: 'evidence',
+    status: 'implemented', docs: ['mining', 'architecture', 'clients'], scene: 'evidence',
     options: [
       {next: 'mining'},
       {next: 'identity'},
@@ -315,7 +315,7 @@ export const adventureNodes = {
     depth: 1, eyebrow: 'Choose the right expedition', question: 'Who is this for?',
     answer: [
       'Loreholm is for people who use LLMs as part of real work and keep losing valuable context at the edge of each conversation. It is especially relevant when decisions, relationships, changing facts, and their sources matter more than finding one matching paragraph.',
-      'An individual can use it as private long-term working memory. A team or organization can use the same boundaries to keep each knowledge world under its own policy and infrastructure. At this stage, it is best suited to technical early adopters and organizations willing to operate a bounded pilot while the complete mining and recall experience is still being built.',
+      'An individual can use it as private long-term working memory. A team or organization can use the same boundaries to keep each knowledge world under its own policy and infrastructure. At this stage, it is best suited to technical early adopters and bounded pilots: one-hop evidence-backed recall works, while broader recall, lifecycle, and correction remain incomplete.',
     ],
     status: 'mixed', docs: ['architecture', 'organizations', 'chat'], scene: 'recall',
     options: [
@@ -354,7 +354,7 @@ export const adventureNodes = {
     depth: 1, eyebrow: 'Bring the memory inside your walls', question: 'Can I use this in my organization?',
     answer: [
       'Yes—especially as a bounded technical pilot for an organization that already uses LLMs and wants durable context under its own control. Each private instance can keep its raw context, future knowledge, policy, and model configuration on organization-managed infrastructure.',
-      'The organization may use Loreholm’s front door or operate the complete server plane itself. The current foundation can demonstrate authentication, private routing, browser-chat capture, storage, and model configuration. It should not yet be treated as mission-critical organizational memory because evidence-backed recall, supported backup and restore, retention workflows, and production operations are still incomplete.',
+      'The organization may use Loreholm’s front door or operate the complete server plane itself. The current foundation can demonstrate authentication, private routing, browser-chat capture, storage, model configuration, and vector-seeded one-hop answers with inspectable Evidence. It should not yet be treated as mission-critical organizational memory because broad recall, supported backup and restore, retention workflows, and production operations are still incomplete.',
     ],
     status: 'mixed', docs: ['organizations', 'self-hosting', 'security'], scene: 'privacy',
     options: [
@@ -367,7 +367,7 @@ export const adventureNodes = {
     depth: 2, eyebrow: 'A first voyage with clear shores', question: 'What would a sensible organizational pilot look like?',
     answer: [
       'Choose a small group, non-critical work, and one bounded source such as Loreholm browser chat. Decide what you want to recover later—a decision, a changing fact, or the evidence behind a recommendation—before collecting anything.',
-      'Run the instance on organization-controlled infrastructure, choose a model route appropriate for the data, and review the network and capture boundaries. Measure reliability and operator burden now, while treating graph-backed recall as the planned outcome rather than a feature already delivered.',
+      'Run the instance on organization-controlled infrastructure, choose a model route appropriate for the data, and review the network and capture boundaries. Exercise the implemented one-hop grounded query path, inspect its seed ambiguity and Evidence, and measure reliability while treating multi-hop and broad episode recall as later work.',
     ],
     status: 'mixed', docs: ['organizations', 'operations', 'security'], scene: 'builder',
     options: [
@@ -523,9 +523,9 @@ export const adventureNodes = {
     depth: 1, eyebrow: 'More than finding words', question: 'How is Loreholm different from searching my notes or chat history?',
     answer: [
       'Search is excellent at finding matching words. Loreholm aims to remember meaning across sources: that two names refer to the same person, that a decision replaced an older one, or that an answer rests on several pieces of evidence.',
-      'It is the difference between finding old pages and asking a careful librarian what the pages collectively say—and being able to inspect the pages afterward.',
+      'The implemented one-hop query path now does this for graph-shaped questions: a question vector locates a resolved entity, active Claims provide the meaning, and exact Evidence spans remain inspectable. Broader episode and multi-hop questions remain later work.',
     ],
-    status: 'planned', docs: ['mining', 'architecture'], scene: 'evidence',
+    status: 'mixed', docs: ['mining', 'architecture'], scene: 'evidence',
     options: [
       {next: 'search'},
       {next: 'time'},
@@ -536,9 +536,9 @@ export const adventureNodes = {
     depth: 2, eyebrow: 'Finding versus understanding', question: 'When is ordinary search enough—and when is Loreholm useful?',
     answer: [
       'If you remember a phrase or filename, ordinary search may be the fastest tool. Loreholm becomes useful when your question depends on connections: reasons, people, changing facts, or evidence spread across several moments.',
-      'Loreholm should not replace search. It should add a deeper kind of recall for questions that keywords alone cannot answer well.',
+      'Loreholm should not replace search. Its current grounded endpoint handles bounded one-hop Claim relationships with source citations; broad transcript and multi-hop recall are not implemented yet.',
     ],
-    status: 'planned', docs: ['mining'], scene: 'evidence',
+    status: 'mixed', docs: ['mining'], scene: 'evidence',
     options: [
       {next: 'knowledge'},
       {next: 'recall'},
@@ -549,9 +549,9 @@ export const adventureNodes = {
     depth: 2, eyebrow: 'Truth that can change', question: 'Can Loreholm remember that something used to be true?',
     answer: [
       'That is part of the design. “Maya leads the project” and “Maya led the project last year” should not overwrite each other or become a contradiction. Each understanding can carry the period when it applied.',
-      'This time-aware knowledge model is designed, but the system that builds and queries it is not yet implemented.',
+      'The system now builds time-aware Claims and applies `valid_from`, `valid_to`, lifecycle, and an explicit `as_of` during one-hop grounded queries. Rich historical comparison and correction interfaces remain planned.',
     ],
-    status: 'planned', docs: ['mining', 'architecture'], scene: 'evidence',
+    status: 'mixed', docs: ['mining', 'architecture'], scene: 'evidence',
     options: [
       {next: 'knowledge'},
       {next: 'identity'},
@@ -575,7 +575,7 @@ export const adventureNodes = {
     depth: 1, eyebrow: 'What is real now', question: 'Where is this project at?',
     answer: [
       'Loreholm is at the working-foundation stage, not at the finished-product stage. You can run a containerized private instance, authenticate clients, accept and safely stage context, configure model routing, and protect remote access behind the private network.',
-      'Browser chat already captures both sides of a conversation without a separate save command. The instance also admits salient context, extracts source-linked candidates, resolves mentions to stable entities, and commits schema-valid Claims with first-class Evidence. Lifecycle tools and natural-language surfacing remain accepted design. That makes the project useful today for technical evaluation and bounded pilots, but not yet as the only memory system an individual or organization depends on.',
+      'Browser chat already captures both sides of a conversation without a separate save command. The instance admits salient context, resolves mentions to stable entities, commits schema-valid Claims with first-class Evidence, and answers bounded one-hop questions by using mention vectors to find the first graph node. Lifecycle tools, multi-hop traversal, and broad episode recall remain accepted design. That makes the project useful today for technical evaluation and bounded pilots, but not yet as the only memory system an individual or organization depends on.',
     ],
     status: 'mixed', docs: ['operations', 'architecture', 'chat'], scene: 'builder',
     options: [
@@ -601,7 +601,7 @@ export const adventureNodes = {
     depth: 3, eyebrow: 'The intelligence behind the work', question: 'Does Loreholm require sending everything to a large online AI model?',
     answer: [
       'No. The design allows local models, remote models you explicitly permit, or a mixture based on the kind of task and your policy. Some jobs may need more capable models; others can remain entirely local.',
-      'The routing foundation exists. The complete controls, budgets, and mining workflow that use it are still partly planned.',
+      'The routing, extraction, resolution, commit, maintenance, query-planning, and cited-synthesis paths exist. Budget enforcement, model-tier assignment, and some richer egress controls remain planned.',
     ],
     status: 'mixed', docs: ['policy', 'development'], scene: 'privacy',
     options: [
@@ -626,7 +626,7 @@ export const adventureNodes = {
   technical: {
     depth: 3, eyebrow: 'The path beneath the floorboards', question: 'I understand the promise. How is the system divided up?',
     answer: [
-      'Connected tools observe context. A shared client layer packages and delivers it. Your instance authenticates and stores it. A future knowledge-building service interprets it and becomes the only component allowed to change the knowledge graph.',
+      'Connected tools observe context. A shared client layer packages and delivers it. Your instance authenticates and stores it. The implemented instance-owned mining pipeline interprets admitted context and is the only component allowed to change the knowledge graph; grounded query reads that graph without mutating it.',
       'That separation keeps individual integrations simple and keeps privacy, identity, evidence, and knowledge rules in one place.',
     ],
     status: 'mixed', docs: ['architecture', 'clients'], scene: 'builder',
@@ -678,8 +678,8 @@ export const adventureNodes = {
   recall: {
     depth: 2, eyebrow: 'The future payoff', question: 'How could one conversation help me three weeks later?',
     answer: [
-      'Imagine saying, “Keep this part local; privacy matters more than the small accuracy gain.” Loreholm keeps the conversation now. Later, it could recognize the decision, its reason, and when it happened.',
-      'When future-you asks why the choice was made, Loreholm could answer and open the exact conversation behind that answer. Saving the conversation works today; the deeper answer is still planned.',
+      'Imagine saying, “Keep this part local; privacy matters more than the small accuracy gain.” Loreholm can keep the conversation, mine an evidence-backed Claim, and retain when it applied.',
+      'When future-you asks a graph-shaped question, the implemented query path embeds the question, locates a resolved entity through mention vectors, traverses adjacent active Claims, and can answer with citations that reopen the exact capture span. Broader episode-style recall remains planned.',
     ],
     status: 'mixed', docs: ['chat', 'mining', 'architecture'], scene: 'recall',
     options: [
@@ -744,7 +744,7 @@ export const adventureNodes = {
     depth: 4, eyebrow: 'Model egress', question: 'Under what policy could saved context reach a remote AI model?',
     answer: [
       'Instance policy owns that choice. The accepted modes range from local-only processing to explicitly allowed remote processing, with capture classes and model roles evaluated before egress.',
-      'Bifrost provides the routing seam. Complete budget enforcement and every planned egress control are not implemented yet, so the field guide separates present behavior from accepted design.',
+      'Bifrost provides the routing seam. Remote query planning requires derived-capable seed sources, while remote answer synthesis requires unrestricted raw Evidence egress. Complete budget enforcement and every planned egress control are not implemented yet.',
     ],
     status: 'mixed', docs: ['policy', 'security'], scene: 'privacy',
     options: [
@@ -757,7 +757,7 @@ export const adventureNodes = {
     depth: 5, eyebrow: 'No silent road to the cloud', question: 'How is local-only model processing enforced?',
     answer: [
       'Instance policy records a remote-processing mode for each capture class, including `local_only`. The structured extractor now checks current capture policy, the operator-declared processing location, and every source class before it sends bounded input through Bifrost.',
-      'A remote endpoint receives raw extraction input only when every involved class is `unrestricted`; `local_only`, `sanitized_remote`, and `derived_only` fail closed today. The reusable client spine is still planned, so pre-upload enforcement is not yet universal.',
+      'A remote endpoint receives raw extraction input only when every involved class is `unrestricted`; `local_only`, `sanitized_remote`, and `derived_only` fail closed for extraction. Remote query planning accepts `derived_only` or `unrestricted` seed sources, but cited synthesis requires `unrestricted` because exact Evidence excerpts leave. The reusable client spine is still planned, so pre-upload enforcement is not yet universal.',
     ],
     status: 'mixed', docs: ['policy', 'security', 'clients'], scene: 'privacy',
     options: [
@@ -769,8 +769,8 @@ export const adventureNodes = {
   minerrole: {
     depth: 5, eyebrow: 'Models with bounded assignments', question: 'What does the miner need a model for?',
     answer: [
-      'The first model-backed role extracts versioned episodes, mentions, temporal signals, and candidate claims from admitted context. A second bounded role judges only ambiguous identity matches: it may select one retrieved entity ID or ask Loreholm to mint a new entity. Summaries and tier-to-model assignment remain planned roles.',
-      'Mechanical trimming, salience admission, strict output validation, vector/string thresholds, incremental idempotency, relation-schema checks, Claim/Evidence commit, maintenance notices, and compensating supersession remain deterministic. New ext:* relations enter conservatively and promotion or revert requires an operator-recorded Git commit. Extraction, embeddings, and ambiguous judgments pass through Bifrost; graph writes do not require another model call.',
+      'The first model-backed role extracts versioned episodes, mentions, temporal signals, and candidate claims from admitted context. A second bounded role judges only ambiguous identity matches. Query-time roles embed the question, select only vector-returned entities and registered relations, and optionally synthesize from a fixed Claim/Evidence bundle. Summaries and tier-to-model assignment remain planned roles.',
+      'Mechanical trimming, salience admission, strict output validation, vector/string thresholds, incremental idempotency, relation-schema checks, Claim/Evidence commit, maintenance, graph traversal, and citation validation remain deterministic. Extraction, embeddings, bounded judgments, planning, and optional prose pass through Bifrost; graph writes do not require a model call.',
     ],
     status: 'mixed', docs: ['policy', 'mining'], scene: 'evidence',
     options: [
@@ -809,7 +809,7 @@ export const adventureNodes = {
     depth: 3, eyebrow: 'From history to meaning', question: 'How does saved history become connected knowledge?',
     answer: [
       'Saved history preserves what happened. It does not automatically know that two names mean the same person, that a statement replaced an older one, or which source supports a conclusion.',
-      'Loreholm now selects admitted context, extracts source-linked episode, mention, and candidate-claim records, connects mentions to stable entities through an audited vector/string resolver, and commits time-aware Claims only after deterministic schema and evidence validation. It also records temporal gaps and competing state, safely re-mines a selected scope, and supersedes only unsupported old evidence after replacement succeeds. Surfacing grounded answers remains planned.',
+      'Loreholm now selects admitted context, extracts source-linked episode, mention, and candidate-claim records, connects mentions to stable entities through an audited vector/string resolver, and commits time-aware Claims only after deterministic schema and evidence validation. A query embedding then locates the first graph entity through those mention vectors, traverses bounded active Claims, hydrates exact Evidence spans, and can synthesize only citation-validated answers.',
     ],
     status: 'mixed', docs: ['mining', 'architecture'], scene: 'evidence',
     options: [
@@ -848,7 +848,7 @@ export const adventureNodes = {
     depth: 4, eyebrow: 'Trust, but inspect', question: 'How is a graph claim tied back to inspectable evidence?',
     answer: [
       'Claims link many-to-many with first-class Evidence records. Evidence points back to the capture, source span, mining lineage, and lifecycle state that justify the claim.',
-      'Structured extraction validates that candidate citations belong to the new evidence-eligible capture delta. The committer stores each accepted source span, capture ID, mining run, miner version, schema version, lifecycle state, and record time as first-class Evidence without duplicating the source excerpt. The grounded query experience that uses these records is still planned.',
+      'Structured extraction validates that candidate citations belong to the new evidence-eligible capture delta. The committer stores each accepted source span, capture ID, mining run, miner version, schema version, lifecycle state, and record time as first-class Evidence without duplicating the source excerpt. Grounded query now reconstructs those excerpts from raw captures and rejects synthesized citations outside the returned bundle.',
     ],
     status: 'mixed', docs: ['mining', 'lifecycle', 'architecture'], scene: 'evidence',
     options: [
@@ -926,7 +926,7 @@ export const adventureNodes = {
     depth: 3, eyebrow: 'Raise the world', question: 'What services and operations exist in the current foundation?',
     answer: [
       'The current foundation installs a containerized Loreholm instance, generates separated credentials, exposes the authenticated instance boundary through the tunnel shim, persists captures in ArcadeDB, assembles transcript sessions, records deterministic salience, and runs policy-gated structured extraction and entity resolution through Bifrost.',
-      'It also validates and commits schema-backed Claims with source Evidence. The reusable client spine, retention coordinator, and evidence-backed recall experience remain clearly marked planned work.',
+      'It also validates and commits schema-backed Claims with source Evidence, then exposes vector-seeded one-hop grounded query with optional cited synthesis. The reusable client spine, retention coordinator, broad episode recall, and correction experience remain clearly marked planned work.',
     ],
     status: 'implemented', docs: ['operations', 'development', 'architecture'], scene: 'builder',
     options: [
