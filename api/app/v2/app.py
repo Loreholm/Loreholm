@@ -24,12 +24,19 @@ from .models import (
     ClaimView,
     EntityView,
     EvidenceView,
+    ExtensionPromotion,
+    ExtensionRelationView,
+    ExtensionRevert,
     InstancePolicy,
+    MaintenanceNoticeView,
     MiningRunView,
     ModelEndpointConfig,
+    ReminingCreate,
+    ReminingView,
     ResolvedMentionView,
 )
 from .claims import ClaimCommitter, extraction_schema_prompt, load_relation_schema
+from .maintenance import KnowledgeMaintainer
 from .mining import BifrostExtractionGateway, MiningWorker
 from .resolution import BifrostResolutionGateway, EntityResolver
 from .router import get_capture_service, require_device_token, router
@@ -84,6 +91,7 @@ def create_app() -> FastAPI:
     resolution_gateway = BifrostResolutionGateway(bifrost_url, bifrost_auth)
     resolver = EntityResolver(store, resolution_gateway) if store else None
     committer = ClaimCommitter(store, relation_schema) if store else None
+    maintainer = KnowledgeMaintainer(store, relation_schema) if store else None
 
     def selected_endpoint() -> ModelEndpointConfig:
         stored = service.store.get_config("model_endpoint") if service is not None else None
@@ -279,7 +287,10 @@ def create_app() -> FastAPI:
 
     @app.get("/v2/admin/knowledge/schema")
     def knowledge_schema(_: None = Depends(require_admin)) -> dict:
-        return relation_schema.model_dump(mode="json")
+        return {
+            **relation_schema.model_dump(mode="json"),
+            "extensions": [item.__dict__ for item in service.store.list_extension_relations(limit=250)],
+        }
 
     @app.get("/v2/admin/knowledge/claims", response_model=list[ClaimView])
     def claims(limit: int = 50, _: None = Depends(require_admin)) -> list[ClaimView]:
@@ -294,6 +305,71 @@ def create_app() -> FastAPI:
             EvidenceView.model_validate(item.__dict__)
             for item in service.store.list_evidence(limit=limit)
         ]
+
+    @app.get("/v2/admin/maintenance/notices", response_model=list[MaintenanceNoticeView])
+    def maintenance_notices(
+        limit: int = 50, _: None = Depends(require_admin)
+    ) -> list[MaintenanceNoticeView]:
+        return [
+            MaintenanceNoticeView.model_validate(item.__dict__)
+            for item in service.store.list_maintenance_notices(limit=limit)
+        ]
+
+    @app.get("/v2/admin/maintenance/remining", response_model=list[ReminingView])
+    def remining_requests(
+        limit: int = 50, _: None = Depends(require_admin)
+    ) -> list[ReminingView]:
+        return [
+            ReminingView.model_validate(item.__dict__)
+            for item in service.store.list_remining_requests(limit=limit)
+        ]
+
+    @app.post("/v2/admin/maintenance/remining", response_model=ReminingView)
+    def request_remining(
+        payload: ReminingCreate, _: None = Depends(require_admin)
+    ) -> ReminingView:
+        try:
+            request = maintainer.request_remining(payload.source_run_id, payload.reason)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return ReminingView.model_validate(request.__dict__)
+
+    @app.get("/v2/admin/knowledge/extensions", response_model=list[ExtensionRelationView])
+    def extension_relations(
+        limit: int = 100, _: None = Depends(require_admin)
+    ) -> list[ExtensionRelationView]:
+        return [
+            ExtensionRelationView.model_validate(item.__dict__)
+            for item in service.store.list_extension_relations(limit=limit)
+        ]
+
+    @app.post(
+        "/v2/admin/knowledge/extensions/{relation}/promote",
+        response_model=ExtensionRelationView,
+    )
+    def promote_extension(
+        relation: str, payload: ExtensionPromotion, _: None = Depends(require_admin)
+    ) -> ExtensionRelationView:
+        try:
+            item = maintainer.promote_extension(
+                relation, payload.core_relation, payload.schema_commit
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return ExtensionRelationView.model_validate(item.__dict__)
+
+    @app.post(
+        "/v2/admin/knowledge/extensions/{relation}/revert",
+        response_model=ExtensionRelationView,
+    )
+    def revert_extension(
+        relation: str, payload: ExtensionRevert, _: None = Depends(require_admin)
+    ) -> ExtensionRelationView:
+        try:
+            item = maintainer.revert_extension(relation, payload.schema_commit)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return ExtensionRelationView.model_validate(item.__dict__)
 
     @app.put("/v2/admin/model")
     def configure_model(config: ModelEndpointConfig, _: None = Depends(require_admin)) -> dict:

@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from app.v2.claims import ClaimCommitter, load_relation_schema
 from app.v2.mining import BifrostExtractionGateway, MiningRunCoordinator, MiningWorker
+from app.v2.maintenance import KnowledgeMaintainer
 from app.v2.models import CaptureEnvelope, InstancePolicy, ModelEndpointConfig
 from app.v2.resolution import (
     BifrostResolutionGateway,
@@ -984,6 +985,75 @@ def test_claim_commit_is_schema_backed_and_idempotent() -> None:
     assert evidence.run_id == run.run_id
     assert store.list_claims(limit=1) == [claim]
     assert store.list_evidence(limit=1) == [evidence]
+    notices = store.list_maintenance_notices()
+    assert len(notices) == 1
+    assert notices[0].kind == "missing_temporal_bounds"
+    assert notices[0].claim_id == claim.claim_id
+
+
+def test_scoped_remining_keeps_old_claim_until_replacement_commit() -> None:
+    policy = InstancePolicy(mining_status="active")
+    store, policy, capture, now = admitted_mining_fixture(policy)
+    first_output = extraction_for(capture.capture_id)
+    replacement_output = json.loads(json.dumps(first_output))
+    replacement_output["candidate_claims"][0]["object"] = "remote"
+    gateway = StubExtractionGateway([first_output, replacement_output])
+    worker = MiningWorker(
+        store, gateway, worker_id="mining-a", policy=lambda: policy,
+        endpoint=lambda: ModelEndpointConfig(embedding_dimensions=3),
+        resolver=EntityResolver(store, StubResolutionGateway([[1.0, 0.0, 0.0]])),
+        committer=ClaimCommitter(store),
+    )
+    source_run = worker.process_once(now)[0]
+    source_claim = store.claims[0]
+    request = KnowledgeMaintainer(store, load_relation_schema()).request_remining(
+        source_run.run_id, "Correct the storage location", now=now + timedelta(seconds=1)
+    )
+
+    assert source_claim.lifecycle == "active"
+    assert store.evidence_records[0].lifecycle == "active"
+    replacement_run = worker.process_once(now + timedelta(seconds=1))[0]
+
+    assert replacement_run.run_id != source_run.run_id
+    assert gateway.calls[1][0].parent_run_id is None
+    assert gateway.calls[1][0].evidence_eligible_capture_ids == [capture.capture_id]
+    assert {item.object_literal for item in store.claims if item.lifecycle == "active"} == {"remote"}
+    assert next(item for item in store.claims if item.claim_id == source_claim.claim_id).lifecycle == "superseded"
+    completed = store.list_remining_requests()[0]
+    assert completed.status == "completed"
+    assert completed.replacement_run_id == replacement_run.run_id
+    assert any(item.kind == "remining_applied" for item in store.list_maintenance_notices())
+
+
+def test_extension_relation_is_conservatively_admitted_promoted_and_reverted() -> None:
+    store, policy, _, run = successful_extraction_run()
+    output = json.loads(json.dumps(run.output))
+    output["candidate_claims"][0]["relation"] = "ext:resides_on"
+    changed = replace(run, run_id="extension-run", run_key="extension-key", output=output)
+    EntityResolver(store, StubResolutionGateway([[1.0, 0.0, 0.0]])).resolve_run(
+        changed, ModelEndpointConfig(embedding_dimensions=3), policy
+    )
+    claim = ClaimCommitter(store).commit_run(changed).claims[0]
+    extension = store.get_extension_relation("ext:resides_on")
+
+    assert extension is not None
+    assert extension.status == "admitted"
+    assert extension.definition["statefulness"] == "eventive"
+    assert extension.definition["cardinality"] == "many"
+    assert claim.relation == "ext:resides_on"
+
+    maintainer = KnowledgeMaintainer(store, load_relation_schema())
+    promoted = maintainer.promote_extension(
+        "ext:resides_on", "storage_location", "abcdef1", now=run.completed_at
+    )
+    assert promoted.status == "promoted"
+    assert promoted.migration_plan["strategy"] == "alias_then_reprocess"
+    reverted = maintainer.revert_extension(
+        "ext:resides_on", "abcdef2", now=run.completed_at + timedelta(seconds=1)
+    )
+    assert reverted.status == "reverted"
+    assert store.claims[0].lifecycle == "superseded"
+    assert store.evidence_records[0].lifecycle == "superseded"
 
 
 def test_unknown_relation_fails_closed_without_graph_writes() -> None:

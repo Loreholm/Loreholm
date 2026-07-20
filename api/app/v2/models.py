@@ -203,3 +203,60 @@ class EvidenceView(BaseModel):
     schema_version: str
     lifecycle: Literal["active", "superseded", "deleted"]
     recorded_at: datetime
+
+
+class ReminingCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_run_id: str = Field(min_length=1, max_length=128)
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class ReminingView(BaseModel):
+    request_id: str
+    source_run_id: str
+    salience_id: str
+    scope_id: str
+    reason: str
+    status: Literal["pending", "completed", "failed"]
+    replacement_run_id: str | None
+    created_at: datetime
+    completed_at: datetime | None
+    error: str | None
+
+
+class MaintenanceNoticeView(BaseModel):
+    notice_id: str
+    kind: Literal["missing_temporal_bounds", "competing_single_value", "remining_applied"]
+    status: Literal["open", "resolved"]
+    scope_id: str
+    claim_id: str | None
+    run_id: str | None
+    details: dict[str, Any]
+    created_at: datetime
+    resolved_at: datetime | None
+
+
+class ExtensionRelationView(BaseModel):
+    relation: str
+    definition: dict[str, Any]
+    status: Literal["admitted", "promoted", "reverted"]
+    schema_version: str
+    promoted_relation: str | None
+    schema_commit: str | None
+    migration_plan: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+
+
+class ExtensionPromotion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    core_relation: str = Field(pattern=r"^[a-z][a-z0-9_]{1,127}$")
+    schema_commit: str = Field(pattern=r"^[0-9a-f]{7,64}$")
+
+
+class ExtensionRevert(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_commit: str = Field(pattern=r"^[0-9a-f]{7,64}$")

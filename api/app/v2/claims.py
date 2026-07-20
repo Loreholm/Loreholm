@@ -13,7 +13,16 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .mining import ClaimCandidate, ExtractionOutput
 from .resolution import normalize_surface
-from .service import CaptureStore, Claim, Evidence, MiningRun, ResolvedMention, _new_uuid7
+from .service import (
+    CaptureStore,
+    Claim,
+    Evidence,
+    ExtensionRelation,
+    MaintenanceNotice,
+    MiningRun,
+    ResolvedMention,
+    _new_uuid7,
+)
 
 
 COMMITTER_VERSION = "claim-committer-v1"
@@ -100,15 +109,68 @@ class ClaimCommitter:
     def schema_version(self) -> str:
         return self.schema.schema_version
 
+    def _relation_definition(
+        self, candidate: ClaimCandidate, output: ExtractionOutput, *, admit: bool
+    ) -> tuple[str, RelationDefinition, str]:
+        definition = self.schema.relations.get(candidate.relation)
+        if definition is not None:
+            return candidate.relation, definition, self.schema.schema_version
+        extension = self.store.get_extension_relation(candidate.relation)
+        if extension is not None and extension.status != "reverted":
+            if extension.status == "promoted" and extension.promoted_relation:
+                promoted = self.schema.relations.get(extension.promoted_relation)
+                if promoted is None:
+                    raise ValueError("extension promotion target is absent from the core schema")
+                return extension.promoted_relation, promoted, extension.schema_version
+            return candidate.relation, RelationDefinition.model_validate(extension.definition), extension.schema_version
+        if not candidate.relation.startswith("ext:"):
+            raise ValueError(
+                f"relation is not registered in {self.schema.schema_version}: {candidate.relation}"
+            )
+        related = [item for item in output.candidate_claims if item.relation == candidate.relation]
+        subject_surfaces = {normalize_surface(item.subject) for item in related}
+        object_surfaces = {
+            normalize_surface(item.object) for item in related if item.object_kind == "entity"
+        }
+        subject_types = sorted({
+            mention.entity_type for mention in output.mentions
+            if normalize_surface(mention.surface) in subject_surfaces
+        })
+        object_types = sorted({
+            mention.entity_type for mention in output.mentions
+            if normalize_surface(mention.surface) in object_surfaces
+        })
+        definition = RelationDefinition(
+            description=f"Conservatively admitted extension relation {candidate.relation}.",
+            subject_types=subject_types or ["*"], object_kind=candidate.object_kind,
+            object_entity_types=object_types if candidate.object_kind == "entity" else [],
+            statefulness="eventive", cardinality="many",
+        )
+        dumped = definition.model_dump(mode="json")
+        schema_version = f"ext-v1-{_fingerprint({'relation': candidate.relation, 'definition': dumped})[:12]}"
+        if admit:
+            now = datetime.now(timezone.utc)
+            extension = self.store.put_extension_relation(ExtensionRelation(
+                relation=candidate.relation, definition=dumped, status="admitted",
+                schema_version=schema_version, promoted_relation=None, schema_commit=None,
+                migration_plan={"strategy": "conservative_admission", "statefulness": "eventive", "cardinality": "many"},
+                created_at=now, updated_at=now,
+            ))
+            return candidate.relation, RelationDefinition.model_validate(extension.definition), extension.schema_version
+        return candidate.relation, definition, schema_version
+
     def validate_extraction(self, output: ExtractionOutput) -> None:
         """Reject schema-incompatible candidates before a run becomes reusable."""
+        pending_extensions: dict[str, dict] = {}
         for candidate in output.candidate_claims:
-            definition = self.schema.relations.get(candidate.relation)
-            if definition is None:
-                raise ValueError(
-                    f"relation is not registered in {self.schema.schema_version}: "
-                    f"{candidate.relation}"
-                )
+            _, definition, _ = self._relation_definition(candidate, output, admit=False)
+            if candidate.relation.startswith("ext:") and self.store.get_extension_relation(candidate.relation) is None:
+                dumped = definition.model_dump(mode="json")
+                previous = pending_extensions.setdefault(candidate.relation, dumped)
+                if previous != dumped:
+                    raise ValueError(
+                        f"extension relation {candidate.relation} has incompatible candidate shapes"
+                    )
             if candidate.object_kind != definition.object_kind:
                 raise ValueError(
                     f"relation {candidate.relation} requires {definition.object_kind} objects"
@@ -177,15 +239,14 @@ class ClaimCommitter:
                 str | None,
                 str | None,
                 str,
+                str,
+                str,
             ]
         ] = []
         for candidate in output.candidate_claims:
-            definition = self.schema.relations.get(candidate.relation)
-            if definition is None:
-                raise ValueError(
-                    f"relation is not registered in {self.schema.schema_version}: "
-                    f"{candidate.relation}"
-                )
+            relation_name, definition, relation_schema_version = self._relation_definition(
+                candidate, output, admit=True
+            )
             if candidate.object_kind != definition.object_kind:
                 raise ValueError(
                     f"relation {candidate.relation} requires {definition.object_kind} objects"
@@ -218,7 +279,7 @@ class ClaimCommitter:
 
             claim_key = _fingerprint({
                 "subject_entity_id": subject.entity_id,
-                "relation": candidate.relation,
+                "relation": relation_name,
                 "object_kind": candidate.object_kind,
                 "object": object_key,
                 "valid_from": _temporal_key(candidate.valid_from),
@@ -239,6 +300,8 @@ class ClaimCommitter:
                 object_literal,
                 object_literal_norm,
                 claim_key,
+                relation_name,
+                relation_schema_version,
             ))
 
         # Validation is intentionally complete before the first graph write.
@@ -253,12 +316,14 @@ class ClaimCommitter:
             object_literal,
             object_literal_norm,
             claim_key,
+            relation_name,
+            relation_schema_version,
         ) in prepared:
             claim = self.store.put_claim(Claim(
                 claim_id=_new_uuid7(),
                 claim_key=claim_key,
                 subject_entity_id=subject.entity_id,
-                relation=candidate.relation,
+                relation=relation_name,
                 object_kind=candidate.object_kind,
                 object_entity_id=object_entity_id,
                 object_literal=object_literal,
@@ -268,7 +333,7 @@ class ClaimCommitter:
                 recorded_at=run.completed_at,
                 statefulness=definition.statefulness,
                 cardinality=definition.cardinality,
-                schema_version=self.schema.schema_version,
+                schema_version=relation_schema_version,
                 lifecycle="active",
                 first_run_id=run.run_id,
             ))
@@ -290,11 +355,38 @@ class ClaimCommitter:
                     source_end=reference.end,
                     run_id=run.run_id,
                     miner_version=run.miner_version,
-                    schema_version=self.schema.schema_version,
+                    schema_version=relation_schema_version,
                     lifecycle="active",
                     recorded_at=run.completed_at,
                 ))
                 committed_evidence[evidence.evidence_id] = evidence
+
+            if claim.statefulness == "stateful" and (
+                claim.valid_from is None or claim.valid_to is None
+            ):
+                self.store.put_maintenance_notice(MaintenanceNotice(
+                    notice_id=_new_uuid7(), notice_key=f"temporal:{claim.claim_id}",
+                    kind="missing_temporal_bounds", status="open", scope_id=run.scope_id,
+                    claim_id=claim.claim_id, run_id=run.run_id,
+                    details={"missing_valid_from": claim.valid_from is None, "missing_valid_to": claim.valid_to is None},
+                    created_at=run.completed_at,
+                ))
+            if claim.statefulness == "stateful" and claim.cardinality == "one":
+                competing = [
+                    item.claim_id
+                    for item in self.store.active_claims_for_subject_relation(
+                        claim.subject_entity_id, claim.relation
+                    )
+                    if item.claim_id != claim.claim_id and item.claim_key != claim.claim_key
+                ]
+                if competing:
+                    ids = sorted([claim.claim_id, *competing])
+                    self.store.put_maintenance_notice(MaintenanceNotice(
+                        notice_id=_new_uuid7(), notice_key="competition:" + _fingerprint(ids),
+                        kind="competing_single_value", status="open", scope_id=run.scope_id,
+                        claim_id=claim.claim_id, run_id=run.run_id,
+                        details={"claim_ids": ids, "relation": claim.relation}, created_at=run.completed_at,
+                    ))
 
         self.store.mark_claim_commit_complete(
             run.run_id,

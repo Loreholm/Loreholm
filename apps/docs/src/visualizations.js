@@ -278,7 +278,7 @@ export const visualizations = {
     item('Saved context', 'The original conversation remains inspectable'),
     item('Knowledge', 'Decision, reason, and time become connected'),
     item('Three weeks later', '“Why did we choose that?” opens the source'),
-  ], 'Capture works today; the deeper mined answer remains planned.'),
+  ], 'Capture and maintained knowledge work today; the grounded answer surface remains planned.'),
 
   privacy: boundary('Public access without public memory', [
     item('Public front door', 'Authenticates identity and relays allowed traffic'),
@@ -317,8 +317,8 @@ export const visualizations = {
   ], 'Instance-side mining enforcement works; end-to-end enforcement still awaits the spine.'),
 
   minerrole: compare('Models advise; deterministic rules commit',
-    side('Model-assisted', ['Extract mentions and candidate claims now', 'Ambiguous identity remains planned', 'Summaries and schema proposals remain planned']),
-    side('Mechanical', ['Trim and salience admission', 'Fingerprint and idempotency checks', 'Schema validation and final commit']),
+    side('Model-assisted', ['Extract mentions and candidate claims', 'Judge bounded identity ambiguity', 'Summaries remain planned']),
+    side('Mechanical', ['Trim and salience admission', 'Schema validation and final commit', 'Notices and compensating supersession']),
     'A model has a bounded assignment—not permission to bypass the pipeline.'),
 
   policysurface: stack('The policy clients can read', [

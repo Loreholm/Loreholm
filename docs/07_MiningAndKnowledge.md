@@ -5,7 +5,9 @@ quarantine, durable session assembly, quiescence, immediate push admission, and
 the leased admission and mining work queues exist. Mechanical trimming,
 scheduled work consumption, durable salience decisions, policy-gated structured
 extraction through Bifrost, mention vector storage, entity resolution, and
-schema-backed Claim/Evidence commit also exist. Grounded surfacing does not.
+schema-backed Claim/Evidence commit, maintenance notices, scoped re-mining,
+compensating supersession, and extension-schema maintenance also exist. Grounded
+surfacing does not.
 
 ## The idea in plain language
 
@@ -68,8 +70,9 @@ The implemented admission and salience boundary:
 - schedules admitted records onto a separate, recoverable mining lease; and
 - backfills mining work for admitted records created by older releases.
 
-A periodic straggler sweep and slower independent schema-maintenance cadence
-remain planned.
+A periodic straggler sweep remains planned. Schema maintenance currently runs
+at commit time for conservative extension admission and through explicit
+authenticated operator actions for promotion and revert.
 
 The durable unit for transcript processing is a session, not an individual
 message job. Messages remain immutable captures; the salience worker reads each
@@ -196,10 +199,10 @@ Unknown temporal bounds remain unknown. Capture time is not substituted for
 missing fact time. Relation schema declares whether a relation is stateful or
 eventive, its cardinality, and its object kind.
 
-For single-valued stateful relations, prior intervals close only on an explicit
-replacement signal. Ambiguity preserves competing claims. Missing temporal
-bounds create maintenance notices that a future client may surface naturally
-and sparingly.
+For single-valued stateful relations, ambiguity preserves competing claims.
+Missing temporal bounds and competing active values create idempotent
+`V2MaintenanceNotice` records. The field console surfaces that ledger without
+silently choosing a winner or inventing dates.
 
 ## Provenance
 
@@ -253,9 +256,20 @@ to understand replies such as “yes.” Those preceding turns are context-only;
 the coordinator permits only delta capture IDs to be recorded as new evidence.
 
 A changed miner or configuration deliberately falls back to the full admitted
-generation. Earlier successful output remains available; future graph stages
-must mark only covered output superseded after its replacement succeeds. Failed
-or partial backfills must never hide prior successful knowledge.
+generation. Earlier successful output remains available; maintenance marks only
+the source run's unsupported output superseded after its replacement succeeds.
+Failed or partial backfills never hide prior successful knowledge.
+
+The implemented maintenance API makes that replacement boundary explicit.
+`POST /v2/admin/maintenance/remining` targets one successful source run and
+reopens its durable mining work with a unique reprocess token. The old Claims
+and Evidence remain active during extraction, resolution, validation, and
+commit. Only after the replacement commit succeeds does Loreholm supersede
+active Evidence owned by the source run whose Claims are absent from the
+replacement. A Claim becomes superseded only when it has no other active
+Evidence, so independent support is never retired with one inference lineage.
+The request and a resolved maintenance notice preserve the source run,
+replacement run, reason, scope, and affected Claim IDs.
 
 ## ArcadeDB model
 
@@ -276,9 +290,10 @@ membership documents, generation-numbered `V2WorkItem` documents,
 `V2SalienceRecord` derived gates, and reusable `V2MiningRun` output documents.
 It also uses `V2Mention` derived documents with a persistent cosine vector
 index, stable `V2Entity` vertices, `V2Claim` vertices, indexed `V2Evidence`
-documents, and per-run commit markers. The expanded production layout still
-needs concrete event time-series, snapshot, external-payload, maintenance
-types, buckets, and indexes.
+documents, per-run commit markers, `V2MaintenanceNotice`, `V2ReminingRequest`,
+and `V2ExtensionRelation` documents. The expanded production layout still
+needs concrete event time-series, snapshot, external-payload types, buckets,
+and indexes.
 
 ## Vector policy
 
@@ -306,12 +321,21 @@ relations begin conservatively eventive and multi-valued. Approved promotions
 include a deterministic migration plan and Git commit; revert drives a
 compensating migration rather than deleting history.
 
-The current executable schema is the shipped `core-v1` JSON file. It contains
+The current executable core schema is the shipped `core-v1` JSON file. It contains
 the initial `created`, `depends_on`, `located_in`, `member_of`, `owns`,
 `storage_location`, `uses`, and `works_for` relations. Operators can review or
-version that file with their deployment source. Automated `ext:*` admission,
-promotion, and compensating migrations remain part of milestone 8; until then,
-an unregistered relation is rejected without any graph writes.
+version that file with their deployment source. An extracted `ext:*` relation
+that does not yet exist is admitted deterministically with the entity types
+actually present in the run and conservative eventive, multi-valued semantics.
+It receives a content-derived schema version and a reviewable migration plan.
+
+An authenticated operator may promote it only to a compatible shipped core
+relation and must record a Git commit hash. Promotion records an
+alias-then-reprocess plan and keeps existing extension Claims active until safe
+re-mining replaces them. Revert records another Git commit and applies a
+compensating supersession to the extension's Claims and Evidence; it never
+deletes history. Non-`ext:*` unknown relations still fail closed before graph
+writes.
 
 ## Surfacing direction
 
@@ -339,5 +363,6 @@ A practical sequence is:
 6. mention vector region and entity resolution — implemented; merge/unmerge,
    split, and multi-region migration remain planned;
 7. schema-backed deterministic claim commit and Evidence records — implemented;
-8. maintenance notices, re-mining, and scoped supersession; and
+8. maintenance notices, re-mining, scoped supersession, and extension-schema
+   admission/promotion/revert — implemented; and
 9. grounded query/surfacing API.

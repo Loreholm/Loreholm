@@ -30,10 +30,12 @@ The executable Loreholm foundation currently provides:
 - policy-gated structured episode, mention, and candidate-claim extraction through Bifrost;
 - durable mention-in-context vectors and conservative entity resolution;
 - schema-backed deterministic Claims with first-class source Evidence;
+- durable maintenance notices, safe scoped re-mining, and compensating supersession;
+- conservatively admitted `ext:*` relations with reviewable promotion and revert history;
 - authenticated client policy sync; and
 - a self-contained ArcadeDB, instance API, and Bifrost deployment.
 
-Query/surfacing, retention UI, sharing, backup, and client adapters are designed
+Grounded query/surfacing, retention UI, sharing, backup, and client adapters are designed
 but are not implemented in this milestone. Extraction and identity output remain
 versioned candidate data until the instance validates them against its relation
 schema and commits an evidence-backed Claim.

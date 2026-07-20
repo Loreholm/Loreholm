@@ -132,9 +132,10 @@ mentions requires `derived_only` or `unrestricted`; the stricter extraction
 rule still controls a combined run.
 
 It does not yet provide capture inventory, deletion, grounded graph query,
-backup, or restore. Mining runs, resolved entities, Claims, Evidence, and the
-relation schema are available through authenticated audit endpoints; the field
-console shows a recent committed-knowledge sample.
+backup, or restore. Mining runs, resolved entities, Claims, Evidence, the
+relation schema, maintenance notices, re-mining requests, and extension
+relations are available through authenticated audit endpoints. The field
+console shows recent committed knowledge and a compensating-maintenance ledger.
 
 Mining runs are currently inspectable as JSON outside the dashboard:
 
@@ -158,6 +159,32 @@ curl -fsS \
 The response contains candidate output, source capture IDs, lineage, and
 retryable failure details. It is administrator-only because derived output may
 contain sensitive context.
+
+### Knowledge maintenance
+
+The console can queue a safe replacement for a successful mining run. The same
+operation is available over the administrator API:
+
+```http
+POST /v2/admin/maintenance/remining
+Authorization: Bearer <LOREHOLM_V2_ADMIN_TOKEN>
+Content-Type: application/json
+
+{"source_run_id":"<run-id>","reason":"Correct stale storage-location output"}
+```
+
+Inspect the durable requests and notices with
+`GET /v2/admin/maintenance/remining` and
+`GET /v2/admin/maintenance/notices`. A pending or failed replacement does not
+change the active graph. Successful replacement supersedes only unsupported
+Evidence owned by the selected source run.
+
+`GET /v2/admin/knowledge/extensions` lists conservatively admitted `ext:*`
+relations. Promotion and revert use
+`POST /v2/admin/knowledge/extensions/{relation}/promote` and `/revert`. Both
+require a Git commit hash. Promotion targets a compatible shipped core relation
+and records an alias-then-reprocess plan; revert records and applies a
+non-destructive compensating supersession.
 
 ## Updating
 

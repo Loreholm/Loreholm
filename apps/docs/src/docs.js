@@ -80,7 +80,7 @@ export const documents = [
     id: 'mining', file: '07_MiningAndKnowledge.md', numeral: 'X', title: 'Mining & Knowledge',
     short: 'Descend into identity, evidence, and time.', region: 'depths', status: 'mixed', depth: 5,
     time: '14 min', color: '#e87951', raw: mining,
-    summary: 'Implemented admission, salience, policy-gated extraction, and run lineage plus planned identity, graph provenance, schema, and surfacing.',
+    summary: 'Implemented admission, extraction, identity, evidence-backed commit, and compensating maintenance; grounded surfacing remains planned.',
   },
   {
     id: 'lifecycle', file: '08_DataLifecycle.md', numeral: 'XI', title: 'Data Lifecycle',
@@ -226,7 +226,7 @@ export const adventureNodes = {
       'Instead of immediately throwing raw chunks into a vector store, Loreholm first preserves the source as an immutable capture with identity, time, source, policy, and delivery metadata. A dedicated mining role can then select worthwhile material and extract episodes, mentions, candidate claims, temporal signals, and provenance before anything becomes durable knowledge.',
       'Vector indexes are built from selected derived records and used for candidate matching rather than treated as the source of truth. Exact retries reuse prior work, while repeated observations can strengthen one claim instead of creating a pile of cloned facts. Graph-maintenance stages then resolve identity, validate the schema, and place evidence-backed claims and connections into the graph, giving them far more to work with than toothpick-thin links guessed from isolated chunks.',
     ],
-    status: 'planned', docs: ['mining', 'architecture'], scene: 'evidence',
+    status: 'mixed', docs: ['mining', 'architecture'], scene: 'evidence',
     options: [
       {next: 'chunks'},
       {next: 'dedup'},
@@ -769,8 +769,8 @@ export const adventureNodes = {
   minerrole: {
     depth: 5, eyebrow: 'Models with bounded assignments', question: 'What does the miner need a model for?',
     answer: [
-      'The first model-backed role extracts versioned episodes, mentions, temporal signals, and candidate claims from admitted context. A second bounded role judges only ambiguous identity matches: it may select one retrieved entity ID or ask Loreholm to mint a new entity. Summaries, schema maintenance, and tier-to-model assignment remain planned roles.',
-      'Mechanical trimming, salience admission, strict output validation, vector/string thresholds, incremental idempotency, relation-schema checks, and Claim/Evidence commit remain deterministic. Extraction, embeddings, and ambiguous judgments pass through Bifrost; graph writes do not require another model call.',
+      'The first model-backed role extracts versioned episodes, mentions, temporal signals, and candidate claims from admitted context. A second bounded role judges only ambiguous identity matches: it may select one retrieved entity ID or ask Loreholm to mint a new entity. Summaries and tier-to-model assignment remain planned roles.',
+      'Mechanical trimming, salience admission, strict output validation, vector/string thresholds, incremental idempotency, relation-schema checks, Claim/Evidence commit, maintenance notices, and compensating supersession remain deterministic. New ext:* relations enter conservatively and promotion or revert requires an operator-recorded Git commit. Extraction, embeddings, and ambiguous judgments pass through Bifrost; graph writes do not require another model call.',
     ],
     status: 'mixed', docs: ['policy', 'mining'], scene: 'evidence',
     options: [
@@ -809,7 +809,7 @@ export const adventureNodes = {
     depth: 3, eyebrow: 'From history to meaning', question: 'How does saved history become connected knowledge?',
     answer: [
       'Saved history preserves what happened. It does not automatically know that two names mean the same person, that a statement replaced an older one, or which source supports a conclusion.',
-      'Loreholm now selects admitted context, extracts source-linked episode, mention, and candidate-claim records, connects mentions to stable entities through an audited vector/string resolver, and commits time-aware Claims only after deterministic schema and evidence validation. Surfacing grounded answers remains planned.',
+      'Loreholm now selects admitted context, extracts source-linked episode, mention, and candidate-claim records, connects mentions to stable entities through an audited vector/string resolver, and commits time-aware Claims only after deterministic schema and evidence validation. It also records temporal gaps and competing state, safely re-mines a selected scope, and supersedes only unsupported old evidence after replacement succeeds. Surfacing grounded answers remains planned.',
     ],
     status: 'mixed', docs: ['mining', 'architecture'], scene: 'evidence',
     options: [

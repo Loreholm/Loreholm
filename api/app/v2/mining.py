@@ -137,6 +137,7 @@ class BifrostExtractionGateway:
                 "Context and prior output may disambiguate the delta but must not be cited as new evidence.",
                 "Do not invent missing temporal bounds; use null.",
                 "Use only a relation in relation_schema and obey its subject/object types.",
+                "If no core relation fits, you may propose one conservative ext:<name> relation; it will be admitted as eventive and multi-valued for review.",
                 "Return JSON matching the supplied schema and no prose.",
             ],
             "relation_schema": self.relation_schema,
@@ -453,6 +454,9 @@ class MiningWorker:
                     "temperature": 0,
                     "relation_schema_version": self.relation_schema_version,
                 }
+                remining = self.store.active_remining_for_salience(work.salience_id)
+                if remining is not None:
+                    config["reprocess_token"] = remining.reprocess_token
                 preparation = self.coordinator.prepare(
                     salience,
                     stage=STAGE,
@@ -496,8 +500,16 @@ class MiningWorker:
                     )
                 if self.resolver is not None:
                     self.resolver.resolve_run(run, endpoint, policy)
+                commit_result = None
                 if self.committer is not None:
-                    self.committer.commit_run(run)
+                    commit_result = self.committer.commit_run(run)
+                if remining is not None:
+                    self.store.complete_remining(
+                        remining.request_id,
+                        run.run_id,
+                        [item.claim_id for item in (commit_result.claims if commit_result else [])],
+                        now=started_at,
+                    )
                 if not self.store.complete_mining_work(
                     work.mining_work_id, self.worker_id, now=started_at
                 ):

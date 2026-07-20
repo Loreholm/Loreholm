@@ -32,7 +32,7 @@ observation and a changed fact.
 
 Loreholm keeps the raw context first. Every capture arrives with stable
 identity, source, time, policy, and delivery metadata, so retries can be
-recognized without losing the original record. The planned pipeline admits
+recognized without losing the original record. The implemented pipeline admits
 useful material, interprets it into episodes and mentions, and derives only the
 vectors needed for tasks such as entity resolution and schema maintenance.
 Raw captures are not indiscriminately embedded.
@@ -49,8 +49,9 @@ That is the database upgrade Loreholm is pursuing: raw history remains
 inspectable, vector retrieval works over selected derived material, and the
 graph is built from rich metadata and evidence rather than isolated chunks.
 Capture, idempotent staging, derived mention vectors, extraction, identity
-resolution, and evidence-backed graph commit work today. Grounded surfacing and
-the remaining lifecycle layers are accepted design and remain to be implemented.
+resolution, evidence-backed graph commit, and compensating knowledge maintenance
+work today. Grounded surfacing and the remaining lifecycle layers are accepted
+design and remain to be implemented.
 
 ## Status legend
 
@@ -258,7 +259,9 @@ successful output and supplies only new captures plus a bounded context tail.
 Context-only captures are excluded from the new-evidence set. Graph commit uses
 that boundary now: exact source retries reuse Evidence, while a genuinely new
 capture can add independent Evidence to the same semantic Claim. Scoped
-supersession across replacement generations remains planned.
+supersession across replacement generations is implemented as an explicit,
+audited re-mining request: replacement commit succeeds before unsupported old
+Evidence is retired, and independently supported Claims remain active.
 
 The structured interpreter/extractor, entity resolver, and deterministic claim
 committer are implemented. No grounded query stage is implemented in the

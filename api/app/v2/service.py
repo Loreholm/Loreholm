@@ -185,6 +185,49 @@ class Evidence:
     recorded_at: datetime
 
 
+@dataclass(frozen=True)
+class MaintenanceNotice:
+    notice_id: str
+    notice_key: str
+    kind: Literal["missing_temporal_bounds", "competing_single_value", "remining_applied"]
+    status: Literal["open", "resolved"]
+    scope_id: str
+    claim_id: str | None
+    run_id: str | None
+    details: dict
+    created_at: datetime
+    resolved_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class ReminingRequest:
+    request_id: str
+    request_key: str
+    source_run_id: str
+    salience_id: str
+    scope_id: str
+    reason: str
+    reprocess_token: str
+    status: Literal["pending", "completed", "failed"]
+    replacement_run_id: str | None
+    created_at: datetime
+    completed_at: datetime | None = None
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class ExtensionRelation:
+    relation: str
+    definition: dict
+    status: Literal["admitted", "promoted", "reverted"]
+    schema_version: str
+    promoted_relation: str | None
+    schema_commit: str | None
+    migration_plan: dict
+    created_at: datetime
+    updated_at: datetime
+
+
 def _new_uuid7() -> str:
     millis = int(time.time() * 1000)
     value = (millis & ((1 << 48) - 1)) << 80
@@ -378,6 +421,47 @@ class CaptureStore:
     def is_claim_commit_complete(self, run_id: str) -> bool:
         raise NotImplementedError
 
+    def put_maintenance_notice(self, notice: MaintenanceNotice) -> MaintenanceNotice:
+        raise NotImplementedError
+
+    def list_maintenance_notices(self, *, limit: int = 50) -> list[MaintenanceNotice]:
+        raise NotImplementedError
+
+    def active_claims_for_subject_relation(self, subject_entity_id: str, relation: str) -> list[Claim]:
+        raise NotImplementedError
+
+    def request_remining(self, request: ReminingRequest) -> ReminingRequest:
+        raise NotImplementedError
+
+    def active_remining_for_salience(self, salience_id: str) -> ReminingRequest | None:
+        raise NotImplementedError
+
+    def complete_remining(
+        self, request_id: str, replacement_run_id: str, replacement_claim_ids: list[str], *, now: datetime
+    ) -> ReminingRequest:
+        raise NotImplementedError
+
+    def list_remining_requests(self, *, limit: int = 50) -> list[ReminingRequest]:
+        raise NotImplementedError
+
+    def get_mining_run_by_id(self, run_id: str) -> MiningRun | None:
+        raise NotImplementedError
+
+    def put_extension_relation(self, relation: ExtensionRelation) -> ExtensionRelation:
+        raise NotImplementedError
+
+    def get_extension_relation(self, relation: str) -> ExtensionRelation | None:
+        raise NotImplementedError
+
+    def list_extension_relations(self, *, limit: int = 100) -> list[ExtensionRelation]:
+        raise NotImplementedError
+
+    def update_extension_relation(self, relation: ExtensionRelation) -> ExtensionRelation:
+        raise NotImplementedError
+
+    def supersede_claims_for_relation(self, relation: str) -> list[str]:
+        raise NotImplementedError
+
 
 class MemoryCaptureStore(CaptureStore):
     """Deterministic development/test store, never selected in production."""
@@ -401,6 +485,9 @@ class MemoryCaptureStore(CaptureStore):
         self._evidence: dict[str, Evidence] = {}
         self._evidence_by_key: dict[str, str] = {}
         self._claim_commit_complete: dict[str, dict] = {}
+        self._maintenance_notices: dict[str, MaintenanceNotice] = {}
+        self._remining_requests: dict[str, ReminingRequest] = {}
+        self._extension_relations: dict[str, ExtensionRelation] = {}
         self._scheduled_captures: set[str] = set()
         self._lock = Lock()
 
@@ -941,6 +1028,107 @@ class MemoryCaptureStore(CaptureStore):
     def is_claim_commit_complete(self, run_id: str) -> bool:
         return run_id in self._claim_commit_complete
 
+    def put_maintenance_notice(self, notice: MaintenanceNotice) -> MaintenanceNotice:
+        with self._lock:
+            return self._maintenance_notices.setdefault(notice.notice_key, notice)
+
+    def list_maintenance_notices(self, *, limit: int = 50) -> list[MaintenanceNotice]:
+        bounded = max(1, min(limit, 250))
+        return sorted(
+            self._maintenance_notices.values(),
+            key=lambda item: (item.created_at, item.notice_id), reverse=True,
+        )[:bounded]
+
+    def active_claims_for_subject_relation(self, subject_entity_id: str, relation: str) -> list[Claim]:
+        return [
+            item for item in self._claims.values()
+            if item.subject_entity_id == subject_entity_id
+            and item.relation == relation and item.lifecycle == "active"
+        ]
+
+    def get_mining_run_by_id(self, run_id: str) -> MiningRun | None:
+        return next((item for item in self._mining_runs.values() if item.run_id == run_id), None)
+
+    def request_remining(self, request: ReminingRequest) -> ReminingRequest:
+        with self._lock:
+            existing = next((item for item in self._remining_requests.values() if item.request_key == request.request_key), None)
+            if existing is not None:
+                return existing
+            work = next((item for item in self._mining_work.values() if item.salience_id == request.salience_id), None)
+            if work is None:
+                raise ValueError("source run has no mining work")
+            work.state = "pending"
+            work.available_at = request.created_at
+            work.updated_at = request.created_at
+            work.lease_owner = None
+            work.leased_until = None
+            work.last_error = None
+            self._remining_requests[request.request_id] = request
+            return request
+
+    def active_remining_for_salience(self, salience_id: str) -> ReminingRequest | None:
+        pending = [item for item in self._remining_requests.values() if item.salience_id == salience_id and item.status == "pending"]
+        return max(pending, key=lambda item: item.created_at, default=None)
+
+    def complete_remining(
+        self, request_id: str, replacement_run_id: str, replacement_claim_ids: list[str], *, now: datetime
+    ) -> ReminingRequest:
+        with self._lock:
+            request = self._remining_requests[request_id]
+            if request.status == "completed":
+                return request
+            replacement = set(replacement_claim_ids)
+            affected_claims: set[str] = set()
+            for evidence_id, evidence in tuple(self._evidence.items()):
+                if evidence.run_id == request.source_run_id and evidence.claim_id not in replacement and evidence.lifecycle == "active":
+                    self._evidence[evidence_id] = replace(evidence, lifecycle="superseded")
+                    affected_claims.add(evidence.claim_id)
+            for claim_id in affected_claims:
+                if not any(item.claim_id == claim_id and item.lifecycle == "active" for item in self._evidence.values()):
+                    self._claims[claim_id] = replace(self._claims[claim_id], lifecycle="superseded")
+            completed = replace(request, status="completed", replacement_run_id=replacement_run_id, completed_at=now)
+            self._remining_requests[request_id] = completed
+            notice = MaintenanceNotice(
+                notice_id=_new_uuid7(), notice_key=f"remining:{request_id}", kind="remining_applied",
+                status="resolved", scope_id=request.scope_id, claim_id=None, run_id=replacement_run_id,
+                details={"source_run_id": request.source_run_id, "replacement_run_id": replacement_run_id,
+                         "superseded_claim_ids": sorted(affected_claims)}, created_at=now, resolved_at=now,
+            )
+            self._maintenance_notices.setdefault(notice.notice_key, notice)
+            return completed
+
+    def list_remining_requests(self, *, limit: int = 50) -> list[ReminingRequest]:
+        bounded = max(1, min(limit, 250))
+        return sorted(self._remining_requests.values(), key=lambda item: (item.created_at, item.request_id), reverse=True)[:bounded]
+
+    def put_extension_relation(self, relation: ExtensionRelation) -> ExtensionRelation:
+        with self._lock:
+            return self._extension_relations.setdefault(relation.relation, relation)
+
+    def get_extension_relation(self, relation: str) -> ExtensionRelation | None:
+        return self._extension_relations.get(relation)
+
+    def list_extension_relations(self, *, limit: int = 100) -> list[ExtensionRelation]:
+        bounded = max(1, min(limit, 250))
+        return sorted(self._extension_relations.values(), key=lambda item: (item.updated_at, item.relation), reverse=True)[:bounded]
+
+    def update_extension_relation(self, relation: ExtensionRelation) -> ExtensionRelation:
+        with self._lock:
+            if relation.relation not in self._extension_relations:
+                raise ValueError("extension relation is not registered")
+            self._extension_relations[relation.relation] = relation
+            return relation
+
+    def supersede_claims_for_relation(self, relation: str) -> list[str]:
+        with self._lock:
+            affected = [item.claim_id for item in self._claims.values() if item.relation == relation and item.lifecycle == "active"]
+            for claim_id in affected:
+                self._claims[claim_id] = replace(self._claims[claim_id], lifecycle="superseded")
+                for evidence_id, evidence in tuple(self._evidence.items()):
+                    if evidence.claim_id == claim_id and evidence.lifecycle == "active":
+                        self._evidence[evidence_id] = replace(evidence, lifecycle="superseded")
+            return affected
+
 
 class ArcadeCaptureStore(CaptureStore):
     """ArcadeDB document-store adapter for the append-only capture region."""
@@ -1189,6 +1377,48 @@ class ArcadeCaptureStore(CaptureStore):
             "CREATE PROPERTY V2ClaimCommitRun.evidence_count IF NOT EXISTS INTEGER",
             "CREATE PROPERTY V2ClaimCommitRun.completed_at IF NOT EXISTS DATETIME",
             "CREATE INDEX IF NOT EXISTS ON V2ClaimCommitRun (run_id) UNIQUE",
+            "CREATE DOCUMENT TYPE V2MaintenanceNotice IF NOT EXISTS",
+            "CREATE PROPERTY V2MaintenanceNotice.notice_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MaintenanceNotice.notice_key IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MaintenanceNotice.kind IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MaintenanceNotice.status IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MaintenanceNotice.scope_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MaintenanceNotice.claim_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MaintenanceNotice.run_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MaintenanceNotice.details_json IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2MaintenanceNotice.created_at IF NOT EXISTS DATETIME",
+            "CREATE PROPERTY V2MaintenanceNotice.resolved_at IF NOT EXISTS DATETIME",
+            "CREATE INDEX IF NOT EXISTS ON V2MaintenanceNotice (notice_id) UNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2MaintenanceNotice (notice_key) UNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2MaintenanceNotice (status, created_at) NOTUNIQUE",
+            "CREATE DOCUMENT TYPE V2ReminingRequest IF NOT EXISTS",
+            "CREATE PROPERTY V2ReminingRequest.request_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ReminingRequest.request_key IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ReminingRequest.source_run_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ReminingRequest.salience_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ReminingRequest.scope_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ReminingRequest.reason IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ReminingRequest.reprocess_token IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ReminingRequest.status IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ReminingRequest.replacement_run_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ReminingRequest.created_at IF NOT EXISTS DATETIME",
+            "CREATE PROPERTY V2ReminingRequest.completed_at IF NOT EXISTS DATETIME",
+            "CREATE PROPERTY V2ReminingRequest.error IF NOT EXISTS STRING",
+            "CREATE INDEX IF NOT EXISTS ON V2ReminingRequest (request_id) UNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2ReminingRequest (request_key) UNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2ReminingRequest (salience_id, status) NOTUNIQUE",
+            "CREATE DOCUMENT TYPE V2ExtensionRelation IF NOT EXISTS",
+            "CREATE PROPERTY V2ExtensionRelation.relation IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ExtensionRelation.definition_json IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ExtensionRelation.status IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ExtensionRelation.schema_version IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ExtensionRelation.promoted_relation IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ExtensionRelation.schema_commit IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ExtensionRelation.migration_plan_json IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ExtensionRelation.created_at IF NOT EXISTS DATETIME",
+            "CREATE PROPERTY V2ExtensionRelation.updated_at IF NOT EXISTS DATETIME",
+            "CREATE INDEX IF NOT EXISTS ON V2ExtensionRelation (relation) UNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2ExtensionRelation (status, updated_at) NOTUNIQUE",
         )
         for statement in statements:
             self._command(statement)
@@ -1778,6 +2008,19 @@ class ArcadeCaptureStore(CaptureStore):
             ).get("result", [])
             if reopened:
                 created += 1
+        pending_remining = self._command(
+            "SELECT salience_id, created_at FROM V2ReminingRequest WHERE status = 'pending'"
+        ).get("result", [])
+        for request in pending_remining:
+            reopened = self._command(
+                "UPDATE V2MiningWork SET state = 'pending', available_at = :available_at, "
+                "lease_owner = null, leased_until = null, last_error = null, updated_at = :available_at "
+                "RETURN AFTER @this WHERE salience_id = :salience_id AND state = 'completed'",
+                {"available_at": _epoch_millis(self._datetime(request["created_at"])),
+                 "salience_id": request["salience_id"]},
+            ).get("result", [])
+            if reopened:
+                created += 1
         return created
 
     def claim_ready_mining_work(
@@ -2322,6 +2565,231 @@ class ArcadeCaptureStore(CaptureStore):
             {"run_id": run_id},
         ).get("result", [])
         return bool(rows)
+
+    @classmethod
+    def _notice_from_row(cls, row: dict) -> MaintenanceNotice:
+        return MaintenanceNotice(
+            notice_id=row["notice_id"], notice_key=row["notice_key"], kind=row["kind"],
+            status=row["status"], scope_id=row["scope_id"], claim_id=row.get("claim_id"),
+            run_id=row.get("run_id"), details=json.loads(row.get("details_json") or "{}"),
+            created_at=cls._datetime(row["created_at"]),
+            resolved_at=cls._datetime(row["resolved_at"]) if row.get("resolved_at") else None,
+        )
+
+    def put_maintenance_notice(self, notice: MaintenanceNotice) -> MaintenanceNotice:
+        rows = self._command(
+            "SELECT FROM V2MaintenanceNotice WHERE notice_key = :notice_key LIMIT 1",
+            {"notice_key": notice.notice_key},
+        ).get("result", [])
+        if rows:
+            return self._notice_from_row(rows[0])
+        self._command(
+            "INSERT INTO V2MaintenanceNotice SET notice_id = :notice_id, notice_key = :notice_key, "
+            "kind = :kind, status = :status, scope_id = :scope_id, claim_id = :claim_id, "
+            "run_id = :run_id, details_json = :details_json, created_at = :created_at, resolved_at = :resolved_at",
+            {**notice.__dict__, "details_json": json.dumps(notice.details, separators=(",", ":"), sort_keys=True),
+             "created_at": _epoch_millis(notice.created_at),
+             "resolved_at": _epoch_millis(notice.resolved_at) if notice.resolved_at else None},
+        )
+        return notice
+
+    def list_maintenance_notices(self, *, limit: int = 50) -> list[MaintenanceNotice]:
+        bounded = max(1, min(limit, 250))
+        rows = self._command(
+            f"SELECT FROM V2MaintenanceNotice ORDER BY created_at DESC, notice_id DESC LIMIT {bounded}"
+        ).get("result", [])
+        return [self._notice_from_row(row) for row in rows]
+
+    def active_claims_for_subject_relation(self, subject_entity_id: str, relation: str) -> list[Claim]:
+        rows = self._command(
+            "SELECT FROM V2Claim WHERE subject_entity_id = :subject_entity_id "
+            "AND relation = :relation AND lifecycle = 'active'",
+            {"subject_entity_id": subject_entity_id, "relation": relation},
+        ).get("result", [])
+        return [self._claim_from_row(row) for row in rows]
+
+    def get_mining_run_by_id(self, run_id: str) -> MiningRun | None:
+        rows = self._command(
+            "SELECT FROM V2MiningRun WHERE run_id = :run_id LIMIT 1", {"run_id": run_id}
+        ).get("result", [])
+        return self._mining_run_from_row(rows[0]) if rows else None
+
+    @classmethod
+    def _remining_from_row(cls, row: dict) -> ReminingRequest:
+        return ReminingRequest(
+            request_id=row["request_id"], request_key=row["request_key"],
+            source_run_id=row["source_run_id"], salience_id=row["salience_id"],
+            scope_id=row["scope_id"], reason=row["reason"], reprocess_token=row["reprocess_token"],
+            status=row["status"], replacement_run_id=row.get("replacement_run_id"),
+            created_at=cls._datetime(row["created_at"]),
+            completed_at=cls._datetime(row["completed_at"]) if row.get("completed_at") else None,
+            error=row.get("error"),
+        )
+
+    def request_remining(self, request: ReminingRequest) -> ReminingRequest:
+        rows = self._command(
+            "SELECT FROM V2ReminingRequest WHERE request_key = :request_key LIMIT 1",
+            {"request_key": request.request_key},
+        ).get("result", [])
+        if rows:
+            existing = self._remining_from_row(rows[0])
+            if existing.status == "pending":
+                self._command(
+                    "UPDATE V2MiningWork SET state = 'pending', available_at = :now, updated_at = :now, "
+                    "lease_owner = NULL, leased_until = NULL, last_error = NULL "
+                    "WHERE salience_id = :salience_id AND state = 'completed'",
+                    {"now": _epoch_millis(existing.created_at), "salience_id": existing.salience_id},
+                )
+            return existing
+        work = self._command(
+            "SELECT mining_work_id FROM V2MiningWork WHERE salience_id = :salience_id LIMIT 1",
+            {"salience_id": request.salience_id},
+        ).get("result", [])
+        if not work:
+            raise ValueError("source run has no mining work")
+        self._command(
+            "INSERT INTO V2ReminingRequest SET request_id = :request_id, request_key = :request_key, "
+            "source_run_id = :source_run_id, salience_id = :salience_id, scope_id = :scope_id, "
+            "reason = :reason, reprocess_token = :reprocess_token, status = :status, "
+            "replacement_run_id = :replacement_run_id, created_at = :created_at, "
+            "completed_at = :completed_at, error = :error",
+            {**request.__dict__, "created_at": _epoch_millis(request.created_at), "completed_at": None},
+        )
+        self._command(
+            "UPDATE V2MiningWork SET state = 'pending', available_at = :now, updated_at = :now, "
+            "lease_owner = NULL, leased_until = NULL, last_error = NULL "
+            "WHERE salience_id = :salience_id AND state = 'completed'",
+            {"now": _epoch_millis(request.created_at), "salience_id": request.salience_id},
+        )
+        return request
+
+    def active_remining_for_salience(self, salience_id: str) -> ReminingRequest | None:
+        rows = self._command(
+            "SELECT FROM V2ReminingRequest WHERE salience_id = :salience_id AND status = 'pending' "
+            "ORDER BY created_at DESC LIMIT 1", {"salience_id": salience_id},
+        ).get("result", [])
+        return self._remining_from_row(rows[0]) if rows else None
+
+    def complete_remining(
+        self, request_id: str, replacement_run_id: str, replacement_claim_ids: list[str], *, now: datetime
+    ) -> ReminingRequest:
+        rows = self._command(
+            "SELECT FROM V2ReminingRequest WHERE request_id = :request_id LIMIT 1",
+            {"request_id": request_id},
+        ).get("result", [])
+        if not rows:
+            raise ValueError("re-mining request not found")
+        request = self._remining_from_row(rows[0])
+        if request.status == "completed":
+            return request
+        old_evidence = self._command(
+            "SELECT FROM V2Evidence WHERE run_id = :run_id",
+            {"run_id": request.source_run_id},
+        ).get("result", [])
+        replacement = set(replacement_claim_ids)
+        affected = sorted({row["claim_id"] for row in old_evidence if row["claim_id"] not in replacement})
+        for claim_id in affected:
+            self._command(
+                "UPDATE V2Evidence SET lifecycle = 'superseded' WHERE run_id = :run_id "
+                "AND claim_id = :claim_id AND lifecycle = 'active'",
+                {"run_id": request.source_run_id, "claim_id": claim_id},
+            )
+            remaining = self._command(
+                "SELECT evidence_id FROM V2Evidence WHERE claim_id = :claim_id AND lifecycle = 'active' LIMIT 1",
+                {"claim_id": claim_id},
+            ).get("result", [])
+            if not remaining:
+                self._command(
+                    "UPDATE V2Claim SET lifecycle = 'superseded' WHERE claim_id = :claim_id AND lifecycle = 'active'",
+                    {"claim_id": claim_id},
+                )
+        self._command(
+            "UPDATE V2ReminingRequest SET status = 'completed', replacement_run_id = :replacement_run_id, "
+            "completed_at = :completed_at WHERE request_id = :request_id",
+            {"replacement_run_id": replacement_run_id, "completed_at": _epoch_millis(now), "request_id": request_id},
+        )
+        self.put_maintenance_notice(MaintenanceNotice(
+            notice_id=_new_uuid7(), notice_key=f"remining:{request_id}", kind="remining_applied",
+            status="resolved", scope_id=request.scope_id, claim_id=None, run_id=replacement_run_id,
+            details={"source_run_id": request.source_run_id, "replacement_run_id": replacement_run_id,
+                     "superseded_claim_ids": affected}, created_at=now, resolved_at=now,
+        ))
+        return replace(request, status="completed", replacement_run_id=replacement_run_id, completed_at=now)
+
+    def list_remining_requests(self, *, limit: int = 50) -> list[ReminingRequest]:
+        bounded = max(1, min(limit, 250))
+        rows = self._command(
+            f"SELECT FROM V2ReminingRequest ORDER BY created_at DESC, request_id DESC LIMIT {bounded}"
+        ).get("result", [])
+        return [self._remining_from_row(row) for row in rows]
+
+    @classmethod
+    def _extension_from_row(cls, row: dict) -> ExtensionRelation:
+        return ExtensionRelation(
+            relation=row["relation"], definition=json.loads(row["definition_json"]), status=row["status"],
+            schema_version=row["schema_version"], promoted_relation=row.get("promoted_relation"),
+            schema_commit=row.get("schema_commit"), migration_plan=json.loads(row.get("migration_plan_json") or "{}"),
+            created_at=cls._datetime(row["created_at"]), updated_at=cls._datetime(row["updated_at"]),
+        )
+
+    def put_extension_relation(self, relation: ExtensionRelation) -> ExtensionRelation:
+        existing = self.get_extension_relation(relation.relation)
+        if existing is not None:
+            return existing
+        self._command(
+            "INSERT INTO V2ExtensionRelation SET relation = :relation, definition_json = :definition_json, "
+            "status = :status, schema_version = :schema_version, promoted_relation = :promoted_relation, "
+            "schema_commit = :schema_commit, migration_plan_json = :migration_plan_json, "
+            "created_at = :created_at, updated_at = :updated_at",
+            {**relation.__dict__, "definition_json": json.dumps(relation.definition, separators=(",", ":"), sort_keys=True),
+             "migration_plan_json": json.dumps(relation.migration_plan, separators=(",", ":"), sort_keys=True),
+             "created_at": _epoch_millis(relation.created_at), "updated_at": _epoch_millis(relation.updated_at)},
+        )
+        return relation
+
+    def get_extension_relation(self, relation: str) -> ExtensionRelation | None:
+        rows = self._command(
+            "SELECT FROM V2ExtensionRelation WHERE relation = :relation LIMIT 1", {"relation": relation}
+        ).get("result", [])
+        return self._extension_from_row(rows[0]) if rows else None
+
+    def list_extension_relations(self, *, limit: int = 100) -> list[ExtensionRelation]:
+        bounded = max(1, min(limit, 250))
+        rows = self._command(
+            f"SELECT FROM V2ExtensionRelation ORDER BY updated_at DESC, relation LIMIT {bounded}"
+        ).get("result", [])
+        return [self._extension_from_row(row) for row in rows]
+
+    def update_extension_relation(self, relation: ExtensionRelation) -> ExtensionRelation:
+        if self.get_extension_relation(relation.relation) is None:
+            raise ValueError("extension relation is not registered")
+        self._command(
+            "UPDATE V2ExtensionRelation SET definition_json = :definition_json, status = :status, "
+            "schema_version = :schema_version, promoted_relation = :promoted_relation, "
+            "schema_commit = :schema_commit, migration_plan_json = :migration_plan_json, "
+            "updated_at = :updated_at WHERE relation = :relation",
+            {**relation.__dict__, "definition_json": json.dumps(relation.definition, separators=(",", ":"), sort_keys=True),
+             "migration_plan_json": json.dumps(relation.migration_plan, separators=(",", ":"), sort_keys=True),
+             "updated_at": _epoch_millis(relation.updated_at)},
+        )
+        return relation
+
+    def supersede_claims_for_relation(self, relation: str) -> list[str]:
+        rows = self._command(
+            "SELECT claim_id FROM V2Claim WHERE relation = :relation AND lifecycle = 'active'",
+            {"relation": relation},
+        ).get("result", [])
+        affected = [row["claim_id"] for row in rows]
+        for claim_id in affected:
+            self._command(
+                "UPDATE V2Evidence SET lifecycle = 'superseded' WHERE claim_id = :claim_id AND lifecycle = 'active'",
+                {"claim_id": claim_id},
+            )
+            self._command(
+                "UPDATE V2Claim SET lifecycle = 'superseded' WHERE claim_id = :claim_id AND lifecycle = 'active'",
+                {"claim_id": claim_id},
+            )
+        return affected
 
 
 class CaptureService:

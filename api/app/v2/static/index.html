@@ -72,6 +72,32 @@
           </section>
         </aside>
       </div>
+
+      <section class="panel maintenance-panel">
+        <div class="section-head">
+          <div><p class="index">04 / KNOWLEDGE MAINTENANCE</p><h2>The compensating ledger</h2><p>Reprocess a scope without hiding its current knowledge. Review temporal gaps, competing state, and extension-schema migrations in one place.</p></div>
+          <div class="maintenance-counts"><strong id="openNoticeCount">0</strong><span>OPEN NOTICES</span><strong id="extensionCount">0</strong><span>EXTENSIONS</span></div>
+        </div>
+        <div class="maintenance-grid">
+          <div class="ledger-column">
+            <p class="ledger-label">NOTICE QUEUE</p>
+            <div id="maintenanceNotices" class="ledger-list"><p>No maintenance notices.</p></div>
+          </div>
+          <div class="ledger-column">
+            <p class="ledger-label">SCOPED RE-MINING</p>
+            <form id="reminingForm" class="remining-form">
+              <label>Successful source run<select id="reminingRun" required></select></label>
+              <label>Reason<input id="reminingReason" maxlength="500" placeholder="Correct stale or incomplete knowledge" required></label>
+              <button>Queue safe replacement <b>→</b></button>
+            </form>
+            <div id="reminingRequests" class="ledger-list compact"><p>No re-mining requests.</p></div>
+          </div>
+          <div class="ledger-column extension-column">
+            <p class="ledger-label">EXTENSION SCHEMA</p>
+            <div id="extensionRelations" class="ledger-list"><p>No admitted extensions.</p></div>
+          </div>
+        </div>
+      </section>
     </div>
   </main>
   <script src="/dashboard/assets/dashboard.js"></script>

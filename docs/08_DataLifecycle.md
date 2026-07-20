@@ -60,8 +60,12 @@ Provenance makes cleanup a deterministic traversal rather than semantic search.
 
 Derived inference is user-paid work and remains available for audit and exact
 reuse until superseded or removed by source deletion. Re-mining does not erase
-older successful generations; normal reads prefer the newest successful active
-generation.
+older successful generations. The implemented scoped workflow keeps the source
+run active until its replacement has completed extraction, resolution,
+validation, and Claim/Evidence commit. It then supersedes only source-run
+Evidence for Claims absent from the replacement and archives a Claim only when
+no independent active Evidence remains. Every transition is retained in the
+re-mining request and maintenance ledger.
 
 Deletion is the exception. Content and vectors derived from a deleted source
 must not survive merely because inference was expensive.
