@@ -29,13 +29,14 @@ The executable Loreholm foundation currently provides:
 - reusable mining-run identity and incremental-input lineage;
 - policy-gated structured episode, mention, and candidate-claim extraction through Bifrost;
 - durable mention-in-context vectors and conservative entity resolution;
+- schema-backed deterministic Claims with first-class source Evidence;
 - authenticated client policy sync; and
 - a self-contained ArcadeDB, instance API, and Bifrost deployment.
 
-Schema-backed claim and Evidence commit, query/surfacing, retention UI,
-sharing, backup, and client adapters are designed but are not implemented in
-this milestone. Extraction and identity output remain versioned candidate data,
-not committed claim truth.
+Query/surfacing, retention UI, sharing, backup, and client adapters are designed
+but are not implemented in this milestone. Extraction and identity output remain
+versioned candidate data until the instance validates them against its relation
+schema and commits an evidence-backed Claim.
 
 ## Architecture
 
@@ -56,7 +57,7 @@ instance API  ---> ArcadeDB staging ---> admission queue ---> salience gate
       |                               entity resolver
       |                                      |
       |                                      v
-      |                               knowledge graph (planned)
+      |                               Claims + Evidence
       |
       +-------> Bifrost ---> user-configured model endpoints
 ```

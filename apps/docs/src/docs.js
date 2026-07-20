@@ -288,10 +288,10 @@ export const adventureNodes = {
   repeatedevidence: {
     depth: 4, eyebrow: 'Many witnesses, one claim', question: 'How can repeated evidence strengthen one claim?',
     answer: [
-      'The accepted graph model separates a claim from the evidence supporting it. If two independent captures support the same subject, relation, object, and time meaning, Loreholm should attach two Evidence records to one stable claim rather than create two facts.',
-      'An inference retry is different: matching run and input fingerprints reuse the earlier mining result and add nothing. Incremental input preparation now also marks repeated prior turns as context-only and rejects them as new evidence. Resolving genuinely independent observations onto one graph claim remains part of the planned graph layer.',
+      'The implemented graph model separates a Claim from the Evidence supporting it. If two independent captures support the same subject, relation, object, and time meaning, Loreholm attaches two Evidence records to one stable Claim rather than creating two facts.',
+      'An inference retry is different: matching run and input fingerprints reuse the earlier mining result, while the Evidence key also prevents the same claim/capture/span support from being inserted twice. Incremental input preparation marks repeated prior turns as context-only and rejects them as new evidence.',
     ],
-    status: 'mixed', docs: ['mining', 'lifecycle'], scene: 'evidence',
+    status: 'implemented', docs: ['mining', 'lifecycle'], scene: 'evidence',
     options: [
       {next: 'evidence'},
       {next: 'identity'},
@@ -575,7 +575,7 @@ export const adventureNodes = {
     depth: 1, eyebrow: 'What is real now', question: 'Where is this project at?',
     answer: [
       'Loreholm is at the working-foundation stage, not at the finished-product stage. You can run a containerized private instance, authenticate clients, accept and safely stage context, configure model routing, and protect remote access behind the private network.',
-      'Browser chat already captures both sides of a conversation without a separate save command. The instance also admits salient context, extracts source-linked candidates, embeds mentions, and resolves them to stable entities. Claim and Evidence commit, lifecycle tools, and natural-language surfacing remain accepted design. That makes the project useful today for technical evaluation and bounded pilots, but not yet as the only memory system an individual or organization depends on.',
+      'Browser chat already captures both sides of a conversation without a separate save command. The instance also admits salient context, extracts source-linked candidates, resolves mentions to stable entities, and commits schema-valid Claims with first-class Evidence. Lifecycle tools and natural-language surfacing remain accepted design. That makes the project useful today for technical evaluation and bounded pilots, but not yet as the only memory system an individual or organization depends on.',
     ],
     status: 'mixed', docs: ['operations', 'architecture', 'chat'], scene: 'builder',
     options: [
@@ -770,7 +770,7 @@ export const adventureNodes = {
     depth: 5, eyebrow: 'Models with bounded assignments', question: 'What does the miner need a model for?',
     answer: [
       'The first model-backed role extracts versioned episodes, mentions, temporal signals, and candidate claims from admitted context. A second bounded role judges only ambiguous identity matches: it may select one retrieved entity ID or ask Loreholm to mint a new entity. Summaries, schema maintenance, and tier-to-model assignment remain planned roles.',
-      'Mechanical trimming, salience admission, strict output validation, vector/string thresholds, incremental idempotency, and candidate-set enforcement remain deterministic. Extraction, embeddings, and ambiguous judgments pass through Bifrost; claim commit remains sealed.',
+      'Mechanical trimming, salience admission, strict output validation, vector/string thresholds, incremental idempotency, relation-schema checks, and Claim/Evidence commit remain deterministic. Extraction, embeddings, and ambiguous judgments pass through Bifrost; graph writes do not require another model call.',
     ],
     status: 'mixed', docs: ['policy', 'mining'], scene: 'evidence',
     options: [
@@ -809,7 +809,7 @@ export const adventureNodes = {
     depth: 3, eyebrow: 'From history to meaning', question: 'How does saved history become connected knowledge?',
     answer: [
       'Saved history preserves what happened. It does not automatically know that two names mean the same person, that a statement replaced an older one, or which source supports a conclusion.',
-      'Loreholm now selects admitted context, extracts source-linked episode, mention, and candidate-claim records, and connects mentions to stable entities through an audited vector/string resolver. Committing time-aware claims and surfacing grounded answers remain planned.',
+      'Loreholm now selects admitted context, extracts source-linked episode, mention, and candidate-claim records, connects mentions to stable entities through an audited vector/string resolver, and commits time-aware Claims only after deterministic schema and evidence validation. Surfacing grounded answers remains planned.',
     ],
     status: 'mixed', docs: ['mining', 'architecture'], scene: 'evidence',
     options: [
@@ -821,8 +821,8 @@ export const adventureNodes = {
   mining: {
     depth: 4, eyebrow: 'The quiet librarian', question: 'How does the knowledge-building pipeline commit graph knowledge?',
     answer: [
-      'The instance now admits context, claims durable mining work, and asks a model through Bifrost for strictly validated episodes, mentions, temporal signals, and candidate claims. It embeds extracted mentions, retrieves same-type identity candidates, and persists exact, automatic, or bounded model-judged resolutions to stable entity vertices.',
-      'Schema-backed claim validation, first-class Evidence records, and claim commit remain planned. Clients stay deliberately less powerful: they observe and deliver, but never decide graph truth.',
+      'The instance admits context, claims durable mining work, and asks a model through Bifrost for strictly validated episodes, mentions, temporal signals, and candidate claims. It embeds extracted mentions, retrieves same-type identity candidates, and persists exact, automatic, or bounded model-judged resolutions to stable entity vertices.',
+      'The deterministic committer then validates every candidate against the versioned core relation schema before writing anything. It commits idempotent Claims and first-class Evidence records, so repeated support from a new capture strengthens one semantic Claim. Clients stay deliberately less powerful: they observe and deliver, but never decide graph truth.',
     ],
     status: 'mixed', docs: ['mining', 'architecture'], scene: 'evidence',
     options: [
@@ -848,7 +848,7 @@ export const adventureNodes = {
     depth: 4, eyebrow: 'Trust, but inspect', question: 'How is a graph claim tied back to inspectable evidence?',
     answer: [
       'Claims link many-to-many with first-class Evidence records. Evidence points back to the capture, source span, mining lineage, and lifecycle state that justify the claim.',
-      'Structured extraction now validates that candidate citations belong to the new evidence-eligible capture delta. First-class graph Evidence records and the query experience that uses them are still planned.',
+      'Structured extraction validates that candidate citations belong to the new evidence-eligible capture delta. The committer stores each accepted source span, capture ID, mining run, miner version, schema version, lifecycle state, and record time as first-class Evidence without duplicating the source excerpt. The grounded query experience that uses these records is still planned.',
     ],
     status: 'mixed', docs: ['mining', 'lifecycle', 'architecture'], scene: 'evidence',
     options: [
@@ -926,7 +926,7 @@ export const adventureNodes = {
     depth: 3, eyebrow: 'Raise the world', question: 'What services and operations exist in the current foundation?',
     answer: [
       'The current foundation installs a containerized Loreholm instance, generates separated credentials, exposes the authenticated instance boundary through the tunnel shim, persists captures in ArcadeDB, assembles transcript sessions, records deterministic salience, and runs policy-gated structured extraction and entity resolution through Bifrost.',
-      'The reusable client spine, retention coordinator, claim/Evidence commit, and evidence-backed recall experience remain clearly marked planned work.',
+      'It also validates and commits schema-backed Claims with source Evidence. The reusable client spine, retention coordinator, and evidence-backed recall experience remain clearly marked planned work.',
     ],
     status: 'implemented', docs: ['operations', 'development', 'architecture'], scene: 'builder',
     options: [

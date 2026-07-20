@@ -396,8 +396,8 @@ export const visualizations = {
   ], 'A quarantined receipt preserves the observation until explicit support exists.'),
 
   operations: compare('What the foundation runs today',
-    side('Operational now', ['Containerized private instance', 'Separated credentials and tunnel shim', 'Capture, durable queues, structured extraction, chat']),
-    side('Still planned', ['Resolver and graph miner', 'Reusable embedded spine', 'Retention and coordinated recovery', 'Evidence-backed recall']),
+    side('Operational now', ['Containerized private instance', 'Separated credentials and tunnel shim', 'Capture, extraction, resolution, Claim/Evidence commit']),
+    side('Still planned', ['Grounded query and surfacing', 'Reusable embedded spine', 'Retention and coordinated recovery', 'Correction experience']),
     'The current system is a working capture foundation, not yet the complete memory experience.'),
 };
 

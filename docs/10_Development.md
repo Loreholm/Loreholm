@@ -38,8 +38,10 @@ repository. Mining defaults to paused. When activated through the dashboard or
 policy API, the background extractor claims durable mining work, enforces the
 declared local or remote processing boundary, calls the configured model only
 through Bifrost, stores strict candidate output in `V2MiningRun`, embeds
-extracted mentions, and resolves them to stable `V2Entity` vertices. It does
-not commit claims or Evidence records. The transcript quiet period defaults to 300 seconds;
+extracted mentions, resolves them to stable `V2Entity` vertices, validates
+candidate relations against `api/app/v2/relation_schema.json`, and commits
+idempotent `V2Claim` vertices with source-linked `V2Evidence` documents. The
+transcript quiet period defaults to 300 seconds;
 `LOREHOLM_V2_SESSION_QUIESCENCE_SECONDS` in the Compose environment overrides
 it and is passed into the API container. `LOREHOLM_V2_EMBEDDING_DIMENSIONS`
 defaults to 384 and fixes the width of the persistent `V2Mention` HNSW region.

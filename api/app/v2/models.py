@@ -173,3 +173,33 @@ class ResolvedMentionView(BaseModel):
     combined_score: float | None
     decision_details: dict[str, Any]
     created_at: datetime
+
+
+class ClaimView(BaseModel):
+    claim_id: str
+    subject_entity_id: str
+    relation: str
+    object_kind: Literal["entity", "literal"]
+    object_entity_id: str | None
+    object_literal: str | None
+    valid_from: datetime | None
+    valid_to: datetime | None
+    recorded_at: datetime
+    statefulness: Literal["stateful", "eventive"]
+    cardinality: Literal["one", "many"]
+    schema_version: str
+    lifecycle: Literal["active", "superseded", "deleted"]
+    first_run_id: str
+
+
+class EvidenceView(BaseModel):
+    evidence_id: str
+    claim_id: str
+    capture_id: str
+    source_start: int
+    source_end: int
+    run_id: str
+    miner_version: str
+    schema_version: str
+    lifecycle: Literal["active", "superseded", "deleted"]
+    recorded_at: datetime

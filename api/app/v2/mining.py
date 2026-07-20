@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, Literal, Protocol
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .models import InstancePolicy, ModelEndpointConfig
 from .service import CaptureStore, MiningRun, SalienceRecord, _new_uuid7
@@ -48,12 +48,28 @@ class ClaimCandidate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     subject: str = Field(min_length=1, max_length=500)
-    relation: str = Field(pattern=r"^[a-z][a-z0-9_]{1,127}$")
+    relation: str = Field(pattern=r"^(?:[a-z][a-z0-9_]{1,127}|ext:[a-z][a-z0-9_]{1,123})$")
     object: str = Field(min_length=1, max_length=2_000)
     object_kind: Literal["entity", "literal"]
     evidence: list[SourceReference] = Field(min_length=1, max_length=50)
     valid_from: datetime | None = None
     valid_to: datetime | None = None
+
+    @field_validator("valid_from", "valid_to")
+    @classmethod
+    def require_temporal_timezone(cls, value: datetime | None) -> datetime | None:
+        if value is not None:
+            if value.tzinfo is None or value.utcoffset() is None:
+                raise ValueError("claim temporal bounds must include a timezone")
+            return value.astimezone(timezone.utc)
+        return value
+
+    @model_validator(mode="after")
+    def validate_temporal_order(self) -> "ClaimCandidate":
+        if self.valid_from is not None and self.valid_to is not None:
+            if self.valid_to < self.valid_from:
+                raise ValueError("claim valid_to cannot precede valid_from")
+        return self
 
 
 class ExtractionOutput(BaseModel):
@@ -87,11 +103,30 @@ class ResolutionStage(Protocol):
     ) -> list: ...
 
 
+class ClaimCommitStage(Protocol):
+    @property
+    def schema_version(self) -> str: ...
+
+    def validate_extraction(self, output: ExtractionOutput) -> None: ...
+
+    def commit_run(self, run: MiningRun): ...
+
+
 class BifrostExtractionGateway:
-    def __init__(self, base_url: str, auth: tuple[str, str]) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        auth: tuple[str, str],
+        relation_schema: dict | None = None,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.auth = auth
         self.timeout = httpx.Timeout(180.0, connect=5.0)
+        # Imported lazily because the deterministic committer consumes this
+        # module's extraction models in the opposite direction.
+        from .claims import extraction_schema_prompt
+
+        self.relation_schema = relation_schema or extraction_schema_prompt()
 
     def extract(self, preparation: "MiningPreparation", endpoint: ModelEndpointConfig) -> dict:
         schema = ExtractionOutput.model_json_schema()
@@ -101,8 +136,10 @@ class BifrostExtractionGateway:
                 "Every evidence item must quote an exact delta substring and give its zero-based start/end offsets.",
                 "Context and prior output may disambiguate the delta but must not be cited as new evidence.",
                 "Do not invent missing temporal bounds; use null.",
+                "Use only a relation in relation_schema and obey its subject/object types.",
                 "Return JSON matching the supplied schema and no prose.",
             ],
+            "relation_schema": self.relation_schema,
             "evidence_eligible_capture_ids": preparation.evidence_eligible_capture_ids,
             "prior_output": preparation.prior_output,
             "context_only": preparation.context,
@@ -340,6 +377,7 @@ class MiningWorker:
         policy: Callable[[], InstancePolicy],
         endpoint: Callable[[], ModelEndpointConfig],
         resolver: ResolutionStage | None = None,
+        committer: ClaimCommitStage | None = None,
         lease_for: timedelta = timedelta(minutes=5),
         retry_after: timedelta = timedelta(seconds=30),
         batch_size: int = 2,
@@ -350,6 +388,13 @@ class MiningWorker:
         self.policy = policy
         self.endpoint = endpoint
         self.resolver = resolver
+        self.committer = committer
+        if committer is None:
+            from .claims import load_relation_schema
+
+            self.relation_schema_version = load_relation_schema().schema_version
+        else:
+            self.relation_schema_version = committer.schema_version
         self.lease_for = lease_for
         self.retry_after = retry_after
         self.batch_size = batch_size
@@ -406,6 +451,7 @@ class MiningWorker:
                     "model_name": endpoint.model_name,
                     "processing_location": endpoint.processing_location,
                     "temperature": 0,
+                    "relation_schema_version": self.relation_schema_version,
                 }
                 preparation = self.coordinator.prepare(
                     salience,
@@ -419,6 +465,8 @@ class MiningWorker:
                     self._enforce_egress(preparation, endpoint, policy)
                     raw_output = self.gateway.extract(preparation, endpoint)
                     output = ExtractionOutput.model_validate(raw_output)
+                    if self.committer is not None:
+                        self.committer.validate_extraction(output)
                     evidence_ids = output.evidence_capture_ids()
                     invalid = sorted(
                         set(evidence_ids) - set(preparation.evidence_eligible_capture_ids)
@@ -448,6 +496,8 @@ class MiningWorker:
                     )
                 if self.resolver is not None:
                     self.resolver.resolve_run(run, endpoint, policy)
+                if self.committer is not None:
+                    self.committer.commit_run(run)
                 if not self.store.complete_mining_work(
                     work.mining_work_id, self.worker_id, now=started_at
                 ):

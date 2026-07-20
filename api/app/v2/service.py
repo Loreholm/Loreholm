@@ -150,6 +150,41 @@ class EntityCandidate:
     mention_surface: str
 
 
+@dataclass(frozen=True)
+class Claim:
+    claim_id: str
+    claim_key: str
+    subject_entity_id: str
+    relation: str
+    object_kind: Literal["entity", "literal"]
+    object_entity_id: str | None
+    object_literal: str | None
+    object_literal_norm: str | None
+    valid_from: datetime | None
+    valid_to: datetime | None
+    recorded_at: datetime
+    statefulness: Literal["stateful", "eventive"]
+    cardinality: Literal["one", "many"]
+    schema_version: str
+    lifecycle: Literal["active", "superseded", "deleted"]
+    first_run_id: str
+
+
+@dataclass(frozen=True)
+class Evidence:
+    evidence_id: str
+    evidence_key: str
+    claim_id: str
+    capture_id: str
+    source_start: int
+    source_end: int
+    run_id: str
+    miner_version: str
+    schema_version: str
+    lifecycle: Literal["active", "superseded", "deleted"]
+    recorded_at: datetime
+
+
 def _new_uuid7() -> str:
     millis = int(time.time() * 1000)
     value = (millis & ((1 << 48) - 1)) << 80
@@ -313,6 +348,36 @@ class CaptureStore:
     def is_resolution_complete(self, run_id: str) -> bool:
         raise NotImplementedError
 
+    def resolved_mentions_for_run(self, run_id: str) -> list[ResolvedMention]:
+        raise NotImplementedError
+
+    def put_claim(self, claim: Claim) -> Claim:
+        raise NotImplementedError
+
+    def put_evidence(self, evidence: Evidence) -> Evidence:
+        raise NotImplementedError
+
+    def list_claims(self, *, limit: int = 50) -> list[Claim]:
+        raise NotImplementedError
+
+    def list_evidence(self, *, limit: int = 50) -> list[Evidence]:
+        raise NotImplementedError
+
+    def mark_claim_commit_complete(
+        self,
+        run_id: str,
+        committer_version: str,
+        schema_version: str,
+        claim_count: int,
+        evidence_count: int,
+        *,
+        completed_at: datetime,
+    ) -> None:
+        raise NotImplementedError
+
+    def is_claim_commit_complete(self, run_id: str) -> bool:
+        raise NotImplementedError
+
 
 class MemoryCaptureStore(CaptureStore):
     """Deterministic development/test store, never selected in production."""
@@ -331,6 +396,11 @@ class MemoryCaptureStore(CaptureStore):
         self._entity_by_key: dict[str, str] = {}
         self._mentions: dict[str, ResolvedMention] = {}
         self._resolution_complete: dict[str, dict] = {}
+        self._claims: dict[str, Claim] = {}
+        self._claim_by_key: dict[str, str] = {}
+        self._evidence: dict[str, Evidence] = {}
+        self._evidence_by_key: dict[str, str] = {}
+        self._claim_commit_complete: dict[str, dict] = {}
         self._scheduled_captures: set[str] = set()
         self._lock = Lock()
 
@@ -381,6 +451,14 @@ class MemoryCaptureStore(CaptureStore):
     @property
     def resolved_mentions(self) -> tuple[ResolvedMention, ...]:
         return tuple(self._mentions.values())
+
+    @property
+    def claims(self) -> tuple[Claim, ...]:
+        return tuple(self._claims.values())
+
+    @property
+    def evidence_records(self) -> tuple[Evidence, ...]:
+        return tuple(self._evidence.values())
 
     def _new_work(
         self,
@@ -605,7 +683,10 @@ class MemoryCaptureStore(CaptureStore):
             if (
                 run.status != "succeeded"
                 or run.stage != "interpret_extract"
-                or self.is_resolution_complete(run.run_id)
+                or (
+                    self.is_resolution_complete(run.run_id)
+                    and self.is_claim_commit_complete(run.run_id)
+                )
             ):
                 continue
             work = next((
@@ -799,6 +880,66 @@ class MemoryCaptureStore(CaptureStore):
 
     def is_resolution_complete(self, run_id: str) -> bool:
         return run_id in self._resolution_complete
+
+    def resolved_mentions_for_run(self, run_id: str) -> list[ResolvedMention]:
+        return sorted(
+            (item for item in self._mentions.values() if item.run_id == run_id),
+            key=lambda item: (item.created_at, item.mention_id),
+        )
+
+    def put_claim(self, claim: Claim) -> Claim:
+        with self._lock:
+            existing_id = self._claim_by_key.get(claim.claim_key)
+            if existing_id is not None:
+                return self._claims[existing_id]
+            self._claims[claim.claim_id] = claim
+            self._claim_by_key[claim.claim_key] = claim.claim_id
+            return claim
+
+    def put_evidence(self, evidence: Evidence) -> Evidence:
+        with self._lock:
+            existing_id = self._evidence_by_key.get(evidence.evidence_key)
+            if existing_id is not None:
+                return self._evidence[existing_id]
+            self._evidence[evidence.evidence_id] = evidence
+            self._evidence_by_key[evidence.evidence_key] = evidence.evidence_id
+            return evidence
+
+    def list_claims(self, *, limit: int = 50) -> list[Claim]:
+        bounded = max(1, min(limit, 250))
+        return sorted(
+            self._claims.values(), key=lambda item: (item.recorded_at, item.claim_id), reverse=True
+        )[:bounded]
+
+    def list_evidence(self, *, limit: int = 50) -> list[Evidence]:
+        bounded = max(1, min(limit, 250))
+        return sorted(
+            self._evidence.values(),
+            key=lambda item: (item.recorded_at, item.evidence_id),
+            reverse=True,
+        )[:bounded]
+
+    def mark_claim_commit_complete(
+        self,
+        run_id: str,
+        committer_version: str,
+        schema_version: str,
+        claim_count: int,
+        evidence_count: int,
+        *,
+        completed_at: datetime,
+    ) -> None:
+        with self._lock:
+            self._claim_commit_complete.setdefault(run_id, {
+                "committer_version": committer_version,
+                "schema_version": schema_version,
+                "claim_count": claim_count,
+                "evidence_count": evidence_count,
+                "completed_at": completed_at,
+            })
+
+    def is_claim_commit_complete(self, run_id: str) -> bool:
+        return run_id in self._claim_commit_complete
 
 
 class ArcadeCaptureStore(CaptureStore):
@@ -1001,6 +1142,53 @@ class ArcadeCaptureStore(CaptureStore):
             "CREATE PROPERTY V2ResolutionRun.mention_count IF NOT EXISTS INTEGER",
             "CREATE PROPERTY V2ResolutionRun.completed_at IF NOT EXISTS DATETIME",
             "CREATE INDEX IF NOT EXISTS ON V2ResolutionRun (run_id) UNIQUE",
+            "CREATE VERTEX TYPE V2Claim IF NOT EXISTS",
+            "CREATE PROPERTY V2Claim.claim_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Claim.claim_key IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Claim.subject_entity_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Claim.relation IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Claim.object_kind IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Claim.object_entity_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Claim.object_literal IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Claim.object_literal_norm IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Claim.valid_from IF NOT EXISTS DATETIME",
+            "CREATE PROPERTY V2Claim.valid_to IF NOT EXISTS DATETIME",
+            "CREATE PROPERTY V2Claim.recorded_at IF NOT EXISTS DATETIME",
+            "CREATE PROPERTY V2Claim.statefulness IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Claim.cardinality IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Claim.schema_version IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Claim.lifecycle IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Claim.first_run_id IF NOT EXISTS STRING",
+            "CREATE INDEX IF NOT EXISTS ON V2Claim (claim_id) UNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2Claim (claim_key) UNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2Claim (subject_entity_id, relation) NOTUNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2Claim (object_entity_id) NOTUNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2Claim (lifecycle, recorded_at) NOTUNIQUE",
+            "CREATE DOCUMENT TYPE V2Evidence IF NOT EXISTS",
+            "CREATE PROPERTY V2Evidence.evidence_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Evidence.evidence_key IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Evidence.claim_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Evidence.capture_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Evidence.source_start IF NOT EXISTS INTEGER",
+            "CREATE PROPERTY V2Evidence.source_end IF NOT EXISTS INTEGER",
+            "CREATE PROPERTY V2Evidence.run_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Evidence.miner_version IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Evidence.schema_version IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Evidence.lifecycle IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2Evidence.recorded_at IF NOT EXISTS DATETIME",
+            "CREATE INDEX IF NOT EXISTS ON V2Evidence (evidence_id) UNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2Evidence (evidence_key) UNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2Evidence (claim_id) NOTUNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2Evidence (capture_id) NOTUNIQUE",
+            "CREATE INDEX IF NOT EXISTS ON V2Evidence (run_id) NOTUNIQUE",
+            "CREATE DOCUMENT TYPE V2ClaimCommitRun IF NOT EXISTS",
+            "CREATE PROPERTY V2ClaimCommitRun.run_id IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ClaimCommitRun.committer_version IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ClaimCommitRun.schema_version IF NOT EXISTS STRING",
+            "CREATE PROPERTY V2ClaimCommitRun.claim_count IF NOT EXISTS INTEGER",
+            "CREATE PROPERTY V2ClaimCommitRun.evidence_count IF NOT EXISTS INTEGER",
+            "CREATE PROPERTY V2ClaimCommitRun.completed_at IF NOT EXISTS DATETIME",
+            "CREATE INDEX IF NOT EXISTS ON V2ClaimCommitRun (run_id) UNIQUE",
         )
         for statement in statements:
             self._command(statement)
@@ -1573,7 +1761,10 @@ class ArcadeCaptureStore(CaptureStore):
             "WHERE status = 'succeeded' AND stage = 'interpret_extract' ORDER BY completed_at"
         ).get("result", [])
         for run in unresolved:
-            if self.is_resolution_complete(run["run_id"]):
+            if (
+                self.is_resolution_complete(run["run_id"])
+                and self.is_claim_commit_complete(run["run_id"])
+            ):
                 continue
             reopened = self._command(
                 "UPDATE V2MiningWork SET state = 'pending', available_at = :available_at, "
@@ -1970,6 +2161,164 @@ class ArcadeCaptureStore(CaptureStore):
     def is_resolution_complete(self, run_id: str) -> bool:
         rows = self._command(
             "SELECT run_id FROM V2ResolutionRun WHERE run_id = :run_id LIMIT 1",
+            {"run_id": run_id},
+        ).get("result", [])
+        return bool(rows)
+
+    def resolved_mentions_for_run(self, run_id: str) -> list[ResolvedMention]:
+        rows = self._command(
+            "SELECT FROM V2Mention WHERE run_id = :run_id ORDER BY created_at, mention_id",
+            {"run_id": run_id},
+        ).get("result", [])
+        return [self._mention_from_row(row) for row in rows]
+
+    @classmethod
+    def _claim_from_row(cls, row: dict) -> Claim:
+        return Claim(
+            claim_id=row["claim_id"],
+            claim_key=row["claim_key"],
+            subject_entity_id=row["subject_entity_id"],
+            relation=row["relation"],
+            object_kind=row["object_kind"],
+            object_entity_id=row.get("object_entity_id"),
+            object_literal=row.get("object_literal"),
+            object_literal_norm=row.get("object_literal_norm"),
+            valid_from=cls._datetime(row.get("valid_from")),
+            valid_to=cls._datetime(row.get("valid_to")),
+            recorded_at=cls._datetime(row["recorded_at"]),
+            statefulness=row["statefulness"],
+            cardinality=row["cardinality"],
+            schema_version=row["schema_version"],
+            lifecycle=row["lifecycle"],
+            first_run_id=row["first_run_id"],
+        )
+
+    @classmethod
+    def _evidence_from_row(cls, row: dict) -> Evidence:
+        return Evidence(
+            evidence_id=row["evidence_id"],
+            evidence_key=row["evidence_key"],
+            claim_id=row["claim_id"],
+            capture_id=row["capture_id"],
+            source_start=int(row["source_start"]),
+            source_end=int(row["source_end"]),
+            run_id=row["run_id"],
+            miner_version=row["miner_version"],
+            schema_version=row["schema_version"],
+            lifecycle=row["lifecycle"],
+            recorded_at=cls._datetime(row["recorded_at"]),
+        )
+
+    def put_claim(self, claim: Claim) -> Claim:
+        rows = self._command(
+            "SELECT FROM V2Claim WHERE claim_key = :claim_key LIMIT 1",
+            {"claim_key": claim.claim_key},
+        ).get("result", [])
+        if rows:
+            return self._claim_from_row(rows[0])
+        params = {
+            **claim.__dict__,
+            "valid_from": _epoch_millis(claim.valid_from) if claim.valid_from else None,
+            "valid_to": _epoch_millis(claim.valid_to) if claim.valid_to else None,
+            "recorded_at": _epoch_millis(claim.recorded_at),
+        }
+        try:
+            self._command(
+                "INSERT INTO V2Claim SET claim_id = :claim_id, claim_key = :claim_key, "
+                "subject_entity_id = :subject_entity_id, relation = :relation, "
+                "object_kind = :object_kind, object_entity_id = :object_entity_id, "
+                "object_literal = :object_literal, object_literal_norm = :object_literal_norm, "
+                "valid_from = :valid_from, valid_to = :valid_to, recorded_at = :recorded_at, "
+                "statefulness = :statefulness, cardinality = :cardinality, "
+                "schema_version = :schema_version, lifecycle = :lifecycle, "
+                "first_run_id = :first_run_id",
+                params,
+            )
+        except RuntimeError:
+            rows = self._command(
+                "SELECT FROM V2Claim WHERE claim_key = :claim_key LIMIT 1",
+                {"claim_key": claim.claim_key},
+            ).get("result", [])
+            if not rows:
+                raise
+            return self._claim_from_row(rows[0])
+        return claim
+
+    def put_evidence(self, evidence: Evidence) -> Evidence:
+        rows = self._command(
+            "SELECT FROM V2Evidence WHERE evidence_key = :evidence_key LIMIT 1",
+            {"evidence_key": evidence.evidence_key},
+        ).get("result", [])
+        if rows:
+            return self._evidence_from_row(rows[0])
+        params = {**evidence.__dict__, "recorded_at": _epoch_millis(evidence.recorded_at)}
+        try:
+            self._command(
+                "INSERT INTO V2Evidence SET evidence_id = :evidence_id, "
+                "evidence_key = :evidence_key, claim_id = :claim_id, capture_id = :capture_id, "
+                "source_start = :source_start, source_end = :source_end, run_id = :run_id, "
+                "miner_version = :miner_version, schema_version = :schema_version, "
+                "lifecycle = :lifecycle, recorded_at = :recorded_at",
+                params,
+            )
+        except RuntimeError:
+            rows = self._command(
+                "SELECT FROM V2Evidence WHERE evidence_key = :evidence_key LIMIT 1",
+                {"evidence_key": evidence.evidence_key},
+            ).get("result", [])
+            if not rows:
+                raise
+            return self._evidence_from_row(rows[0])
+        return evidence
+
+    def list_claims(self, *, limit: int = 50) -> list[Claim]:
+        bounded = max(1, min(limit, 250))
+        rows = self._command(
+            f"SELECT FROM V2Claim ORDER BY recorded_at DESC, claim_id DESC LIMIT {bounded}"
+        ).get("result", [])
+        return [self._claim_from_row(row) for row in rows]
+
+    def list_evidence(self, *, limit: int = 50) -> list[Evidence]:
+        bounded = max(1, min(limit, 250))
+        rows = self._command(
+            f"SELECT FROM V2Evidence ORDER BY recorded_at DESC, evidence_id DESC LIMIT {bounded}"
+        ).get("result", [])
+        return [self._evidence_from_row(row) for row in rows]
+
+    def mark_claim_commit_complete(
+        self,
+        run_id: str,
+        committer_version: str,
+        schema_version: str,
+        claim_count: int,
+        evidence_count: int,
+        *,
+        completed_at: datetime,
+    ) -> None:
+        if self.is_claim_commit_complete(run_id):
+            return
+        try:
+            self._command(
+                "INSERT INTO V2ClaimCommitRun SET run_id = :run_id, "
+                "committer_version = :committer_version, schema_version = :schema_version, "
+                "claim_count = :claim_count, evidence_count = :evidence_count, "
+                "completed_at = :completed_at",
+                {
+                    "run_id": run_id,
+                    "committer_version": committer_version,
+                    "schema_version": schema_version,
+                    "claim_count": claim_count,
+                    "evidence_count": evidence_count,
+                    "completed_at": _epoch_millis(completed_at),
+                },
+            )
+        except RuntimeError:
+            if not self.is_claim_commit_complete(run_id):
+                raise
+
+    def is_claim_commit_complete(self, run_id: str) -> bool:
+        rows = self._command(
+            "SELECT run_id FROM V2ClaimCommitRun WHERE run_id = :run_id LIMIT 1",
             {"run_id": run_id},
         ).get("result", [])
         return bool(rows)

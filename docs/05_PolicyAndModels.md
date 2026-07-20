@@ -78,8 +78,8 @@ The policy exposes `active` and `paused`, defaults to `paused`, and migrates the
 retired `unavailable_not_implemented` value to `paused`. Session assembly,
 salience, and durable mining-work creation continue while paused, but the
 mining worker claims nothing and performs no model egress. Active mining runs
-structured extraction and entity resolution; it does not activate claim or
-Evidence commit.
+structured extraction, entity resolution, and deterministic Claim/Evidence
+commit.
 
 ## Bifrost model boundary
 

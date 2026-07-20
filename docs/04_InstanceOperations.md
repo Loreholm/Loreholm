@@ -125,14 +125,16 @@ this form enables both request types. Otherwise the named embedding provider
 must already exist in Bifrost.
 
 Mining defaults to paused. Activating it permits candidate extraction followed
-by mention embedding and entity resolution; claim/Evidence commit remains
-unavailable. A remote endpoint receives raw extraction input only for classes
+by mention embedding, entity resolution, and deterministic Claim/Evidence
+commit. A remote endpoint receives raw extraction input only for classes
 whose processing mode is `unrestricted`. Remote resolution of locally derived
 mentions requires `derived_only` or `unrestricted`; the stricter extraction
 rule still controls a combined run.
 
-It does not yet provide capture inventory, deletion, mining runs, graph
-inspection, backup, or restore.
+It does not yet provide capture inventory, deletion, grounded graph query,
+backup, or restore. Mining runs, resolved entities, Claims, Evidence, and the
+relation schema are available through authenticated audit endpoints; the field
+console shows a recent committed-knowledge sample.
 
 Mining runs are currently inspectable as JSON outside the dashboard:
 

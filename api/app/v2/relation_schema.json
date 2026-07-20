@@ -1,0 +1,69 @@
+{
+  "schema_version": "core-v1",
+  "relations": {
+    "created": {
+      "description": "The subject created the object.",
+      "subject_types": ["*"],
+      "object_kind": "entity",
+      "object_entity_types": ["*"],
+      "statefulness": "eventive",
+      "cardinality": "many"
+    },
+    "depends_on": {
+      "description": "The subject depends on the object.",
+      "subject_types": ["*"],
+      "object_kind": "entity",
+      "object_entity_types": ["*"],
+      "statefulness": "stateful",
+      "cardinality": "many"
+    },
+    "located_in": {
+      "description": "The subject is located in the object place.",
+      "subject_types": ["*"],
+      "object_kind": "entity",
+      "object_entity_types": ["place", "location"],
+      "statefulness": "stateful",
+      "cardinality": "one"
+    },
+    "member_of": {
+      "description": "The subject is a member of the object group or organization.",
+      "subject_types": ["*"],
+      "object_kind": "entity",
+      "object_entity_types": ["group", "organization", "team"],
+      "statefulness": "stateful",
+      "cardinality": "many"
+    },
+    "owns": {
+      "description": "The subject owns the object.",
+      "subject_types": ["*"],
+      "object_kind": "entity",
+      "object_entity_types": ["*"],
+      "statefulness": "stateful",
+      "cardinality": "many"
+    },
+    "storage_location": {
+      "description": "The literal location or locality policy where the subject is stored.",
+      "subject_types": ["data_collection", "artifact", "database", "system"],
+      "object_kind": "literal",
+      "object_entity_types": [],
+      "statefulness": "stateful",
+      "cardinality": "one"
+    },
+    "uses": {
+      "description": "The subject uses the object.",
+      "subject_types": ["*"],
+      "object_kind": "entity",
+      "object_entity_types": ["*"],
+      "statefulness": "stateful",
+      "cardinality": "many"
+    },
+    "works_for": {
+      "description": "The subject works for the object organization.",
+      "subject_types": ["person"],
+      "object_kind": "entity",
+      "object_entity_types": ["organization"],
+      "statefulness": "stateful",
+      "cardinality": "one"
+    }
+  }
+}

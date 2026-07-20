@@ -48,9 +48,9 @@ forced into a brittle link.
 That is the database upgrade Loreholm is pursuing: raw history remains
 inspectable, vector retrieval works over selected derived material, and the
 graph is built from rich metadata and evidence rather than isolated chunks.
-The capture and idempotent staging foundation works today. The derived vector,
-mining, graph-commit, and surfacing layers are accepted design and remain to be
-implemented.
+Capture, idempotent staging, derived mention vectors, extraction, identity
+resolution, and evidence-backed graph commit work today. Grounded surfacing and
+the remaining lifecycle layers are accepted design and remain to be implemented.
 
 ## Status legend
 
@@ -87,7 +87,7 @@ interpret + candidate extraction       [implemented]
 mention vectors + resolve              [implemented]
     |
     v
-knowledge graph + provenance           [planned]
+schema-valid Claims + Evidence          [implemented]
     |
     v
 query and surfacing                     [planned]
@@ -144,7 +144,8 @@ captures, and stores an idempotent admitted-or-skipped salience record. Admitted
 records receive separate durable mining work. When mining is active, the
 extractor sends policy-permitted bounded input through Bifrost and persists
 strictly validated episode, mention, and candidate-claim output. It does not
-write the graph.
+write the graph directly; the resolver and deterministic committer consume its
+durable output before mining work completes.
 
 ### Policy
 
@@ -254,14 +255,14 @@ The implemented `V2MiningRun` foundation carries stage, miner,
 model/configuration, and input fingerprints plus parent-run lineage. For a new
 session generation, the input coordinator reuses the latest compatible
 successful output and supplies only new captures plus a bounded context tail.
-Context-only captures are excluded from the new-evidence set. Re-mining and
-graph commit must later use that lineage so a new successful generation can
-supersede covered derived output without replacing stable accreted identities
-or destroying independent evidence.
+Context-only captures are excluded from the new-evidence set. Graph commit uses
+that boundary now: exact source retries reuse Evidence, while a genuinely new
+capture can add independent Evidence to the same semantic Claim. Scoped
+supersession across replacement generations remains planned.
 
-The structured interpreter/extractor and entity resolver are implemented. No
-schema-backed claim-commit worker or query stage is implemented in the current
-foundation milestone.
+The structured interpreter/extractor, entity resolver, and deterministic claim
+committer are implemented. No grounded query stage is implemented in the
+current foundation milestone.
 
 See [mining and knowledge](07_MiningAndKnowledge.md) for the accepted identity,
 provenance, schema, vector, and surfacing decisions, and
@@ -281,7 +282,7 @@ provenance, schema, vector, and surfacing decisions, and
 | Embedded spine | Planned | Identity, policy enforcement, redaction, ordering, and offline delivery |
 | Structured extractor | Implemented | Turn admitted captures into versioned episode, mention, and candidate-claim output |
 | Entity resolver | Implemented | Embed extracted mentions, retrieve typed candidates, and persist audited identity decisions |
-| Claim and evidence committer | Planned | Validate relation schema and commit claims with first-class evidence |
+| Claim and evidence committer | Implemented | Validate the versioned relation schema and commit idempotent Claims with first-class Evidence |
 | Graph query/surfacing | Planned | Retrieve mined knowledge for users and assistants |
 
 ## Source map
@@ -293,6 +294,9 @@ provenance, schema, vector, and surfacing decisions, and
   enforcement, validation, and mining-run persistence
 - `api/app/v2/resolution.py` — Bifrost embeddings, vector/string candidate
   scoring, bounded identity judgment, and durable mention resolution
+- `api/app/v2/claims.py` — deterministic relation validation, semantic Claim
+  identity, Evidence attachment, and commit markers
+- `api/app/v2/relation_schema.json` — shipped Git-versioned core relation schema
 - `api/app/v2/app.py` — Loreholm application, administration, and chat capture
 - `deploy/docker-compose.v2.yml` — private instance deployment
 - `deploy/docker-compose.v2.remote.yml` — retained tunnel topology, currently wired for chat

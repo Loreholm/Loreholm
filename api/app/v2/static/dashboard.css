@@ -65,10 +65,19 @@ aside{display:grid;gap:22px}
 .check input{accent-color:var(--acid)}
 .pipeline{display:flex;align-items:center;justify-content:space-between;margin:30px 0}
 .pipeline span{font:9px monospace;letter-spacing:.1em}
-.pipeline .pipeline-sealed{color:var(--rust)}
+.pipeline .pipeline-live{color:var(--acid)}
 .pipeline i{height:1px;flex:1;margin:0 8px;background:var(--line);position:relative}
 .pipeline i:after{content:"";position:absolute;right:0;top:-2px;border-left:5px solid var(--line);border-top:2px solid transparent;border-bottom:2px solid transparent}
 .notice{font:11px monospace;color:var(--blue);border-top:1px solid var(--line);padding-top:16px}
+.knowledge-summary{margin-top:26px;padding-top:24px;border-top:1px solid var(--line)}
+.knowledge-summary h3{font-size:20px}
+.knowledge-counts{display:grid;grid-template-columns:auto auto;gap:2px 8px;text-align:right}
+.knowledge-counts strong{font:18px monospace;color:var(--acid)}
+.knowledge-counts span{font:9px monospace;letter-spacing:.12em;color:var(--muted);align-self:center}
+.recent-claims{display:grid;gap:8px;margin-top:16px}
+.recent-claims article{display:grid;grid-template-columns:minmax(130px,.7fr) 1fr auto;gap:12px;padding:11px 13px;background:#0d0f0c;border:1px solid var(--line);align-items:center}
+.recent-claims article span,.recent-claims article small{font:10px monospace;color:var(--muted)}
+.recent-claims article strong{font:13px monospace;font-weight:400;color:var(--ink);overflow-wrap:anywhere}
 .tip{position:relative;display:inline-grid;place-items:center;width:16px;height:16px;padding:0;border:1px solid #596050;border-radius:50%;background:transparent;color:var(--muted);font:700 9px monospace;vertical-align:middle;letter-spacing:0}
 .tip:hover,.tip:focus-visible{border-color:var(--acid);color:var(--acid);outline:none}
 .tip:after{content:attr(data-tip);position:absolute;z-index:30;left:50%;bottom:calc(100% + 10px);width:250px;padding:11px 12px;border:1px solid var(--line);background:#090b09;color:var(--ink);font:11px/1.45 monospace;letter-spacing:0;text-align:left;box-shadow:0 12px 35px #000;opacity:0;visibility:hidden;transform:translate(-50%,5px);transition:.16s;pointer-events:none}

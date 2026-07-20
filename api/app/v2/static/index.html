@@ -26,7 +26,7 @@
     <div id="console" hidden>
       <section class="status-strip">
         <div><span>INSTANCE <button class="tip" data-tip="The Loreholm API that receives captures, enforces policy, and serves this console." aria-label="About instance status">?</button></span><strong id="instanceState">—</strong></div>
-        <div><span>ARCADEDB <button class="tip" data-tip="The durable local store for raw captures, quarantine, policy, and the future knowledge graph." aria-label="About ArcadeDB status">?</button></span><strong class="good">ONLINE</strong></div>
+        <div><span>ARCADEDB <button class="tip" data-tip="The durable local store for raw captures, quarantine, policy, resolved entities, Claims, and Evidence." aria-label="About ArcadeDB status">?</button></span><strong class="good">ONLINE</strong></div>
         <div><span><a id="bifrostDashboardLink" class="status-link" href="#" target="_blank" rel="noopener">BIFROST ↗</a> <button class="tip" data-tip="Open your Bifrost dashboard to add provider credentials, inspect model traffic, and manage routing." aria-label="About Bifrost status">?</button></span><strong id="bifrostState">—</strong></div>
         <div><span>LOCAL MODEL <button class="tip" data-tip="READY means Bifrost can reach the configured vLLM endpoint and list its models." aria-label="About local model status">?</button></span><strong id="modelState">—</strong></div>
         <div><span>POLICY REV. <button class="tip" data-tip="The durable policy version. It increments after each successful policy commit." aria-label="About policy revision">?</button></span><strong id="policyVersion">—</strong></div>
@@ -37,7 +37,11 @@
           <p class="index">01 / CAPTURE BOUNDARY</p>
           <div class="section-head"><div><h2>What enters the archive?</h2><p>Capture and model-egress are separate decisions. Tighten them independently.</p></div><button id="savePolicy" class="save">Commit policy</button></div>
           <div id="classes" class="class-list"></div>
-          <div class="mining-row"><div><span class="glyph">M</span><div><h3>Mining state <button class="tip" data-tip="Active claims admitted scopes for structured extraction through Bifrost. Paused keeps capturing and admission running without model egress." aria-label="About mining state">?</button></h3><p>Extraction produces versioned candidates only; it does not commit graph truth.</p></div></div><select id="miningStatus" aria-label="Mining state"><option value="paused">Paused</option><option value="active">Active</option></select></div>
+          <div class="mining-row"><div><span class="glyph">M</span><div><h3>Mining state <button class="tip" data-tip="Active claims admitted scopes for extraction, identity resolution, schema validation, and evidence-backed commit. Paused keeps capture and admission running without model egress." aria-label="About mining state">?</button></h3><p>Active mining commits only schema-valid claims with inspectable source evidence.</p></div></div><select id="miningStatus" aria-label="Mining state"><option value="paused">Paused</option><option value="active">Active</option></select></div>
+          <div class="knowledge-summary">
+            <div class="section-head"><div><p class="index">COMMITTED KNOWLEDGE</p><h3>Recent graph truth</h3></div><div class="knowledge-counts"><strong id="claimCount">0</strong><span>recent claims</span><strong id="evidenceCount">0</strong><span>recent evidence</span></div></div>
+            <div id="recentClaims" class="recent-claims"><p>No committed claims yet.</p></div>
+          </div>
         </section>
 
         <aside>
@@ -63,7 +67,7 @@
           <section class="panel signal-panel">
             <p class="index">03 / SIGNAL</p>
             <h2>Pipeline topology</h2>
-            <div class="pipeline"><span>STAGING</span><i></i><span>EXTRACTOR</span><i></i><span>RESOLVER</span><i></i><span class="pipeline-sealed">CLAIMS / SEALED</span></div>
+            <div class="pipeline"><span>STAGING</span><i></i><span>EXTRACTOR</span><i></i><span>RESOLVER</span><i></i><span class="pipeline-live">CLAIMS + EVIDENCE</span></div>
             <p id="notice" class="notice">Console synchronized.</p>
           </section>
         </aside>

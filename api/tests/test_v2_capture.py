@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from pydantic import ValidationError
 
+from app.v2.claims import ClaimCommitter, load_relation_schema
 from app.v2.mining import BifrostExtractionGateway, MiningRunCoordinator, MiningWorker
 from app.v2.models import CaptureEnvelope, InstancePolicy, ModelEndpointConfig
 from app.v2.resolution import (
@@ -739,6 +740,8 @@ def test_bifrost_gateway_requests_strict_json_schema(monkeypatch) -> None:
     assert seen["url"] == "http://bifrost:8080/v1/chat/completions"
     assert seen["payload"]["response_format"]["type"] == "json_schema"
     assert seen["payload"]["response_format"]["json_schema"]["strict"] is True
+    assert seen["payload"]["messages"][1]["content"].find('"schema_version":"core-v1"') > 0
+    assert seen["payload"]["messages"][1]["content"].find('"storage_location"') > 0
 
 
 class StubResolutionGateway:
@@ -815,13 +818,27 @@ def test_startup_reopens_successful_extraction_missing_resolution_marker() -> No
     assert store.mining_work_items[0].state == "pending"
 
 
-def test_resolution_marker_prevents_completed_work_from_reopening() -> None:
+def test_resolution_without_claim_commit_reopens_completed_work() -> None:
     store, policy, _, run = successful_extraction_run()
     EntityResolver(store, StubResolutionGateway([[1.0, 0.0, 0.0]])).resolve_run(
         run, ModelEndpointConfig(embedding_dimensions=3), policy
     )
 
     assert store.is_resolution_complete(run.run_id) is True
+    assert store.backfill_mining_work() == 1
+    assert store.mining_work_items[0].state == "pending"
+
+
+def test_claim_commit_marker_prevents_completed_work_from_reopening() -> None:
+    store, policy, _, run = successful_extraction_run()
+    EntityResolver(store, StubResolutionGateway([[1.0, 0.0, 0.0]])).resolve_run(
+        run, ModelEndpointConfig(embedding_dimensions=3), policy
+    )
+    result = ClaimCommitter(store).commit_run(run)
+
+    assert len(result.claims) == 1
+    assert len(result.evidence) == 1
+    assert store.is_claim_commit_complete(run.run_id) is True
     assert store.backfill_mining_work() == 0
     assert store.mining_work_items[0].state == "completed"
 
@@ -927,6 +944,7 @@ def test_mining_work_completes_only_after_entity_resolution() -> None:
         policy=lambda: policy,
         endpoint=lambda: ModelEndpointConfig(embedding_dimensions=3),
         resolver=resolver,
+        committer=ClaimCommitter(store),
     )
 
     runs = worker.process_once(now)
@@ -935,6 +953,191 @@ def test_mining_work_completes_only_after_entity_resolution() -> None:
     assert store.mining_work_items[0].state == "completed"
     assert len(store.resolved_mentions) == 1
     assert len(store.entities) == 1
+    assert len(store.claims) == 1
+    assert len(store.evidence_records) == 1
+
+
+def test_claim_commit_is_schema_backed_and_idempotent() -> None:
+    store, policy, capture, run = successful_extraction_run()
+    EntityResolver(store, StubResolutionGateway([[1.0, 0.0, 0.0]])).resolve_run(
+        run, ModelEndpointConfig(embedding_dimensions=3), policy
+    )
+    committer = ClaimCommitter(store)
+
+    first = committer.commit_run(run)
+    repeated = committer.commit_run(run)
+
+    assert repeated == first
+    assert len(store.claims) == 1
+    assert len(store.evidence_records) == 1
+    claim = first.claims[0]
+    assert claim.subject_entity_id == store.entities[0].entity_id
+    assert claim.relation == "storage_location"
+    assert claim.object_literal == "local"
+    assert claim.object_entity_id is None
+    assert claim.statefulness == "stateful"
+    assert claim.cardinality == "one"
+    assert claim.schema_version == "core-v1"
+    evidence = first.evidence[0]
+    assert evidence.claim_id == claim.claim_id
+    assert evidence.capture_id == capture.capture_id
+    assert evidence.run_id == run.run_id
+    assert store.list_claims(limit=1) == [claim]
+    assert store.list_evidence(limit=1) == [evidence]
+
+
+def test_unknown_relation_fails_closed_without_graph_writes() -> None:
+    store, policy, _, run = successful_extraction_run()
+    resolver = EntityResolver(store, StubResolutionGateway([[1.0, 0.0, 0.0]]))
+    output = json.loads(json.dumps(run.output))
+    output["candidate_claims"][0]["relation"] = "invented_relation"
+    changed = replace(run, run_id="unknown-relation-run", run_key="unknown-relation-key", output=output)
+    resolver.resolve_run(changed, ModelEndpointConfig(embedding_dimensions=3), policy)
+
+    with pytest.raises(ValueError, match="not registered"):
+        ClaimCommitter(store).commit_run(changed)
+
+    assert store.claims == ()
+    assert store.evidence_records == ()
+    assert store.is_claim_commit_complete(changed.run_id) is False
+
+
+def test_all_candidates_validate_before_any_graph_write() -> None:
+    store, policy, _, run = successful_extraction_run()
+    resolver = EntityResolver(store, StubResolutionGateway([[1.0, 0.0, 0.0]]))
+    output = json.loads(json.dumps(run.output))
+    invalid = json.loads(json.dumps(output["candidate_claims"][0]))
+    invalid["relation"] = "invented_relation"
+    output["candidate_claims"].append(invalid)
+    changed = replace(run, run_id="atomic-validation-run", run_key="atomic-validation-key", output=output)
+    resolver.resolve_run(changed, ModelEndpointConfig(embedding_dimensions=3), policy)
+
+    with pytest.raises(ValueError, match="not registered"):
+        ClaimCommitter(store).commit_run(changed)
+
+    assert store.claims == ()
+    assert store.evidence_records == ()
+
+
+def test_schema_invalid_extraction_is_not_reused_on_worker_retry() -> None:
+    policy = InstancePolicy(mining_status="active")
+    store, policy, capture, now = admitted_mining_fixture(policy)
+    invalid = extraction_for(capture.capture_id)
+    invalid["candidate_claims"][0]["relation"] = "invented_relation"
+    gateway = StubExtractionGateway([invalid, extraction_for(capture.capture_id)])
+    worker = MiningWorker(
+        store,
+        gateway,
+        worker_id="mining-a",
+        policy=lambda: policy,
+        endpoint=lambda: ModelEndpointConfig(embedding_dimensions=3),
+        resolver=EntityResolver(store, StubResolutionGateway([[1.0, 0.0, 0.0]])),
+        committer=ClaimCommitter(store),
+        retry_after=timedelta(seconds=5),
+    )
+
+    assert worker.process_once(now) == []
+    assert store.mining_runs[0].status == "failed"
+    completed = worker.process_once(now + timedelta(seconds=5))
+
+    assert len(completed) == 1
+    assert len(gateway.calls) == 2
+    assert len(store.claims) == 1
+    assert store.mining_work_items[0].state == "completed"
+
+
+def test_entity_object_claim_requires_both_surfaces_to_be_resolved() -> None:
+    store, policy, capture, run = successful_extraction_run()
+    evidence = extraction_for(capture.capture_id)["mentions"][0]["evidence"]
+    output = json.loads(json.dumps(run.output))
+    output["mentions"] = [
+        {
+            "surface": "Maya",
+            "entity_type": "person",
+            "context": "Maya works for Northwind",
+            "evidence": evidence,
+        },
+        {
+            "surface": "Northwind",
+            "entity_type": "organization",
+            "context": "Maya works for Northwind",
+            "evidence": evidence,
+        },
+    ]
+    output["candidate_claims"] = [{
+        "subject": "Maya",
+        "relation": "works_for",
+        "object": "Northwind",
+        "object_kind": "entity",
+        "evidence": [evidence],
+        "valid_from": None,
+        "valid_to": None,
+    }]
+    changed = replace(run, run_id="entity-object-run", run_key="entity-object-key", output=output)
+    EntityResolver(
+        store, StubResolutionGateway([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+    ).resolve_run(changed, ModelEndpointConfig(embedding_dimensions=3), policy)
+
+    claim = ClaimCommitter(store).commit_run(changed).claims[0]
+
+    assert claim.object_kind == "entity"
+    assert claim.object_entity_id is not None
+    assert claim.object_literal is None
+    assert claim.subject_entity_id != claim.object_entity_id
+
+
+def test_independent_capture_adds_evidence_to_the_same_claim() -> None:
+    store, policy, _, run = successful_extraction_run()
+    resolver = EntityResolver(
+        store, StubResolutionGateway([[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+    )
+    endpoint = ModelEndpointConfig(embedding_dimensions=3)
+    resolver.resolve_run(run, endpoint, policy)
+    committer = ClaimCommitter(store)
+    first = committer.commit_run(run)
+
+    later_capture = envelope(
+        capture_id="018f5e2a-1234-7abc-8def-1234567890dd",
+        occurred_at="2026-07-10T13:00:00Z",
+        payload={"role": "user", "content": "We decided to keep all deployment data local."},
+    )
+    CaptureService(store, policy).ingest(later_capture, run.completed_at + timedelta(hours=1))
+    output = json.loads(json.dumps(run.output))
+    for section in ("episodes", "candidate_claims"):
+        for item in output[section]:
+            for reference in item["evidence"]:
+                reference["capture_id"] = later_capture.capture_id
+    output["mentions"][0]["evidence"]["capture_id"] = later_capture.capture_id
+    later = replace(
+        run,
+        run_id="independent-evidence-run",
+        run_key="independent-evidence-key",
+        output=output,
+        evidence_capture_ids=[later_capture.capture_id],
+        completed_at=run.completed_at + timedelta(hours=1),
+    )
+    resolver.resolve_run(later, endpoint, policy)
+    second = committer.commit_run(later)
+
+    assert second.claims[0].claim_id == first.claims[0].claim_id
+    assert len(store.claims) == 1
+    assert len(store.evidence_records) == 2
+    assert {item.capture_id for item in store.evidence_records} == {
+        run.evidence_capture_ids[0], later_capture.capture_id
+    }
+
+
+def test_relation_schema_is_versioned_and_extraction_temporal_bounds_are_ordered() -> None:
+    schema = load_relation_schema()
+
+    assert schema.schema_version == "core-v1"
+    assert schema.relations["storage_location"].object_kind == "literal"
+    invalid = extraction_for(CAPTURE_ID)
+    invalid["candidate_claims"][0]["valid_from"] = "2026-07-11T00:00:00Z"
+    invalid["candidate_claims"][0]["valid_to"] = "2026-07-10T00:00:00Z"
+    with pytest.raises(ValidationError, match="valid_to"):
+        from app.v2.mining import ExtractionOutput
+        ExtractionOutput.model_validate(invalid)
 
 
 def test_bifrost_resolution_gateway_uses_embedding_route(monkeypatch) -> None:

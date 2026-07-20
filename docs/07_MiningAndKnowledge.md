@@ -4,8 +4,8 @@
 quarantine, durable session assembly, quiescence, immediate push admission, and
 the leased admission and mining work queues exist. Mechanical trimming,
 scheduled work consumption, durable salience decisions, policy-gated structured
-extraction through Bifrost, mention vector storage, and entity resolution also
-exist. Schema-backed claim/Evidence commit and surfacing do not.
+extraction through Bifrost, mention vector storage, entity resolution, and
+schema-backed Claim/Evidence commit also exist. Grounded surfacing does not.
 
 ## The idea in plain language
 
@@ -218,6 +218,22 @@ content.
 The same claim observed in a new capture adds evidence. It is not treated as an
 inference retry.
 
+The implemented `claim-committer-v1` loads the shipped
+`api/app/v2/relation_schema.json` vocabulary. It resolves entity-valued claim
+subjects and objects only through mentions resolved in the same mining run,
+checks entity types, object kind, statefulness, cardinality, temporal order, and
+the run's evidence boundary, then validates every candidate before making the
+first graph write. Unknown relations fail closed. Semantic Claim keys collapse
+the same subject, relation, object, and time meaning; Evidence keys collapse the
+same claim/capture/span support while allowing a new capture to add independent
+support. Storage writes and the final `V2ClaimCommitRun` marker are idempotent,
+so a partial infrastructure failure can safely retry.
+
+Administrators can audit the vocabulary and committed records through
+`GET /v2/admin/knowledge/schema`, `GET /v2/admin/knowledge/claims`, and
+`GET /v2/admin/knowledge/evidence`. These are inspection endpoints, not the
+planned grounded recall API.
+
 ## Idempotency and re-mining
 
 The mining-run foundation is used by the model-backed extractor. Before
@@ -259,9 +275,10 @@ envelope, mutable `V2Session` aggregates, idempotent `V2SessionCapture`
 membership documents, generation-numbered `V2WorkItem` documents,
 `V2SalienceRecord` derived gates, and reusable `V2MiningRun` output documents.
 It also uses `V2Mention` derived documents with a persistent cosine vector
-index and stable `V2Entity` vertices. The expanded production layout still
-needs concrete event time-series, snapshot, external-payload, claim, Evidence,
-and maintenance types, buckets, and indexes.
+index, stable `V2Entity` vertices, `V2Claim` vertices, indexed `V2Evidence`
+documents, and per-run commit markers. The expanded production layout still
+needs concrete event time-series, snapshot, external-payload, maintenance
+types, buckets, and indexes.
 
 ## Vector policy
 
@@ -289,6 +306,13 @@ relations begin conservatively eventive and multi-valued. Approved promotions
 include a deterministic migration plan and Git commit; revert drives a
 compensating migration rather than deleting history.
 
+The current executable schema is the shipped `core-v1` JSON file. It contains
+the initial `created`, `depends_on`, `located_in`, `member_of`, `owns`,
+`storage_location`, `uses`, and `works_for` relations. Operators can review or
+version that file with their deployment source. Automated `ext:*` admission,
+promotion, and compensating migrations remain part of milestone 8; until then,
+an unregistered relation is rejected without any graph writes.
+
 ## Surfacing direction
 
 The default model-facing result will contain current claims plus the strongest
@@ -314,6 +338,6 @@ A practical sequence is:
 5. mention and candidate-claim extraction through Bifrost — implemented;
 6. mention vector region and entity resolution — implemented; merge/unmerge,
    split, and multi-region migration remain planned;
-7. schema-backed deterministic claim commit and Evidence records;
+7. schema-backed deterministic claim commit and Evidence records — implemented;
 8. maintenance notices, re-mining, and scoped supersession; and
 9. grounded query/surfacing API.

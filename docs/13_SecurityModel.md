@@ -67,8 +67,9 @@ rest.
 Capture authorization controls who may submit context; it does not make every
 captured statement true. Capture hints are non-authoritative. The implemented
 extractor produces candidates only. The implemented resolver records bounded,
-auditable identity decisions, while the planned claim committer remains
-responsible for relation validation, Evidence creation, and graph truth.
+auditable identity decisions, while the deterministic claim committer validates
+the versioned relation schema and creates first-class Evidence before graph
+truth is admitted.
 
 ## Model-egress boundary
 

@@ -21,12 +21,15 @@ from .models import (
     AdminStatus,
     CaptureEnvelope,
     ChatStreamRequest,
+    ClaimView,
     EntityView,
+    EvidenceView,
     InstancePolicy,
     MiningRunView,
     ModelEndpointConfig,
     ResolvedMentionView,
 )
+from .claims import ClaimCommitter, extraction_schema_prompt, load_relation_schema
 from .mining import BifrostExtractionGateway, MiningWorker
 from .resolution import BifrostResolutionGateway, EntityResolver
 from .router import get_capture_service, require_device_token, router
@@ -74,9 +77,13 @@ def create_app() -> FastAPI:
         os.getenv("BIFROST_ADMIN_PASSWORD", ""),
     )
     mining_poll_seconds = max(1, int(os.getenv("LOREHOLM_V2_MINING_POLL_SECONDS", "5")))
-    extraction_gateway = BifrostExtractionGateway(bifrost_url, bifrost_auth)
+    relation_schema = load_relation_schema()
+    extraction_gateway = BifrostExtractionGateway(
+        bifrost_url, bifrost_auth, extraction_schema_prompt(relation_schema)
+    )
     resolution_gateway = BifrostResolutionGateway(bifrost_url, bifrost_auth)
     resolver = EntityResolver(store, resolution_gateway) if store else None
+    committer = ClaimCommitter(store, relation_schema) if store else None
 
     def selected_endpoint() -> ModelEndpointConfig:
         stored = service.store.get_config("model_endpoint") if service is not None else None
@@ -98,6 +105,7 @@ def create_app() -> FastAPI:
         policy=lambda: service.policy,
         endpoint=selected_endpoint,
         resolver=resolver,
+        committer=committer,
     ) if store else None
 
     def bifrost_request(method: str, path: str, **kwargs) -> httpx.Response:
@@ -267,6 +275,24 @@ def create_app() -> FastAPI:
         return [
             EntityView.model_validate(entity.__dict__)
             for entity in service.store.list_entities(limit=limit)
+        ]
+
+    @app.get("/v2/admin/knowledge/schema")
+    def knowledge_schema(_: None = Depends(require_admin)) -> dict:
+        return relation_schema.model_dump(mode="json")
+
+    @app.get("/v2/admin/knowledge/claims", response_model=list[ClaimView])
+    def claims(limit: int = 50, _: None = Depends(require_admin)) -> list[ClaimView]:
+        return [
+            ClaimView.model_validate(claim.__dict__)
+            for claim in service.store.list_claims(limit=limit)
+        ]
+
+    @app.get("/v2/admin/knowledge/evidence", response_model=list[EvidenceView])
+    def evidence(limit: int = 50, _: None = Depends(require_admin)) -> list[EvidenceView]:
+        return [
+            EvidenceView.model_validate(item.__dict__)
+            for item in service.store.list_evidence(limit=limit)
         ]
 
     @app.put("/v2/admin/model")

@@ -95,5 +95,6 @@ yet. Before production adoption, an organization should require:
 - a clear support plan—the upstream project currently has no SLA.
 
 The project documents planned behavior early so teams can evaluate the design,
-but every pilot should distinguish implemented candidate extraction and entity
-resolution from planned claim commit, graph query, and lifecycle capabilities.
+but every pilot should distinguish implemented candidate extraction, entity
+resolution, and deterministic Claim/Evidence commit from planned graph query
+and lifecycle capabilities.
